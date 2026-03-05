@@ -1,62 +1,67 @@
-import random
 import time
 import os
 
-WIDTH = 20
-HEIGHT = 20
-NUM_AGENTS = 10
-NUM_FOOD = 30
+from config import TICK_SPEED
+from world import World
 
-class Agent:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.hunger = 20
-
-    def move(self):
-        dx = random.choice([-1, 0, 1])
-        dy = random.choice([-1, 0, 1])
-        self.x = max(0, min(WIDTH - 1, self.x + dx))
-        self.y = max(0, min(HEIGHT - 1, self.y + dy))
-        self.hunger -= 1
-
-    def eat(self):
-        self.hunger += 10
 
 def clear():
-    os.system('clear')
+    os.system("clear")
 
-agents = [Agent(random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1)) for _ in range(NUM_AGENTS)]
-food = {(random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1)) for _ in range(NUM_FOOD)}
 
-while True:
-    clear()
-    grid = [["." for _ in range(WIDTH)] for _ in range(HEIGHT)]
+world = World()
 
-    for fx, fy in food:
-        grid[fy][fx] = "F"
+try:
+    while True:
+        clear()
 
-    alive_agents = []
-    for agent in agents:
-        agent.move()
+        world.update()
+        grid = world.generate_grid()
 
-        if (agent.x, agent.y) in food:
-            agent.eat()
-            food.remove((agent.x, agent.y))
+        for row in grid:
+            print(" ".join(row))
 
-        if agent.hunger > 0:
-            alive_agents.append(agent)
-            grid[agent.y][agent.x] = "A"
+        print("\n===== WORLD DASHBOARD =====")
+        print(f"Tick: {world.tick}")
+        print(f"Agenti vivi: {len(world.agents)}")
+        print(f"Cibo in mappa: {len(world.food)}")
 
-    agents = alive_agents
+        # indicatori ecosistema
+        if len(world.agents) > 0:
+            food_per_agent = len(world.food) / len(world.agents)
+        else:
+            food_per_agent = 0
 
-    for row in grid:
-        print(" ".join(row))
+        if world.last_births > world.last_deaths:
+            trend = "growing"
+        elif world.last_births < world.last_deaths:
+            trend = "shrinking"
+        else:
+            trend = "stable"
 
-    print(f"\nAgenti vivi: {len(agents)}")
+        if food_per_agent < 0.5:
+            starvation = "HIGH"
+        elif food_per_agent < 1:
+            starvation = "medium"
+        else:
+            starvation = "low"
 
-    if len(agents) == 0:
-        print("Tutti morti 💀")
-        break
+        print(f"\nFood per agent: {food_per_agent:.2f}")
+        print(f"Population trend: {trend}")
+        print(f"Starvation risk: {starvation}")
 
-    time.sleep(0.5)
+        print(f"\nNascite (tick): {world.last_births} | Totali: {world.total_births}")
+        print(f"Morti   (tick): {world.last_deaths} | Totali: {world.total_deaths}")
+        print(f"Cibo mangiato (tick): {world.last_eaten} | Totale: {world.total_eaten}")
+
+        time.sleep(TICK_SPEED)
+
+except KeyboardInterrupt:
+
+    print("\n\n===== SIMULATION REPORT =====")
+    print(f"Tick totali: {world.tick}")
+    print(f"Agenti vivi finali: {len(world.agents)}")
+    print(f"Nascite totali: {world.total_births}")
+    print(f"Morti totali: {world.total_deaths}")
+    print(f"Cibo mangiato totale: {world.total_eaten}")
+    print("\nSimulazione terminata 👋")
