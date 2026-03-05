@@ -1,13 +1,18 @@
 import random
 from config import WIDTH, HEIGHT, NUM_AGENTS, NUM_FOOD
 from agent import Agent
+from brain import RandomBrain
 
 class World:
     def __init__(self):
         self.agents = [
-            Agent(random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1))
-            for _ in range(NUM_AGENTS)
-        ]
+    Agent(
+        random.randint(0, WIDTH-1),
+        random.randint(0, HEIGHT-1),
+        RandomBrain()
+    )
+    for _ in range(NUM_AGENTS)
+]
 
         self.food = {
             (random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1))
@@ -18,7 +23,7 @@ class World:
         alive_agents = []
 
         for agent in self.agents:
-            agent.move()
+            agent.update(self)
 
             if (agent.x, agent.y) in self.food:
                 agent.eat()
