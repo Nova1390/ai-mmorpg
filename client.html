@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>AI MMORPG</title>
+
+<style>
+body {
+    font-family: Arial;
+}
+
+canvas {
+    border:1px solid black;
+}
+</style>
+
+</head>
+
+<body>
+
+<h2>AI MMORPG WORLD</h2>
+
+<canvas id="world" width="600" height="600"></canvas>
+
+<p id="stats"></p>
+
+<script>
+
+const canvas = document.getElementById("world");
+const ctx = canvas.getContext("2d");
+
+async function update() {
+
+    const response = await fetch("/state");
+    const data = await response.json();
+
+    const width = data.width;
+    const height = data.height;
+
+    const cellSize = canvas.width / width;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    ctx.fillStyle = "green";
+
+    data.food.forEach(f=>{
+        ctx.fillRect(f.x*cellSize, f.y*cellSize, cellSize, cellSize);
+    });
+
+    ctx.fillStyle = "blue";
+
+    data.agents.forEach(a=>{
+        ctx.fillRect(a.x*cellSize, a.y*cellSize, cellSize, cellSize);
+    });
+
+    document.getElementById("stats").innerText =
+        "Tick: " + data.tick +
+        " | Agents: " + data.agents_alive +
+        " | Food: " + data.food_count;
+}
+
+setInterval(update,200);
+
+</script>
+
+</body>
+</html>
