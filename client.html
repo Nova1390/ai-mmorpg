@@ -1,262 +1,209 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>AI MMORPG</title>
-
-  <style>
-    body { font-family: Arial; }
-    canvas { border: 1px solid black; }
-    .row { display: flex; gap: 16px; align-items: flex-start; }
-    .panel { width: 260px; border: 1px solid #ddd; padding: 10px; }
-    .kv { display: flex; justify-content: space-between; margin: 6px 0; font-size: 13px; }
-    input { width: 100%; box-sizing: border-box; padding: 8px; margin: 6px 0; }
-    button { padding: 8px; width: 100%; margin: 6px 0; }
-    .small { font-size: 12px; color: #666; }
-  </style>
+<meta charset="UTF-8">
+<title>AI MMORPG</title>
+<style>
+  body { font-family: Arial; }
+  canvas { border: 1px solid #111; image-rendering: pixelated; }
+  .row { display:flex; gap:16px; align-items:flex-start; }
+  .panel { border: 1px solid #aaa; padding: 10px; width: 380px; }
+  .legend div { margin: 4px 0; }
+  .box { display:inline-block; width:12px; height:12px; margin-right:6px; border:1px solid #222; }
+  .mono { font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+  button { padding: 8px 10px; }
+</style>
 </head>
-
 <body>
 
 <h2>AI MMORPG WORLD</h2>
 
-<div class="row">
+<button onclick="spawnPlayer()">Spawn Player</button>
+
+<div class="row" style="margin-top:12px;">
   <div>
-    <button onclick="spawnPlayer()">Spawn Player</button>
-    <canvas id="world" width="600" height="600"></canvas>
-    <p id="stats" class="small"></p>
+    <canvas id="world" width="640" height="640"></canvas>
+    <div id="stats" class="panel mono" style="margin-top:10px;"></div>
   </div>
 
-  <div class="panel">
-    <h3 style="margin: 6px 0;">Minimap</h3>
-    <canvas id="minimap" width="160" height="160"></canvas>
-    <div class="small">Rosso = tu. Arancione = market. Giallo = roads.</div>
+  <div>
+    <div class="panel">
+      <b>Minimap</b><br><br>
+      <canvas id="minimap" width="220" height="220"></canvas>
+    </div>
 
-    <hr>
-    <h3 style="margin: 6px 0;">Player</h3>
-    <div class="kv"><span>ID</span><span id="pid">-</span></div>
-    <div class="kv"><span>Pos</span><span id="pos">-</span></div>
-    <div class="kv"><span>Hunger</span><span id="hunger">-</span></div>
+    <div class="panel legend" style="margin-top:12px;">
+      <b>LEGEND</b>
+      <div><span class="box" style="background:red"></span> Player</div>
+      <div><span class="box" style="background:blue"></span> NPC</div>
 
-    <hr>
-    <h3 style="margin: 6px 0;">Inventory</h3>
-    <div class="kv"><span>food</span><span id="inv_food">0</span></div>
-    <div class="kv"><span>wood</span><span id="inv_wood">0</span></div>
-    <div class="kv"><span>stone</span><span id="inv_stone">0</span></div>
+      <div style="margin-top:8px;"><b>Tiles</b></div>
+      <div><span class="box" style="background:#6fcf6a"></span> Grass (G)</div>
+      <div><span class="box" style="background:#2f8f45"></span> Forest (F)</div>
+      <div><span class="box" style="background:#999"></span> Mountain (M)</div>
+      <div><span class="box" style="background:#4da6ff"></span> Water (W)</div>
 
-    <hr>
-    <h3 style="margin: 6px 0;">Command</h3>
-    <input id="commandBox" placeholder="e.g. build house / gather food">
-    <button onclick="sendCommand()">Send</button>
-    <div class="small">Planner rule-based (poi OpenClaw).</div>
+      <div style="margin-top:8px;"><b>World objects</b></div>
+      <div><span class="box" style="background:#00aa00"></span> Food</div>
+      <div><span class="box" style="background:#0b3d1e"></span> Wood (tree)</div>
+      <div><span class="box" style="background:#d3d3d3"></span> Stone</div>
+      <div><span class="box" style="background:#8b4513"></span> House</div>
+    </div>
   </div>
 </div>
 
 <script>
-  const canvas = document.getElementById("world");
-  const ctx = canvas.getContext("2d");
+const canvas = document.getElementById("world");
+const ctx = canvas.getContext("2d");
 
-  const mini = document.getElementById("minimap");
-  const mctx = mini.getContext("2d");
+const minimap = document.getElementById("minimap");
+const mctx = minimap.getContext("2d");
 
-  let playerId = null;
+let playerId = null;
 
-  async function spawnPlayer() {
-    const response = await fetch("/spawn_player", { method: "POST" });
-    const data = await response.json();
-    playerId = data.player_id;
-    document.getElementById("pid").innerText = playerId.slice(0, 8) + "...";
-  }
+function tileColor(t){
+  if (t === "G") return "#6fcf6a";
+  if (t === "F") return "#2f8f45";
+  if (t === "M") return "#999999";
+  if (t === "W") return "#4da6ff";
+  return "#ffffff";
+}
 
-  async function sendCommand() {
-    if (!playerId) return;
-    const text = document.getElementById("commandBox").value.trim();
-    if (!text) return;
+async function spawnPlayer(){
+  const r = await fetch("/spawn_player", { method: "POST" });
+  const data = await r.json();
+  playerId = data.player_id || null;
+}
 
-    await fetch(`/player/${playerId}/command`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text, horizon: "short" })
-    });
+async function update(){
+  const r = await fetch("/state", { cache: "no-store" });
+  const data = await r.json();
 
-    document.getElementById("commandBox").value = "";
-  }
+  const cellSize = 32;
+  const viewW = Math.floor(canvas.width / cellSize);
+  const viewH = Math.floor(canvas.height / cellSize);
 
-  function tileColor(t) {
-    if (t === "G") return "#7CFC90";
-    if (t === "F") return "#2E8B57";
-    if (t === "M") return "#999999";
-    if (t === "W") return "#4DA6FF";
-    return "#ffffff";
-  }
+  let cameraX = 0, cameraY = 0;
+  let playerData = null;
 
-  function overlayColor(o) {
-    if (o === "R") return "#F2D14B"; // road (giallo)
-    if (o === "H") return "#8B5A2B"; // house
-    if (o === "K") return "#FF9F1A"; // market
-    return null;
-  }
-
-  function buildOverlayMap(overlayList) {
-    // key "x,y" => t
-    const m = new Map();
-    overlayList.forEach(o => {
-      m.set(`${o.x},${o.y}`, o.t);
-    });
-    return m;
-  }
-
-  function drawMinimap(tilesRows, overlayMap, worldW, worldH, playerX, playerY) {
-    const mw = mini.width;
-    const mh = mini.height;
-
-    const sx = worldW / mw;
-    const sy = worldH / mh;
-
-    const img = mctx.createImageData(mw, mh);
-    const data = img.data;
-
-    for (let y = 0; y < mh; y++) {
-      const wy = Math.min(worldH - 1, Math.floor(y * sy));
-      const row = tilesRows[wy];
-      for (let x = 0; x < mw; x++) {
-        const wx = Math.min(worldW - 1, Math.floor(x * sx));
-        const t = row[wx];
-
-        let r=255, g=255, b=255;
-        if (t === "G") { r=124; g=252; b=144; }
-        else if (t === "F") { r=46; g=139; b=87; }
-        else if (t === "M") { r=153; g=153; b=153; }
-        else if (t === "W") { r=77; g=166; b=255; }
-
-        // overlay “dominante” sulla minimap (campionamento semplice)
-        const ov = overlayMap.get(`${wx},${wy}`);
-        if (ov === "R") { r=242; g=209; b=75; }
-        else if (ov === "H") { r=139; g=90; b=43; }
-        else if (ov === "K") { r=255; g=159; b=26; }
-
-        const i = (y * mw + x) * 4;
-        data[i] = r; data[i+1] = g; data[i+2] = b; data[i+3] = 255;
-      }
-    }
-
-    mctx.putImageData(img, 0, 0);
-
-    if (playerX != null && playerY != null) {
-      const px = Math.floor(playerX / worldW * mw);
-      const py = Math.floor(playerY / worldH * mh);
-      mctx.fillStyle = "red";
-      mctx.fillRect(px - 1, py - 1, 3, 3);
+  if (playerId){
+    const pr = await fetch(`/player/${playerId}`, { cache: "no-store" });
+    if (pr.status === 200){
+      playerData = await pr.json();
+      cameraX = playerData.x - Math.floor(viewW/2);
+      cameraY = playerData.y - Math.floor(viewH/2);
     }
   }
 
-  async function update() {
-    const response = await fetch("/state", { cache: "no-store" });
-    const data = await response.json();
+  // clamp camera
+  cameraX = Math.max(0, Math.min(cameraX, data.width - viewW));
+  cameraY = Math.max(0, Math.min(cameraY, data.height - viewH));
 
-    const overlayMap = buildOverlayMap(data.overlay);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    const cellSize = 20;
-    const viewWidth = Math.floor(canvas.width / cellSize);
-    const viewHeight = Math.floor(canvas.height / cellSize);
+  // --- Layer 0: tiles ---
+  for (let y=0; y<viewH; y++){
+    for (let x=0; x<viewW; x++){
+      const wx = x + cameraX;
+      const wy = y + cameraY;
+      if (wx<0 || wy<0 || wx>=data.width || wy>=data.height) continue;
 
-    // camera segue il TUO player
-    let cameraX = 0;
-    let cameraY = 0;
-
-    let pdata = null;
-    if (playerId) {
-      const pr = await fetch(`/player/${playerId}`, { cache: "no-store" });
-      if (pr.status === 200) {
-        pdata = await pr.json();
-        cameraX = pdata.x - Math.floor(viewWidth / 2);
-        cameraY = pdata.y - Math.floor(viewHeight / 2);
-      }
-    }
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // base tiles
-    for (let y = 0; y < viewHeight; y++) {
-      for (let x = 0; x < viewWidth; x++) {
-        const wx = x + cameraX;
-        const wy = y + cameraY;
-        if (wx < 0 || wy < 0 || wx >= data.width || wy >= data.height) continue;
-
-        const tile = data.tiles[wy][wx];
-        ctx.fillStyle = tileColor(tile);
-        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-
-        // overlay sopra
-        const ov = overlayMap.get(`${wx},${wy}`);
-        if (ov) {
-          const c = overlayColor(ov);
-          if (c) {
-            ctx.fillStyle = c;
-            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-          }
-        }
-      }
-    }
-
-    // risorse (sopra overlay)
-    ctx.fillStyle = "green";
-    data.food.forEach(f => {
-      const sx = (f.x - cameraX) * cellSize;
-      const sy = (f.y - cameraY) * cellSize;
-      ctx.fillRect(sx, sy, cellSize, cellSize);
-    });
-
-    ctx.fillStyle = "brown";
-    data.wood.forEach(w => {
-      const sx = (w.x - cameraX) * cellSize;
-      const sy = (w.y - cameraY) * cellSize;
-      ctx.fillRect(sx, sy, cellSize, cellSize);
-    });
-
-    ctx.fillStyle = "gray";
-    data.stone.forEach(s => {
-      const sx = (s.x - cameraX) * cellSize;
-      const sy = (s.y - cameraY) * cellSize;
-      ctx.fillRect(sx, sy, cellSize, cellSize);
-    });
-
-    // agenti
-    data.agents.forEach(a => {
-      const sx = (a.x - cameraX) * cellSize;
-      const sy = (a.y - cameraY) * cellSize;
-
-      if (a.role === "merchant") ctx.fillStyle = "#FFD700"; // merchant gold
-      else if (a.is_player) ctx.fillStyle = (a.player_id === playerId) ? "red" : "#ff8a8a";
-      else ctx.fillStyle = "blue";
-
-      ctx.fillRect(sx, sy, cellSize, cellSize);
-    });
-
-    document.getElementById("stats").innerText =
-      `Tick: ${data.tick} | Agents: ${data.agents_alive} | Villages: ${countMarkets(data.overlay)}`;
-
-    // HUD + minimap
-    if (pdata) {
-      document.getElementById("pos").innerText = `(${pdata.x}, ${pdata.y})`;
-      document.getElementById("hunger").innerText = `${pdata.hunger}`;
-      document.getElementById("inv_food").innerText = pdata.inventory.food ?? 0;
-      document.getElementById("inv_wood").innerText = pdata.inventory.wood ?? 0;
-      document.getElementById("inv_stone").innerText = pdata.inventory.stone ?? 0;
-
-      drawMinimap(data.tiles, overlayMap, data.width, data.height, pdata.x, pdata.y);
-    } else {
-      drawMinimap(data.tiles, overlayMap, data.width, data.height, null, null);
+      const t = data.tiles[wy][wx];
+      ctx.fillStyle = tileColor(t);
+      ctx.fillRect(x*cellSize, y*cellSize, cellSize, cellSize);
     }
   }
 
-  function countMarkets(overlayList) {
-    let c = 0;
-    overlayList.forEach(o => { if (o.t === "K") c++; });
-    return c;
+  // helper to draw world-point objects
+  function drawCell(x, y, color){
+    const sx = (x - cameraX) * cellSize;
+    const sy = (y - cameraY) * cellSize;
+    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) return;
+
+    // disegna “icona” più piccola per capire meglio
+    const pad = Math.floor(cellSize * 0.2);
+    ctx.fillStyle = color;
+    ctx.fillRect(sx + pad, sy + pad, cellSize - pad*2, cellSize - pad*2);
   }
 
-  setInterval(update, 250);
+  // --- Layer 1: resources ---
+  (data.food || []).forEach(f => drawCell(f.x, f.y, "#00aa00"));      // food
+  (data.wood || []).forEach(w => drawCell(w.x, w.y, "#0b3d1e"));      // wood/tree
+  (data.stone || []).forEach(s => drawCell(s.x, s.y, "#d3d3d3"));     // stone
+
+  // --- Layer 2: structures (houses) ---
+  (data.structures || []).forEach(h => {
+    const sx = (h.x - cameraX) * cellSize;
+    const sy = (h.y - cameraY) * cellSize;
+    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) return;
+
+    ctx.fillStyle = "#8b4513";
+    ctx.fillRect(sx, sy, cellSize, cellSize);
+    ctx.strokeStyle = "#1a1a1a";
+    ctx.strokeRect(sx, sy, cellSize, cellSize);
+  });
+
+  // --- Layer 3: agents ---
+  (data.agents || []).forEach(a => {
+    const sx = (a.x - cameraX) * cellSize;
+    const sy = (a.y - cameraY) * cellSize;
+    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) return;
+
+    const isPlayer = a.is_player && a.player_id === playerId;
+
+    ctx.fillStyle = isPlayer ? "red" : "blue";
+    ctx.fillRect(sx, sy, cellSize, cellSize);
+
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx, sy, cellSize, cellSize);
+    ctx.lineWidth = 1;
+  });
+
+  // --- Dashboard ---
+  const inv = playerData?.inventory || { food:0, wood:0, stone:0 };
+  document.getElementById("stats").innerHTML = `
+<b>WORLD STATS</b>
+tick: ${data.tick}
+population: ${data.population} (players: ${data.players}, npcs: ${data.npcs})
+avg_hunger: ${data.avg_hunger}
+
+food: ${data.food_count}
+wood: ${data.wood_count}
+stone: ${data.stone_count}
+
+<b>PLAYER</b>
+id: ${playerId ? playerId.slice(0,8)+"..." : "-"}
+pos: ${playerData ? `(${playerData.x}, ${playerData.y})` : "-"}
+hunger: ${playerData ? playerData.hunger : "-"}
+inventory: food=${inv.food ?? 0}, wood=${inv.wood ?? 0}, stone=${inv.stone ?? 0}
+  `.replaceAll("\n", "<br>");
+  
+  renderMinimap(data, cameraX, cameraY, viewW, viewH);
+}
+
+function renderMinimap(data, cameraX, cameraY, viewW, viewH){
+  const w = minimap.width, h = minimap.height;
+  const sx = w / data.width;
+  const sy = h / data.height;
+
+  // draw tiles (sample)
+  const step = Math.max(2, Math.floor(data.width / 120));
+  mctx.clearRect(0,0,w,h);
+
+  for (let y=0; y<data.height; y+=step){
+    for (let x=0; x<data.width; x+=step){
+      mctx.fillStyle = tileColor(data.tiles[y][x]);
+      mctx.fillRect(x*sx, y*sy, step*sx, step*sy);
+    }
+  }
+
+  // viewport rect
+  mctx.strokeStyle = "#000";
+  mctx.strokeRect(cameraX*sx, cameraY*sy, viewW*sx, viewH*sy);
+}
+
+setInterval(update, 200);
 </script>
 
 </body>

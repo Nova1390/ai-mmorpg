@@ -1,116 +1,135 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Tuple
 import random
-from config import AGENT_START_HUNGER, FOOD_EAT_GAIN
+
+from config import FOOD_EAT_GAIN, AGENT_START_HUNGER, REPRO_MIN_HUNGER, REPRO_PROB, REPRO_COST
 
 
+@dataclass
 class Agent:
+    x: int
+    y: int
+    brain: Any
+    is_player: bool = False
+    player_id: Optional[str] = None
 
-    def __init__(
-        self,
-        x,
-        y,
-        brain=None,
-        is_player=False,
-        player_id=None,
-        traits=None,
-        personality=None,
-        role="npc",
-    ):
+    alive: bool = True
+    hunger: float = float(AGENT_START_HUNGER)
 
-        self.x = x
-        self.y = y
+    # inventario semplice (estendibile)
+    inventory: Dict[str, int] = field(default_factory=lambda: {"food": 0, "wood": 0, "stone": 0})
 
-        self.brain = brain
-        self.is_player = is_player
-        self.player_id = player_id
-        self.role = role
+    # memoria percettiva
+    memory: Dict[str, set] = field(default_factory=lambda: {"food": set(), "wood": set(), "stone": set()})
 
-        self.hunger = AGENT_START_HUNGER
-        self.alive = True
-        self.repro_cooldown = 0
+    # riproduzione (solo npc)
+    repro_cooldown: int = 0
 
-        self.inventory = {
-            "food": 0,
-            "wood": 0,
-            "stone": 0,
-            "sword": 0,
-        }
+    def run_brain(self, world: "World") -> Tuple[str, ...]:
+        """
+        Ritorna un'azione come tuple:
+          ("move", dx, dy) oppure ("wait",)
+        """
+        if self.brain is None:
+            return ("wait",)
 
-        # traits
-        if traits is None:
-            traits = {
-                "strength": random.randint(1, 10),
-                "agility": random.randint(1, 10),
-                "intelligence": random.randint(1, 10),
-            }
+        action = self.brain.decide(self, world)
 
-        self.traits = traits
+        if not action:
+            return ("wait",)
 
-        # personality
-        if personality is None:
-            personality = {
-                "aggressiveness": random.random(),
-                "curiosity": random.random(),
-                "discipline": random.random(),
-                "greed": random.random(),
-            }
+        # normalizza
+        if isinstance(action, tuple):
+            return action
 
-        self.personality = personality
+        return ("wait",)
 
-        # memory
-        self.memory = {
-            "food": [],
-            "wood": [],
-            "stone": []
-        }
-
-        # goals
-        self.goals_queue = []
-        self.current_goal = None
-        self.current_plan = []
-
-        # anti stuck
-        self.last_move = (0, 0)
-        self.last_pos = (x, y)
-        self.stuck_ticks = 0
-        self.escape_steps = 0
-
-        # LLM thinking timer
-        self.last_think = 0
-
-    def update(self, world):
-
-        if self.role == "merchant":
-            return
-
-        if not self.alive:
-            return
-
-        dx = 0
-        dy = 0
-
-        if self.brain:
-            dx, dy = self.brain.decide(self, world)
-
-        nx = self.x + dx
-        ny = self.y + dy
-
-        if world.is_walkable(nx, ny):
-            self.x = nx
-            self.y = ny
-
-        # metabolismo
-        self.hunger -= 1
-
-        # auto eat
-        if self.hunger < 15 and self.inventory["food"] > 0:
+    def eat_if_needed(self) -> None:
+        """
+        Se ho cibo e ho fame bassa, mangio automaticamente.
+        """
+        if self.inventory.get("food", 0) > 0 and self.hunger < 50:
             self.inventory["food"] -= 1
-            self.eat()
+            self.hunger += FOOD_EAT_GAIN
+            if self.hunger > 100:
+                self.hunger = 100
 
-        if self.hunger <= 0:
-            self.alive = False
+    def try_reproduce(self, world: "World") -> None:
+        """
+        Riproduzione semplice (solo NPC): se ho abbastanza fame "alta" (energia) genero un nuovo NPC vicino.
+        """
+        if self.is_player:
+            return
 
         if self.repro_cooldown > 0:
             self.repro_cooldown -= 1
+            return
 
-    def eat(self):
-        self.hunger += FOOD_EAT_GAIN
+        if self.hunger < REPRO_MIN_HUNGER:
+            return
+
+        if random.random() > REPRO_PROB:
+            return
+
+        baby_pos = world.find_free_adjacent(self.x, self.y)
+        if baby_pos is None:
+            return
+
+        bx, by = baby_pos
+
+        baby = Agent(
+            x=bx,
+            y=by,
+            brain=self.brain,
+            is_player=False,
+            player_id=None,
+        )
+        baby.hunger = float(AGENT_START_HUNGER)
+        world.add_agent(baby)
+
+        self.hunger -= REPRO_COST
+        if self.hunger < 1:
+            self.hunger = 1
+
+        self.repro_cooldown = 8
+
+    def update(self, world: "World") -> None:
+        """
+        1 tick di simulazione per l'agente.
+        """
+        if not self.alive:
+            return
+
+        # consumo base
+        self.hunger -= 1
+        if self.hunger <= 0:
+            self.alive = False
+            return
+
+        # mangia se serve
+        self.eat_if_needed()
+
+        # decisione + movimento
+        action = self.run_brain(world)
+
+        if action[0] == "move":
+            dx = int(action[1])
+            dy = int(action[2])
+
+            nx = self.x + dx
+            ny = self.y + dy
+
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                self.x = nx
+                self.y = ny
+
+        # pickup garantito (anche se brain è scemo)
+        world.autopickup(self)
+
+        # mangia dopo pickup (utile quando raccoglie proprio adesso)
+        self.eat_if_needed()
+
+        # riproduzione
+        self.try_reproduce(world)

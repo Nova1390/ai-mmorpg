@@ -1,90 +1,118 @@
-import random
+from __future__ import annotations
 
-VISION_RADIUS = 5
+from typing import Optional, Tuple
+import random
 
 
 class FoodBrain:
+    """
+    Brain semplice:
+    - aggiorna memoria visiva
+    - se serve cibo e lo vede: va dritto al cibo (priorità alta)
+    - altrimenti: wandering leggero
+    """
 
-    def decide(self, agent, world):
+    def __init__(self, vision_radius: int = 6):
+        self.vision_radius = vision_radius
 
+    def decide(self, agent, world) -> Tuple[str, ...]:
+        # aggiorna memoria: quello che vede entra in memoria
         self.update_memory(agent, world)
 
-        # fame -> cerca food
-        if agent.hunger < 10:
-            target = self.get_memory_target(agent, "food")
-            if target:
-                return self.move_toward(agent, world, target)
+        # priorità food: se fame bassa o non ho food in inventory
+        need_food = agent.hunger < 60 or agent.inventory.get("food", 0) == 0
 
-        # player con plan
-        if agent.is_player and agent.current_plan:
-            step = agent.current_plan[0]
-            if step.get("action") == "gather":
-                res = step.get("resource")
-                target = self.get_memory_target(agent, res)
-                if target:
-                    return self.move_toward(agent, world, target)
+        if need_food:
+            target = self.find_nearest_food(agent, world, radius=self.vision_radius)
+            if target is not None:
+                tx, ty = target
 
-        # fallback: random walk
-        return self.random_walk(agent, world)
+                # se sono già sul target, aspetto: world.autopickup farà il resto
+                if (agent.x, agent.y) == (tx, ty):
+                    return ("wait",)
 
-    def update_memory(self, agent, world):
+                return self.step_towards(agent, world, tx, ty)
 
+        # se non serve food: roaming
+        return self.wander(agent, world)
+
+    def update_memory(self, agent, world) -> None:
         ax, ay = agent.x, agent.y
+        r = self.vision_radius
 
-        for fx, fy in world.food:
-            if abs(ax - fx) <= VISION_RADIUS and abs(ay - fy) <= VISION_RADIUS:
-                if (fx, fy) not in agent.memory["food"]:
-                    agent.memory["food"].append((fx, fy))
+        # vede food nel raggio
+        for (fx, fy) in world.food:
+            if abs(fx - ax) + abs(fy - ay) <= r:
+                agent.memory["food"].add((fx, fy))
 
-        for wx, wy in world.wood:
-            if abs(ax - wx) <= VISION_RADIUS and abs(ay - wy) <= VISION_RADIUS:
-                if (wx, wy) not in agent.memory["wood"]:
-                    agent.memory["wood"].append((wx, wy))
+        # pulizia memory: se quel punto non ha più cibo, rimuovi
+        # (evita target "fantasma")
+        to_remove = []
+        for (fx, fy) in agent.memory["food"]:
+            if (fx, fy) not in world.food:
+                to_remove.append((fx, fy))
+        for p in to_remove:
+            agent.memory["food"].discard(p)
 
-        for sx, sy in world.stone:
-            if abs(ax - sx) <= VISION_RADIUS and abs(ay - sy) <= VISION_RADIUS:
-                if (sx, sy) not in agent.memory["stone"]:
-                    agent.memory["stone"].append((sx, sy))
-
-    def get_memory_target(self, agent, resource):
-
-        if resource not in agent.memory:
-            return None
-
-        if not agent.memory[resource]:
-            return None
-
-        return random.choice(agent.memory[resource])
-
-    def move_toward(self, agent, world, target):
-
-        tx, ty = target
+    def find_nearest_food(self, agent, world, radius: int = 6) -> Optional[Tuple[int, int]]:
         ax, ay = agent.x, agent.y
+        best = None
+        best_d = 10**9
 
-        dx = 0
-        dy = 0
+        # usa direttamente world.food (reale), non solo memory
+        for (fx, fy) in world.food:
+            d = abs(fx - ax) + abs(fy - ay)
+            if d <= radius and d < best_d:
+                best_d = d
+                best = (fx, fy)
 
-        if tx > ax:
-            dx = 1
-        elif tx < ax:
-            dx = -1
-        elif ty > ay:
-            dy = 1
-        elif ty < ay:
-            dy = -1
+        # fallback: prova memory (nel caso)
+        if best is None:
+            for (fx, fy) in agent.memory["food"]:
+                d = abs(fx - ax) + abs(fy - ay)
+                if d <= radius and d < best_d:
+                    best_d = d
+                    best = (fx, fy)
 
-        if world.is_walkable(ax + dx, ay + dy):
-            return dx, dy
+        return best
 
-        return self.random_walk(agent, world)
+    def step_towards(self, agent, world, tx: int, ty: int):
+        # muovi di 1 step verso target
+        dx = 0 if tx == agent.x else (1 if tx > agent.x else -1)
+        dy = 0 if ty == agent.y else (1 if ty > agent.y else -1)
 
-    def random_walk(self, agent, world):
+        # prova prima asse più “utile”
+        # (preferisce ridurre la distanza manhattan)
+        candidates = []
+        if dx != 0:
+            candidates.append((dx, 0))
+        if dy != 0:
+            candidates.append((0, dy))
 
-        moves = [(1,0),(-1,0),(0,1),(0,-1)]
-        random.shuffle(moves)
+        # alternativa per aggirare ostacoli
+        random.shuffle(candidates)
+        for (mx, my) in candidates:
+            nx, ny = agent.x + mx, agent.y + my
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                return ("move", mx, my)
 
-        for dx, dy in moves:
-            if world.is_walkable(agent.x + dx, agent.y + dy):
-                return dx, dy
+        # se bloccato: tenta 4 direzioni
+        dirs = [(1,0), (-1,0), (0,1), (0,-1)]
+        random.shuffle(dirs)
+        for (mx, my) in dirs:
+            nx, ny = agent.x + mx, agent.y + my
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                return ("move", mx, my)
 
-        return 0, 0
+        return ("wait",)
+
+    def wander(self, agent, world):
+        dirs = [(1,0), (-1,0), (0,1), (0,-1), (0,0)]
+        random.shuffle(dirs)
+        for (dx, dy) in dirs:
+            nx, ny = agent.x + dx, agent.y + dy
+            if dx == 0 and dy == 0:
+                return ("wait",)
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                return ("move", dx, dy)
+        return ("wait",)

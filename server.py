@@ -1,137 +1,179 @@
 import asyncio
 import random
-from uuid import uuid4
+import uuid
+import os
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from config import TICK_SPEED, WIDTH, HEIGHT
 from world import World
 from agent import Agent
 from brain import FoodBrain
 
+
 app = FastAPI()
+
+# --- world ---
 world = World()
+brain = FoodBrain()
+
+# --- sprites directory ---
+SPRITES_DIR = "sprites"
+
+app.mount("/sprites", StaticFiles(directory=SPRITES_DIR), name="sprites")
 
 
 async def tick_loop():
     while True:
         world.update()
-        await asyncio.sleep(TICK_SPEED)
+        await asyncio.sleep(0.2)
 
 
 @app.on_event("startup")
-async def startup_event():
+async def startup():
+
+    # spawn NPC iniziali
+    for _ in range(40):
+
+        for _ in range(200):
+
+            x = random.randint(0, world.width - 1)
+            y = random.randint(0, world.height - 1)
+
+            if world.is_walkable(x, y):
+
+                npc = Agent(x, y, brain, False, None)
+
+                world.add_agent(npc)
+
+                break
+
     asyncio.create_task(tick_loop())
 
 
 @app.get("/")
-def home():
+def root():
     return FileResponse("client.html")
+
+
+@app.get("/sprites_manifest")
+def sprites_manifest():
+
+    manifest = {}
+
+    for folder in os.listdir(SPRITES_DIR):
+
+        path = os.path.join(SPRITES_DIR, folder)
+
+        if os.path.isdir(path):
+
+            files = []
+
+            for root, dirs, filenames in os.walk(path):
+
+                for f in filenames:
+
+                    if f.lower().endswith((".png",".jpg",".jpeg")):
+
+                        rel = os.path.relpath(os.path.join(root,f), SPRITES_DIR)
+
+                        files.append("/sprites/" + rel.replace("\\","/"))
+
+            manifest[folder.lower()] = files
+
+    return manifest
 
 
 @app.get("/state")
 def get_state():
-    agents = [
-        {
-            "x": a.x,
-            "y": a.y,
-            "hunger": a.hunger,
-            "is_player": a.is_player,
-            "player_id": a.player_id,
-            "role": a.role,
-            "current_goal": a.current_goal,
-        }
-        for a in world.agents
-    ]
 
-    food = [{"x": x, "y": y} for (x, y) in world.food]
-    wood = [{"x": x, "y": y} for (x, y) in world.wood]
-    stone = [{"x": x, "y": y} for (x, y) in world.stone]
+    alive_agents = [a for a in world.agents if a.alive]
 
-    tiles_rows = ["".join(row) for row in world.tiles]
+    players = [a for a in alive_agents if a.is_player]
+    npcs = [a for a in alive_agents if not a.is_player]
 
-    overlay = [{"x": x, "y": y, "t": t} for (x, y), t in world.overlay.items()]
+    avg_hunger = 0
+
+    if alive_agents:
+        avg_hunger = sum(a.hunger for a in alive_agents) / len(alive_agents)
 
     return {
+
         "tick": world.tick,
-        "agents_alive": len(world.agents),
-        "agents": agents,
-        "food": food,
-        "wood": wood,
-        "stone": stone,
-        "tiles": tiles_rows,
-        "overlay": overlay,
-        "width": WIDTH,
-        "height": HEIGHT,
+        "width": world.width,
+        "height": world.height,
+
+        "tiles": world.tiles,
+
+        "food":[{"x":x,"y":y} for x,y in world.food],
+        "wood":[{"x":x,"y":y} for x,y in world.wood],
+        "stone":[{"x":x,"y":y} for x,y in world.stone],
+
+        "structures":[{"x":x,"y":y} for x,y in world.structures],
+
+        "agents":[
+            {
+                "x":a.x,
+                "y":a.y,
+                "is_player":a.is_player,
+                "player_id":a.player_id
+            }
+            for a in alive_agents
+        ],
+
+        "population":len(alive_agents),
+        "players":len(players),
+        "npcs":len(npcs),
+
+        "avg_hunger":round(avg_hunger,2),
+
+        "food_count":len(world.food),
+        "wood_count":len(world.wood),
+        "stone_count":len(world.stone)
     }
-
-
-def find_player(player_id: str) -> Agent:
-    for a in world.agents:
-        if a.is_player and a.player_id == player_id:
-            return a
-    raise HTTPException(status_code=404, detail="Player not found")
 
 
 @app.post("/spawn_player")
 def spawn_player():
-    while True:
-        x = random.randint(0, WIDTH - 1)
-        y = random.randint(0, HEIGHT - 1)
+
+    for _ in range(200):
+
+        x = random.randint(0, world.width - 1)
+        y = random.randint(0, world.height - 1)
+
         if world.is_walkable(x, y):
-            break
 
-    pid = str(uuid4())
+            pid = str(uuid.uuid4())
 
-    player = Agent(
-        x,
-        y,
-        brain=FoodBrain(),
-        is_player=True,
-        player_id=pid,
-        role="player",
-    )
+            player = Agent(x, y, brain, True, pid)
 
-    player.inventory["food"] = 5
-    world.agents.append(player)
+            world.add_agent(player)
 
-    return {"status": "spawned", "player_id": pid, "x": x, "y": y}
+            return {"player_id": pid}
+
+    return {"error": "spawn failed"}
 
 
 @app.get("/player/{player_id}")
 def get_player(player_id: str):
-    p = find_player(player_id)
-    return {
-        "player_id": p.player_id,
-        "x": p.x,
-        "y": p.y,
-        "hunger": p.hunger,
-        "inventory": p.inventory,
-        "traits": p.traits,
-        "personality": p.personality,
-        "role": p.role,
-        "current_goal": p.current_goal,
-        "current_plan": p.current_plan,
-        "goals_queue": p.goals_queue,
-    }
 
+    for p in world.agents:
 
-class Command(BaseModel):
-    text: str
-    horizon: str = "short"
+        if p.player_id == player_id:
 
+            inv = getattr(p, "inventory", {})
 
-@app.post("/player/{player_id}/command")
-def player_command(player_id: str, command: Command):
-    p = find_player(player_id)
-    goal = {"text": command.text, "horizon": command.horizon}
-    p.goals_queue.append(goal)
-    return {"status": "goal_added", "goal": goal}
+            return {
+                "id": p.player_id,
+                "x": p.x,
+                "y": p.y,
+                "hunger": p.hunger,
+                "inventory": {
+                    "food": inv.get("food", 0),
+                    "wood": inv.get("wood", 0),
+                    "stone": inv.get("stone", 0)
+                }
+            }
 
-
-@app.get("/grid", response_class=PlainTextResponse)
-def grid():
-    g = world.generate_grid()
-    return "\n".join([" ".join(row) for row in g])
+    raise HTTPException(status_code=404, detail="player not found")
