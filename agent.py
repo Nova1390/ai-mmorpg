@@ -1,12 +1,17 @@
-from config import WIDTH, HEIGHT
+from config import WIDTH, HEIGHT, AGENT_START_HUNGER, FOOD_EAT_GAIN
+
 
 class Agent:
     def __init__(self, x, y, brain):
         self.x = x
         self.y = y
-        self.hunger = 20
-        self.alive = True
         self.brain = brain
+
+        self.hunger = AGENT_START_HUNGER
+        self.alive = True
+
+        # per evitare che si riproducano a raffica
+        self.repro_cooldown = 0
 
     def update(self, world):
         dx, dy = self.brain.decide(self, world)
@@ -18,5 +23,8 @@ class Agent:
         if self.hunger <= 0:
             self.alive = False
 
+        if self.repro_cooldown > 0:
+            self.repro_cooldown -= 1
+
     def eat(self):
-        self.hunger += 10
+        self.hunger += FOOD_EAT_GAIN
