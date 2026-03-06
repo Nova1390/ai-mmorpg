@@ -1,106 +1,161 @@
-import time
-import json
-import urllib.request
+from __future__ import annotations
 
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-MODEL = "phi3"
-THINK_INTERVAL = 60  # secondi tra un "pensiero" e l'altro
+from typing import Optional, Tuple, Set
+import random
+import asyncio
 
-
-def should_think(agent):
-    now = time.time()
-    last = getattr(agent, "last_think", 0)
-    if now - last >= THINK_INTERVAL:
-        agent.last_think = now
-        return True
-    return False
+from planner import Planner
 
 
-def build_prompt(agent, world):
-    # stato minimo per decisione strategica
-    tile = world.tiles[agent.y][agent.x]
-    prompt = f"""
-You are the strategic brain of an AI agent in a sandbox world.
+class FoodBrain:
+    def __init__(self, vision_radius: int = 8):
+        self.vision_radius = vision_radius
 
-Agent status:
-- position: ({agent.x},{agent.y})
-- hunger: {agent.hunger}
-- inventory: {agent.inventory}
-- biome: {tile}
+    def decide(self, agent, world) -> Tuple[str, ...]:
+        if agent.hunger < 60 or agent.inventory.get("food", 0) == 0:
+            target = self.find_nearest(agent, world.food, self.vision_radius)
+            if target is not None:
+                return self.move_towards(agent, world, target)
 
-Environment:
-- villages exist
-- forest contains wood
-- mountains contain stone
-- grassland contains food
+        if agent.inventory.get("wood", 0) < 5:
+            target = self.find_nearest(agent, world.wood, self.vision_radius)
+            if target is not None:
+                return self.move_towards(agent, world, target)
 
-Available goals:
-- gather food
-- gather wood
-- gather stone
-- explore
-- return home
-- build house
+        if agent.inventory.get("stone", 0) < 3:
+            target = self.find_nearest(agent, world.stone, self.vision_radius)
+            if target is not None:
+                return self.move_towards(agent, world, target)
 
-Choose ONE goal for the next minutes.
+        return self.wander(agent, world)
 
-Respond ONLY in JSON like:
-{{"goal":"gather wood"}}
-"""
-    return prompt.strip()
+    def find_nearest(
+        self,
+        agent,
+        resource_set: Set[Tuple[int, int]],
+        radius: int,
+    ) -> Optional[Tuple[int, int]]:
+        ax, ay = agent.x, agent.y
+        best: Optional[Tuple[int, int]] = None
+        best_d = 10**9
+
+        for (x, y) in resource_set:
+            d = abs(x - ax) + abs(y - ay)
+            if d <= radius and d < best_d:
+                best_d = d
+                best = (x, y)
+
+        return best
+
+    def move_towards(self, agent, world, target: Tuple[int, int]) -> Tuple[str, ...]:
+        tx, ty = target
+        if (agent.x, agent.y) == (tx, ty):
+            return ("wait",)
+
+        options = []
+
+        if tx > agent.x:
+            options.append((1, 0))
+        elif tx < agent.x:
+            options.append((-1, 0))
+
+        if ty > agent.y:
+            options.append((0, 1))
+        elif ty < agent.y:
+            options.append((0, -1))
+
+        random.shuffle(options)
+
+        for dx, dy in options:
+            nx, ny = agent.x + dx, agent.y + dy
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                return ("move", dx, dy)
+
+        dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        random.shuffle(dirs)
+        for dx, dy in dirs:
+            nx, ny = agent.x + dx, agent.y + dy
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                return ("move", dx, dy)
+
+        return ("wait",)
+
+    def wander(self, agent, world) -> Tuple[str, ...]:
+        dirs = [(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)]
+        random.shuffle(dirs)
+        for dx, dy in dirs:
+            if dx == 0 and dy == 0:
+                return ("wait",)
+            nx, ny = agent.x + dx, agent.y + dy
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                return ("move", dx, dy)
+        return ("wait",)
 
 
-def ask_llm(prompt: str) -> str:
-    data = {
-        "model": MODEL,
-        "prompt": prompt,
-        "stream": False
-    }
+class LLMBrain:
+    def __init__(self, planner: Planner, fallback: FoodBrain, think_every_ticks: int = 30):
+        self.planner = planner
+        self.fallback = fallback
+        self.think_every_ticks = think_every_ticks
 
-    req = urllib.request.Request(
-        OLLAMA_URL,
-        data=json.dumps(data).encode(),
-        headers={"Content-Type": "application/json"}
-    )
+    def decide(self, agent, world) -> Tuple[str, ...]:
+        # survival prima di tutto
+        if agent.hunger < 60 or agent.inventory.get("food", 0) == 0:
+            return self.fallback.decide(agent, world)
 
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.loads(resp.read().decode())
+        # trigger non bloccante
+        if (
+            world.tick - agent.last_llm_tick >= self.think_every_ticks
+            and not agent.llm_pending
+        ):
+            agent.last_llm_tick = world.tick
+            agent.llm_pending = True
+            prompt = self._make_prompt(agent, world)
 
-    return result["response"]
+            print(f"LLM thinking for player: {agent.player_id}")
 
+            asyncio.create_task(self._request_goal(agent, prompt))
 
-def think(agent, world):
+        # usa il goal corrente senza bloccare
+        g = (agent.goal or "").lower()
 
-    prompt = build_prompt(agent, world)
+        if "wood" in g or "legn" in g or "tree" in g:
+            if agent.inventory.get("wood", 0) < 8:
+                target = self.fallback.find_nearest(agent, world.wood, self.fallback.vision_radius)
+                if target is not None:
+                    return self.fallback.move_towards(agent, world, target)
 
-    try:
+        if "stone" in g or "pietr" in g or "rock" in g:
+            if agent.inventory.get("stone", 0) < 6:
+                target = self.fallback.find_nearest(agent, world.stone, self.fallback.vision_radius)
+                if target is not None:
+                    return self.fallback.move_towards(agent, world, target)
 
-        response = ask_llm(prompt)
+        if "food" in g or "cibo" in g or "eat" in g or "hunt" in g:
+            target = self.fallback.find_nearest(agent, world.food, self.fallback.vision_radius)
+            if target is not None:
+                return self.fallback.move_towards(agent, world, target)
 
-        # debug utile
-        print("LLM raw response:", response)
+        return self.fallback.decide(agent, world)
 
-        # trova il JSON nella risposta
-        start = response.find("{")
-        end = response.rfind("}") + 1
+    async def _request_goal(self, agent, prompt: str) -> None:
+        try:
+            goal = await self.planner.propose_goal_async(prompt)
+            agent.goal = goal or "survive"
+            print(f"LLM goal: {agent.goal}")
+        except Exception as e:
+            print(f"LLM error for player {agent.player_id}: {e}")
+        finally:
+            agent.llm_pending = False
 
-        if start == -1 or end == -1:
-            print("LLM: no JSON found")
-            return
-
-        json_text = response[start:end]
-
-        data = json.loads(json_text)
-
-        goal = data.get("goal")
-
-        if goal:
-            agent.goals_queue.append({
-                "text": goal,
-                "horizon": "medium"
-            })
-
-            print("LLM goal:", goal)
-
-    except Exception as e:
-        print("LLM error:", e)
+    def _make_prompt(self, agent, world) -> str:
+        return (
+            "You are the brain of a player character in a small tile world.\n"
+            "Return a VERY SHORT goal for the next seconds.\n"
+            "Answer as JSON: {\"goal\":\"...\"}\n"
+            f"Tick={world.tick}\n"
+            f"Position=({agent.x},{agent.y})\n"
+            f"Hunger={agent.hunger}\n"
+            f"Inventory={agent.inventory}\n"
+            "Possible goals: gather food, gather wood, gather stone, explore.\n"
+        )

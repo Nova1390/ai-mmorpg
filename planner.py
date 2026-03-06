@@ -1,84 +1,128 @@
-def _norm(text: str) -> str:
-    return (text or "").strip().lower()
+from __future__ import annotations
+
+import asyncio
+import json
+import re
+import urllib.error
+import urllib.request
+from typing import Optional
 
 
-def plan_from_goal(goal):
+class Planner:
     """
-    goal può essere dict {"text": "..."} o stringa.
-    ritorna lista step.
+    Planner che chiama Ollama locale via HTTP.
+    Default:
+      http://127.0.0.1:11434/api/generate
     """
-    if isinstance(goal, dict):
-        text = goal.get("text", "")
-    else:
-        text = str(goal)
 
-    t = _norm(text)
+    def __init__(
+        self,
+        model: str = "phi3",
+        base_url: str = "http://127.0.0.1:11434",
+        timeout_s: int = 20,
+    ):
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout_s = timeout_s
 
-    # GATHER
-    if "wood" in t and ("gather" in t or "collect" in t):
-        return [
-            {"action": "gather", "resource": "wood"},
-            {"action": "gather", "resource": "wood"},
-            {"action": "gather", "resource": "wood"},
-        ]
+    def propose_goal(self, prompt: str) -> str:
+        """
+        Chiamata sincrona a Ollama.
+        Ritorna una stringa goal pulita.
+        """
+        url = f"{self.base_url}/api/generate"
 
-    if "stone" in t and ("gather" in t or "collect" in t):
-        return [
-            {"action": "gather", "resource": "stone"},
-            {"action": "gather", "resource": "stone"},
-            {"action": "gather", "resource": "stone"},
-        ]
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": True,
+        }
 
-    if "food" in t and ("gather" in t or "collect" in t or "hunt" in t):
-        return [
-            {"action": "gather", "resource": "food"},
-            {"action": "gather", "resource": "food"},
-        ]
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
 
-    # EXPLORE
-    if "explore" in t or "scout" in t or "wander" in t:
-        return [{"action": "explore"} for _ in range(10)]
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+        except urllib.error.URLError as e:
+            return f"error: ollama unreachable ({e})"
+        except Exception as e:
+            return f"error: {e}"
 
-    # RETURN HOME (marker, per ora)
-    if "return home" in t or "go home" in t or "back home" in t:
-        return [{"action": "return_home"}]
+        text = self._parse_ollama_stream(raw)
+        goal = self._extract_goal(text)
 
-    # BUILD HOUSE (marker: lo implementiamo subito dopo)
-    if "build" in t and "house" in t:
-        return [
-            {"action": "gather", "resource": "wood"},
-            {"action": "gather", "resource": "wood"},
-            {"action": "gather", "resource": "wood"},
-            {"action": "gather", "resource": "wood"},
-            {"action": "gather", "resource": "wood"},
-            {"action": "gather", "resource": "stone"},
-            {"action": "gather", "resource": "stone"},
-            {"action": "gather", "resource": "stone"},
-            {"action": "build", "what": "house"},
-        ]
+        return goal or "survive"
 
-    # fallback: esplora un po'
-    return [{"action": "explore"} for _ in range(5)]
+    async def propose_goal_async(self, prompt: str) -> str:
+        """
+        Wrapper non bloccante.
+        Esegue propose_goal in thread separato.
+        """
+        return await asyncio.to_thread(self.propose_goal, prompt)
 
+    def _parse_ollama_stream(self, raw: str) -> str:
+        """
+        Ollama spesso ritorna più righe JSON:
+        {"response":"...","done":false}
+        {"response":"...","done":true}
+        """
+        parts = []
 
-def advance_plan_if_progress(agent, before_inv, after_inv):
-    """
-    Consuma 1 step quando:
-    - gather X: inventory[X] è aumentato nel tick
-    - explore/return_home/build: consumati subito (per ora)
-    """
-    if not agent.current_plan:
-        return
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
 
-    step = agent.current_plan[0]
-    action = step.get("action")
+            try:
+                obj = json.loads(line)
 
-    if action == "gather":
-        res = step.get("resource")
-        if res in before_inv and res in after_inv and after_inv[res] > before_inv[res]:
-            agent.current_plan.pop(0)
-        return
+                if isinstance(obj, dict):
+                    if "response" in obj:
+                        parts.append(str(obj["response"]))
+                    elif "error" in obj:
+                        parts.append(f"error: {obj['error']}")
+            except json.JSONDecodeError:
+                # fallback: se non è JSON, prova a tenere il testo
+                parts.append(line)
 
-    if action in ("explore", "return_home", "build"):
-        agent.current_plan.pop(0)
-        return
+        return "".join(parts).strip()
+
+    def _extract_goal(self, text: str) -> Optional[str]:
+        """
+        Estrae un goal da:
+        - testo normale
+        - JSON
+        - ```json ... ```
+        """
+        if not text:
+            return None
+
+        cleaned = text.strip()
+
+        # rimuovi code fences markdown
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+        # prova parsing JSON diretto
+        try:
+            obj = json.loads(cleaned)
+
+            if isinstance(obj, dict):
+                g = obj.get("goal") or obj.get("task") or obj.get("objective")
+                if isinstance(g, str) and g.strip():
+                    return g.strip()
+        except Exception:
+            pass
+
+        # fallback: prima riga utile
+        lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+        if not lines:
+            return None
+
+        return lines[0][:120].strip()

@@ -1,118 +1,200 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Set
 import random
+import asyncio
+
+from planner import Planner
 
 
 class FoodBrain:
-    """
-    Brain semplice:
-    - aggiorna memoria visiva
-    - se serve cibo e lo vede: va dritto al cibo (priorità alta)
-    - altrimenti: wandering leggero
-    """
-
-    def __init__(self, vision_radius: int = 6):
+    def __init__(self, vision_radius: int = 8):
         self.vision_radius = vision_radius
 
     def decide(self, agent, world) -> Tuple[str, ...]:
-        # aggiorna memoria: quello che vede entra in memoria
-        self.update_memory(agent, world)
-
-        # priorità food: se fame bassa o non ho food in inventory
-        need_food = agent.hunger < 60 or agent.inventory.get("food", 0) == 0
-
-        if need_food:
-            target = self.find_nearest_food(agent, world, radius=self.vision_radius)
+        # 1) FOOD priority
+        if agent.hunger < 60 or agent.inventory.get("food", 0) == 0:
+            target = self.find_nearest(agent, world.food, self.vision_radius)
             if target is not None:
-                tx, ty = target
+                return self.move_towards(agent, world, target)
 
-                # se sono già sul target, aspetto: world.autopickup farà il resto
-                if (agent.x, agent.y) == (tx, ty):
-                    return ("wait",)
+        # 2) WOOD
+        if agent.inventory.get("wood", 0) < 5:
+            target = self.find_nearest(agent, world.wood, self.vision_radius)
+            if target is not None:
+                return self.move_towards(agent, world, target)
 
-                return self.step_towards(agent, world, tx, ty)
+        # 3) STONE
+        if agent.inventory.get("stone", 0) < 3:
+            target = self.find_nearest(agent, world.stone, self.vision_radius)
+            if target is not None:
+                return self.move_towards(agent, world, target)
 
-        # se non serve food: roaming
         return self.wander(agent, world)
 
-    def update_memory(self, agent, world) -> None:
+    def find_nearest(
+        self,
+        agent,
+        resource_set: Set[Tuple[int, int]],
+        radius: int,
+    ) -> Optional[Tuple[int, int]]:
         ax, ay = agent.x, agent.y
-        r = self.vision_radius
-
-        # vede food nel raggio
-        for (fx, fy) in world.food:
-            if abs(fx - ax) + abs(fy - ay) <= r:
-                agent.memory["food"].add((fx, fy))
-
-        # pulizia memory: se quel punto non ha più cibo, rimuovi
-        # (evita target "fantasma")
-        to_remove = []
-        for (fx, fy) in agent.memory["food"]:
-            if (fx, fy) not in world.food:
-                to_remove.append((fx, fy))
-        for p in to_remove:
-            agent.memory["food"].discard(p)
-
-    def find_nearest_food(self, agent, world, radius: int = 6) -> Optional[Tuple[int, int]]:
-        ax, ay = agent.x, agent.y
-        best = None
+        best: Optional[Tuple[int, int]] = None
         best_d = 10**9
 
-        # usa direttamente world.food (reale), non solo memory
-        for (fx, fy) in world.food:
-            d = abs(fx - ax) + abs(fy - ay)
+        for (x, y) in resource_set:
+            d = abs(x - ax) + abs(y - ay)
             if d <= radius and d < best_d:
                 best_d = d
-                best = (fx, fy)
-
-        # fallback: prova memory (nel caso)
-        if best is None:
-            for (fx, fy) in agent.memory["food"]:
-                d = abs(fx - ax) + abs(fy - ay)
-                if d <= radius and d < best_d:
-                    best_d = d
-                    best = (fx, fy)
+                best = (x, y)
 
         return best
 
-    def step_towards(self, agent, world, tx: int, ty: int):
-        # muovi di 1 step verso target
-        dx = 0 if tx == agent.x else (1 if tx > agent.x else -1)
-        dy = 0 if ty == agent.y else (1 if ty > agent.y else -1)
+    def move_towards(self, agent, world, target: Tuple[int, int]) -> Tuple[str, ...]:
+        tx, ty = target
 
-        # prova prima asse più “utile”
-        # (preferisce ridurre la distanza manhattan)
-        candidates = []
-        if dx != 0:
-            candidates.append((dx, 0))
-        if dy != 0:
-            candidates.append((0, dy))
+        if (agent.x, agent.y) == (tx, ty):
+            return ("wait",)
 
-        # alternativa per aggirare ostacoli
-        random.shuffle(candidates)
-        for (mx, my) in candidates:
-            nx, ny = agent.x + mx, agent.y + my
-            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
-                return ("move", mx, my)
+        options = []
 
-        # se bloccato: tenta 4 direzioni
-        dirs = [(1,0), (-1,0), (0,1), (0,-1)]
-        random.shuffle(dirs)
-        for (mx, my) in dirs:
-            nx, ny = agent.x + mx, agent.y + my
-            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
-                return ("move", mx, my)
+        if tx > agent.x:
+            options.append((1, 0))
+        elif tx < agent.x:
+            options.append((-1, 0))
 
-        return ("wait",)
+        if ty > agent.y:
+            options.append((0, 1))
+        elif ty < agent.y:
+            options.append((0, -1))
 
-    def wander(self, agent, world):
-        dirs = [(1,0), (-1,0), (0,1), (0,-1), (0,0)]
-        random.shuffle(dirs)
-        for (dx, dy) in dirs:
+        random.shuffle(options)
+
+        for dx, dy in options:
             nx, ny = agent.x + dx, agent.y + dy
-            if dx == 0 and dy == 0:
-                return ("wait",)
             if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
                 return ("move", dx, dy)
+
+        dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        random.shuffle(dirs)
+
+        for dx, dy in dirs:
+            nx, ny = agent.x + dx, agent.y + dy
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                return ("move", dx, dy)
+
         return ("wait",)
+
+    def wander(self, agent, world) -> Tuple[str, ...]:
+        dirs = [(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)]
+        random.shuffle(dirs)
+
+        for dx, dy in dirs:
+            if dx == 0 and dy == 0:
+                return ("wait",)
+
+            nx, ny = agent.x + dx, agent.y + dy
+            if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
+                return ("move", dx, dy)
+
+        return ("wait",)
+
+
+class LLMBrain:
+    """
+    Brain ibrido:
+    - survival e movimento concreto demandati a FoodBrain
+    - goal alto livello aggiornato via LLM in modo non bloccante
+    """
+
+    def __init__(self, planner: Planner, fallback: FoodBrain, think_every_ticks: int = 60):
+        self.planner = planner
+        self.fallback = fallback
+        self.think_every_ticks = think_every_ticks
+
+    def decide(self, agent, world) -> Tuple[str, ...]:
+        # survival sempre prioritaria
+        if agent.hunger < 60 or agent.inventory.get("food", 0) == 0:
+            return self.fallback.decide(agent, world)
+
+        # chiedi nuovo goal solo ogni tanto e solo se non c'è già una richiesta in corso
+        if self._should_think(agent, world):
+            self._schedule_llm_request(agent, world)
+
+        # usa il goal corrente per indirizzare il comportamento
+        return self._act_from_goal(agent, world)
+
+    def _should_think(self, agent, world) -> bool:
+        if agent.llm_pending:
+            return False
+        if world.tick - agent.last_llm_tick < self.think_every_ticks:
+            return False
+        return True
+
+    def _schedule_llm_request(self, agent, world) -> None:
+        agent.llm_pending = True
+        agent.last_llm_tick = world.tick
+
+        prompt = self._make_prompt(agent, world)
+        print(f"LLM thinking for player: {agent.player_id}")
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._request_goal(agent, prompt))
+        except RuntimeError:
+            # fallback di sicurezza: se per qualche motivo non c'è event loop attivo
+            agent.llm_pending = False
+            print(f"LLM scheduling failed for player {agent.player_id}: no running event loop")
+
+    async def _request_goal(self, agent, prompt: str) -> None:
+        try:
+            goal = await self.planner.propose_goal_async(prompt)
+            agent.goal = goal or "survive"
+            print(f"LLM goal: {agent.goal}")
+        except Exception as e:
+            print(f"LLM error for player {agent.player_id}: {e}")
+        finally:
+            agent.llm_pending = False
+
+    def _act_from_goal(self, agent, world) -> Tuple[str, ...]:
+        g = (agent.goal or "").lower()
+
+        if "wood" in g or "legn" in g or "tree" in g:
+            if agent.inventory.get("wood", 0) < 8:
+                target = self.fallback.find_nearest(
+                    agent, world.wood, self.fallback.vision_radius
+                )
+                if target is not None:
+                    return self.fallback.move_towards(agent, world, target)
+
+        if "stone" in g or "pietr" in g or "rock" in g:
+            if agent.inventory.get("stone", 0) < 6:
+                target = self.fallback.find_nearest(
+                    agent, world.stone, self.fallback.vision_radius
+                )
+                if target is not None:
+                    return self.fallback.move_towards(agent, world, target)
+
+        if "food" in g or "cibo" in g or "eat" in g or "hunt" in g:
+            target = self.fallback.find_nearest(
+                agent, world.food, self.fallback.vision_radius
+            )
+            if target is not None:
+                return self.fallback.move_towards(agent, world, target)
+
+        if "explore" in g or "esplora" in g:
+            return self.fallback.wander(agent, world)
+
+        # fallback sensato
+        return self.fallback.decide(agent, world)
+
+    def _make_prompt(self, agent, world) -> str:
+        return (
+            "You are the high-level brain of a player character in a tile world.\n"
+            "Return only a short JSON object.\n"
+            'Format: {"goal":"gather food|gather wood|gather stone|explore"}\n'
+            f"tick={world.tick}\n"
+            f"position=({agent.x},{agent.y})\n"
+            f"hunger={agent.hunger}\n"
+            f"inventory={agent.inventory}\n"
+        )
