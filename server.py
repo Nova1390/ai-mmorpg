@@ -17,32 +17,47 @@ app = FastAPI()
 
 world = World()
 
-# NPC brain (veloce)
 npc_brain = FoodBrain(vision_radius=8)
-
-# Player brain (LLM + fallback)
 planner = Planner(model="phi3")
-player_brain = LLMBrain(planner=planner, fallback=npc_brain, think_every_ticks=30)
+player_brain = LLMBrain(planner=planner, fallback=npc_brain, think_every_ticks=60)
+leader_brain = LLMBrain(planner=planner, fallback=npc_brain, think_every_ticks=120)
 
 SPRITES_DIR = "sprites"
 app.mount("/sprites", StaticFiles(directory=SPRITES_DIR), name="sprites")
 
 
+def refresh_agent_brains():
+    for a in world.agents:
+        if not a.alive:
+            continue
+
+        if a.is_player:
+            a.brain = player_brain
+            a.role = "player"
+        elif getattr(a, "role", "npc") == "leader":
+            a.brain = leader_brain
+        else:
+            a.brain = npc_brain
+
+
 async def tick_loop():
     while True:
+        refresh_agent_brains()
         world.update()
+        refresh_agent_brains()
         await asyncio.sleep(0.2)
 
 
 @app.on_event("startup")
 async def startup():
-    # spawn NPC iniziali
     for _ in range(40):
         for _ in range(200):
             x = random.randint(0, world.width - 1)
             y = random.randint(0, world.height - 1)
+
             if world.is_walkable(x, y) and not world.is_occupied(x, y):
                 npc = Agent(x, y, npc_brain, False, None)
+                npc.role = "npc"
                 world.add_agent(npc)
                 break
 
@@ -60,13 +75,16 @@ def sprites_manifest():
 
     for folder in os.listdir(SPRITES_DIR):
         path = os.path.join(SPRITES_DIR, folder)
+
         if os.path.isdir(path):
             files = []
+
             for root, dirs, filenames in os.walk(path):
                 for f in filenames:
                     if f.lower().endswith((".png", ".jpg", ".jpeg")):
                         rel = os.path.relpath(os.path.join(root, f), SPRITES_DIR)
                         files.append("/sprites/" + rel.replace("\\", "/"))
+
             manifest[folder.lower()] = files
 
     return manifest
@@ -92,8 +110,16 @@ def get_state():
         "wood": [{"x": x, "y": y} for x, y in world.wood],
         "stone": [{"x": x, "y": y} for x, y in world.stone],
         "structures": [{"x": x, "y": y} for x, y in world.structures],
+        "villages": world.villages,
         "agents": [
-            {"x": a.x, "y": a.y, "is_player": a.is_player, "player_id": a.player_id}
+            {
+                "x": a.x,
+                "y": a.y,
+                "is_player": a.is_player,
+                "player_id": a.player_id,
+                "role": getattr(a, "role", "npc"),
+                "village_id": getattr(a, "village_id", None),
+            }
             for a in alive_agents
         ],
         "population": len(alive_agents),
@@ -103,6 +129,10 @@ def get_state():
         "food_count": len(world.food),
         "wood_count": len(world.wood),
         "stone_count": len(world.stone),
+        "houses_count": len(world.structures),
+        "villages_count": len(world.villages),
+        "leaders_count": world.count_leaders(),
+        "llm_interactions": world.llm_interactions,
     }
 
 
@@ -116,6 +146,7 @@ def spawn_player():
             pid = str(uuid.uuid4())
 
             player = Agent(x, y, player_brain, True, pid)
+            player.role = "player"
             world.add_agent(player)
 
             return {"player_id": pid}
@@ -134,6 +165,8 @@ def get_player(player_id: str):
                 "y": p.y,
                 "hunger": p.hunger,
                 "goal": getattr(p, "goal", "survive"),
+                "role": getattr(p, "role", "player"),
+                "village_id": getattr(p, "village_id", None),
                 "inventory": {
                     "food": inv.get("food", 0),
                     "wood": inv.get("wood", 0),

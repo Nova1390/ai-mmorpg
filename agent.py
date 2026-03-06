@@ -25,23 +25,93 @@ class Agent:
     alive: bool = True
     hunger: float = float(AGENT_START_HUNGER)
 
-    # inventario
     inventory: Dict[str, int] = field(
         default_factory=lambda: {"food": 0, "wood": 0, "stone": 0}
     )
 
-    # memoria percettiva
     memory: Dict[str, set] = field(
-        default_factory=lambda: {"food": set(), "wood": set(), "stone": set()}
+        default_factory=lambda: {
+            "food": set(),
+            "wood": set(),
+            "stone": set(),
+            "villages": set(),
+        }
     )
 
-    # riproduzione
     repro_cooldown: int = 0
 
     # stato LLM / goal alto livello
     goal: str = "survive"
     last_llm_tick: int = 0
     llm_pending: bool = False
+
+    # civ / villaggio
+    role: str = "npc"          # npc | leader | player
+    village_id: Optional[int] = None
+
+    # ---------------------------------------------------
+    # MEMORY
+    # ---------------------------------------------------
+
+    def update_memory(self, world: "World") -> None:
+        vision = 6
+
+        for dx in range(-vision, vision + 1):
+            for dy in range(-vision, vision + 1):
+                x = self.x + dx
+                y = self.y + dy
+
+                if x < 0 or y < 0 or x >= world.width or y >= world.height:
+                    continue
+
+                pos = (x, y)
+
+                if pos in world.food:
+                    self.memory["food"].add(pos)
+
+                if pos in world.wood:
+                    self.memory["wood"].add(pos)
+
+                if pos in world.stone:
+                    self.memory["stone"].add(pos)
+
+        for village in getattr(world, "villages", []):
+            center = village.get("center")
+            if not center:
+                continue
+
+            vx = center.get("x")
+            vy = center.get("y")
+
+            if vx is None or vy is None:
+                continue
+
+            if abs(vx - self.x) <= vision * 2 and abs(vy - self.y) <= vision * 2:
+                self.memory["villages"].add((vx, vy))
+
+    def cleanup_memory(self, world: "World") -> None:
+        self.memory["food"] = {
+            p for p in self.memory["food"] if p in world.food
+        }
+
+        self.memory["wood"] = {
+            p for p in self.memory["wood"] if p in world.wood
+        }
+
+        self.memory["stone"] = {
+            p for p in self.memory["stone"] if p in world.stone
+        }
+
+        valid_village_centers = set()
+
+        for village in getattr(world, "villages", []):
+            center = village.get("center")
+            if center and "x" in center and "y" in center:
+                valid_village_centers.add((center["x"], center["y"]))
+
+        self.memory["villages"] = {
+            p for p in self.memory["villages"] if p in valid_village_centers
+        }
 
     # ---------------------------------------------------
     # BRAIN
@@ -78,24 +148,19 @@ class Agent:
     # ---------------------------------------------------
 
     def try_reproduce(self, world: "World") -> None:
-        # solo NPC
         if self.is_player:
             return
 
-        # frena crescita popolazione
         if len(world.agents) >= int(MAX_AGENTS * 0.60):
             return
 
-        # cooldown
         if self.repro_cooldown > 0:
             self.repro_cooldown -= 1
             return
 
-        # energia minima
         if self.hunger < REPRO_MIN_HUNGER:
             return
 
-        # probabilità
         if random.random() > REPRO_PROB:
             return
 
@@ -108,21 +173,21 @@ class Agent:
         baby = Agent(
             x=bx,
             y=by,
-            brain=self.brain,  # NPC condividono brain veloce
+            brain=self.brain,
             is_player=False,
             player_id=None,
         )
 
         baby.hunger = float(AGENT_START_HUNGER)
+        baby.role = "npc"
+        baby.village_id = self.village_id
 
         world.add_agent(baby)
 
-        # costo riproduzione
         self.hunger -= REPRO_COST
         if self.hunger < 1:
             self.hunger = 1
 
-        # cooldown alto per evitare crescita esponenziale
         self.repro_cooldown = 80
 
     # ---------------------------------------------------
@@ -133,20 +198,19 @@ class Agent:
         if not self.alive:
             return
 
-        # consumo fame
+        self.update_memory(world)
+        self.cleanup_memory(world)
+
         self.hunger -= 1
 
         if self.hunger <= 0:
             self.alive = False
             return
 
-        # mangia se necessario
         self.eat_if_needed()
 
-        # decisione brain
         action = self.run_brain(world)
 
-        # movimento
         if action and action[0] == "move":
             dx = int(action[1])
             dy = int(action[2])
@@ -158,13 +222,9 @@ class Agent:
                 self.x = nx
                 self.y = ny
 
-        # interazioni col mondo
         world.autopickup(self)
         world.gather_resource(self)
         world.try_build_house(self)
 
-        # mangia dopo eventuale raccolta
         self.eat_if_needed()
-
-        # riproduzione
         self.try_reproduce(world)

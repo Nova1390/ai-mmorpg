@@ -9,8 +9,18 @@
   .row { display:flex; gap:16px; align-items:flex-start; }
   .panel { border: 1px solid #aaa; padding: 10px; width: 380px; }
   .legend div { margin: 4px 0; }
-  .box { display:inline-block; width:12px; height:12px; margin-right:6px; border:1px solid #222; }
-  .mono { font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+  .box {
+    display:inline-block;
+    width:12px;
+    height:12px;
+    margin-right:6px;
+    border:1px solid #222;
+  }
+  .mono {
+    font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    line-height: 1.4;
+  }
   button { padding: 8px 10px; }
 </style>
 </head>
@@ -36,6 +46,8 @@
       <b>LEGEND</b>
       <div><span class="box" style="background:red"></span> Player</div>
       <div><span class="box" style="background:blue"></span> NPC</div>
+      <div><span class="box" style="background:gold"></span> Village center</div>
+      <div><span class="box" style="background:orange"></span> Leader</div>
 
       <div style="margin-top:8px;"><b>Tiles</b></div>
       <div><span class="box" style="background:#6fcf6a"></span> Grass (G)</div>
@@ -45,9 +57,11 @@
 
       <div style="margin-top:8px;"><b>World objects</b></div>
       <div><span class="box" style="background:#00aa00"></span> Food</div>
-      <div><span class="box" style="background:#0b3d1e"></span> Wood (tree)</div>
+      <div><span class="box" style="background:#0b3d1e"></span> Wood</div>
       <div><span class="box" style="background:#d3d3d3"></span> Stone</div>
       <div><span class="box" style="background:#8b4513"></span> House</div>
+      <div><span class="box" style="background:rgba(255,215,0,0.25)"></span> Village influence</div>
+      <div><span class="box" style="background:rgba(255,80,0,0.25)"></span> Population heat</div>
     </div>
   </div>
 </div>
@@ -61,7 +75,7 @@ const mctx = minimap.getContext("2d");
 
 let playerId = null;
 
-function tileColor(t){
+function tileColor(t) {
   if (t === "G") return "#6fcf6a";
   if (t === "F") return "#2f8f45";
   if (t === "M") return "#999999";
@@ -69,13 +83,109 @@ function tileColor(t){
   return "#ffffff";
 }
 
-async function spawnPlayer(){
+async function spawnPlayer() {
   const r = await fetch("/spawn_player", { method: "POST" });
   const data = await r.json();
   playerId = data.player_id || null;
 }
 
-async function update(){
+function drawMinimapCircle(x, y, radius, color) {
+  mctx.beginPath();
+  mctx.arc(x, y, radius, 0, Math.PI * 2);
+  mctx.fillStyle = color;
+  mctx.fill();
+}
+
+function renderMinimap(data, cameraX, cameraY, viewW, viewH) {
+  if (!data || !data.tiles) return;
+
+  const w = minimap.width;
+  const h = minimap.height;
+  const sx = w / data.width;
+  const sy = h / data.height;
+
+  const step = Math.max(2, Math.floor(data.width / 120));
+  mctx.clearRect(0, 0, w, h);
+
+  for (let y = 0; y < data.height; y += step) {
+    for (let x = 0; x < data.width; x += step) {
+      mctx.fillStyle = tileColor(data.tiles[y][x]);
+      mctx.fillRect(x * sx, y * sy, step * sx, step * sy);
+    }
+  }
+
+  (data.villages || []).forEach(v => {
+    const cx = v.center.x * sx;
+    const cy = v.center.y * sy;
+    const influenceRadius = Math.max(6, (v.houses || 1) * 0.9);
+    drawMinimapCircle(cx, cy, influenceRadius, "rgba(255, 215, 0, 0.14)");
+  });
+
+  (data.villages || []).forEach(v => {
+    const cx = v.center.x * sx;
+    const cy = v.center.y * sy;
+    const pop = v.population || 0;
+    const heatRadius = Math.max(4, pop * 0.45);
+    const alpha = Math.min(0.28, 0.04 + pop * 0.01);
+    drawMinimapCircle(cx, cy, heatRadius, `rgba(255, 80, 0, ${alpha})`);
+  });
+
+  (data.structures || []).forEach(house => {
+    mctx.fillStyle = "#5a2d0c";
+    mctx.fillRect(
+      house.x * sx,
+      house.y * sy,
+      Math.max(2, sx),
+      Math.max(2, sy)
+    );
+  });
+
+  (data.villages || []).forEach(v => {
+    const cx = v.center.x * sx;
+    const cy = v.center.y * sy;
+
+    mctx.beginPath();
+    mctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    mctx.fillStyle = "gold";
+    mctx.fill();
+
+    mctx.strokeStyle = "#222";
+    mctx.lineWidth = 1;
+    mctx.stroke();
+  });
+
+  (data.agents || []).forEach(a => {
+    const ax = a.x * sx;
+    const ay = a.y * sy;
+
+    if (a.role === "leader") {
+      mctx.beginPath();
+      mctx.arc(ax, ay, 3.5, 0, Math.PI * 2);
+      mctx.fillStyle = "orange";
+      mctx.fill();
+      return;
+    }
+
+    mctx.fillStyle = a.is_player ? "red" : "blue";
+    mctx.fillRect(
+      ax,
+      ay,
+      Math.max(1.5, sx * 0.8),
+      Math.max(1.5, sy * 0.8)
+    );
+  });
+
+  mctx.strokeStyle = "#000";
+  mctx.lineWidth = 1;
+  mctx.strokeRect(
+    cameraX * sx,
+    cameraY * sy,
+    viewW * sx,
+    viewH * sy
+  );
+}
+
+async function update() {
   const r = await fetch("/state", { cache: "no-store" });
   const data = await r.json();
 
@@ -83,59 +193,61 @@ async function update(){
   const viewW = Math.floor(canvas.width / cellSize);
   const viewH = Math.floor(canvas.height / cellSize);
 
-  let cameraX = 0, cameraY = 0;
+  let cameraX = 0;
+  let cameraY = 0;
   let playerData = null;
 
-  if (playerId){
+  if (playerId) {
     const pr = await fetch(`/player/${playerId}`, { cache: "no-store" });
-    if (pr.status === 200){
+    if (pr.status === 200) {
       playerData = await pr.json();
-      cameraX = playerData.x - Math.floor(viewW/2);
-      cameraY = playerData.y - Math.floor(viewH/2);
+      cameraX = playerData.x - Math.floor(viewW / 2);
+      cameraY = playerData.y - Math.floor(viewH / 2);
     }
   }
 
-  // clamp camera
   cameraX = Math.max(0, Math.min(cameraX, data.width - viewW));
   cameraY = Math.max(0, Math.min(cameraY, data.height - viewH));
 
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // --- Layer 0: tiles ---
-  for (let y=0; y<viewH; y++){
-    for (let x=0; x<viewW; x++){
+  for (let y = 0; y < viewH; y++) {
+    for (let x = 0; x < viewW; x++) {
       const wx = x + cameraX;
       const wy = y + cameraY;
-      if (wx<0 || wy<0 || wx>=data.width || wy>=data.height) continue;
+
+      if (wx < 0 || wy < 0 || wx >= data.width || wy >= data.height) continue;
 
       const t = data.tiles[wy][wx];
       ctx.fillStyle = tileColor(t);
-      ctx.fillRect(x*cellSize, y*cellSize, cellSize, cellSize);
+      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
     }
   }
 
-  // helper to draw world-point objects
-  function drawCell(x, y, color){
+  function drawCell(x, y, color) {
     const sx = (x - cameraX) * cellSize;
     const sy = (y - cameraY) * cellSize;
-    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) return;
 
-    // disegna “icona” più piccola per capire meglio
+    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) {
+      return;
+    }
+
     const pad = Math.floor(cellSize * 0.2);
     ctx.fillStyle = color;
-    ctx.fillRect(sx + pad, sy + pad, cellSize - pad*2, cellSize - pad*2);
+    ctx.fillRect(sx + pad, sy + pad, cellSize - pad * 2, cellSize - pad * 2);
   }
 
-  // --- Layer 1: resources ---
-  (data.food || []).forEach(f => drawCell(f.x, f.y, "#00aa00"));      // food
-  (data.wood || []).forEach(w => drawCell(w.x, w.y, "#0b3d1e"));      // wood/tree
-  (data.stone || []).forEach(s => drawCell(s.x, s.y, "#d3d3d3"));     // stone
+  (data.food || []).forEach(f => drawCell(f.x, f.y, "#00aa00"));
+  (data.wood || []).forEach(w => drawCell(w.x, w.y, "#0b3d1e"));
+  (data.stone || []).forEach(s => drawCell(s.x, s.y, "#d3d3d3"));
 
-  // --- Layer 2: structures (houses) ---
   (data.structures || []).forEach(h => {
     const sx = (h.x - cameraX) * cellSize;
     const sy = (h.y - cameraY) * cellSize;
-    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) return;
+
+    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) {
+      return;
+    }
 
     ctx.fillStyle = "#8b4513";
     ctx.fillRect(sx, sy, cellSize, cellSize);
@@ -143,14 +255,15 @@ async function update(){
     ctx.strokeRect(sx, sy, cellSize, cellSize);
   });
 
-  // --- Layer 3: agents ---
   (data.agents || []).forEach(a => {
     const sx = (a.x - cameraX) * cellSize;
     const sy = (a.y - cameraY) * cellSize;
-    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) return;
+
+    if (sx < -cellSize || sy < -cellSize || sx > canvas.width || sy > canvas.height) {
+      return;
+    }
 
     const isPlayer = a.is_player && a.player_id === playerId;
-
     ctx.fillStyle = isPlayer ? "red" : "blue";
     ctx.fillRect(sx, sy, cellSize, cellSize);
 
@@ -160,8 +273,8 @@ async function update(){
     ctx.lineWidth = 1;
   });
 
-  // --- Dashboard ---
-  const inv = playerData?.inventory || { food:0, wood:0, stone:0 };
+  const inv = playerData?.inventory || { food: 0, wood: 0, stone: 0 };
+
   document.getElementById("stats").innerHTML = `
 <b>WORLD STATS</b>
 tick: ${data.tick}
@@ -171,36 +284,22 @@ avg_hunger: ${data.avg_hunger}
 food: ${data.food_count}
 wood: ${data.wood_count}
 stone: ${data.stone_count}
+houses: ${data.houses_count}
+villages: ${data.villages_count}
+leaders: ${data.leaders_count}
+llm_interactions: ${data.llm_interactions}
 
 <b>PLAYER</b>
-id: ${playerId ? playerId.slice(0,8)+"..." : "-"}
+id: ${playerId ? playerId.slice(0, 8) + "..." : "-"}
 pos: ${playerData ? `(${playerData.x}, ${playerData.y})` : "-"}
 hunger: ${playerData ? playerData.hunger : "-"}
+goal: ${playerData ? playerData.goal : "-"}
+role: ${playerData ? playerData.role : "-"}
+village_id: ${playerData ? playerData.village_id : "-"}
 inventory: food=${inv.food ?? 0}, wood=${inv.wood ?? 0}, stone=${inv.stone ?? 0}
   `.replaceAll("\n", "<br>");
-  
+
   renderMinimap(data, cameraX, cameraY, viewW, viewH);
-}
-
-function renderMinimap(data, cameraX, cameraY, viewW, viewH){
-  const w = minimap.width, h = minimap.height;
-  const sx = w / data.width;
-  const sy = h / data.height;
-
-  // draw tiles (sample)
-  const step = Math.max(2, Math.floor(data.width / 120));
-  mctx.clearRect(0,0,w,h);
-
-  for (let y=0; y<data.height; y+=step){
-    for (let x=0; x<data.width; x+=step){
-      mctx.fillStyle = tileColor(data.tiles[y][x]);
-      mctx.fillRect(x*sx, y*sy, step*sx, step*sy);
-    }
-  }
-
-  // viewport rect
-  mctx.strokeStyle = "#000";
-  mctx.strokeRect(cameraX*sx, cameraY*sy, viewW*sx, viewH*sy);
 }
 
 setInterval(update, 200);
