@@ -198,7 +198,11 @@ def apply_phase_guardrails(village: dict, proposed: str) -> str:
 
     if needs.get("food_buffer_critical"):
         return "secure_food"
-    if needs.get("food_buffer_low") and not needs.get("food_surplus"):
+    if (
+        needs.get("food_buffer_low")
+        and not needs.get("food_surplus")
+        and not needs.get("secure_food_deescalate")
+    ):
         return "secure_food"
 
     # Phase 1: village exists but no farming base yet -> push to farms.

@@ -243,6 +243,7 @@ class Agent:
             pop = max(1, village.get("population", 1))
             food_stock = storage.get("food", 0)
             buffer_target = max(4, pop * 4)
+            food_reserve = max(2, pop * 2)
             if food_stock > 0:
                 # Village food should protect members earlier, reducing avoidable starvation.
                 if food_stock >= pop:
@@ -263,7 +264,11 @@ class Agent:
 
         if village is not None:
             storage = village.get("storage", {})
-            if storage.get("food", 0) > 0:
+            pop = max(1, village.get("population", 1))
+            food_reserve = max(2, pop * 2)
+            storage_food = storage.get("food", 0)
+            can_use_storage_food = storage_food > food_reserve or self.hunger <= 15
+            if storage_food > 0 and can_use_storage_food:
                 storage["food"] -= 1
                 self.hunger += FOOD_EAT_GAIN
                 if self.hunger > 100:

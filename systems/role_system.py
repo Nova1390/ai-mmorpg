@@ -36,12 +36,17 @@ def assign_village_roles(world: "World") -> None:
         metrics = village.get("metrics", {})
         pop = len(workers)
         active_farms = int(metrics.get("active_farms", 0))
+        storage_exists = bool(metrics.get("storage_exists", False))
+        min_farms_target = max(3, int(village.get("population", 0) // 3))
 
         # quote minime / desiderate
         desired_farmers = max(1, pop // 3 + (1 if pop >= 5 else 0))
         desired_builders = 1 if needs.get("need_housing") or needs.get("need_storage") else 0
         desired_haulers = 1 if pop >= 4 else 0
         desired_foragers = 1 if needs.get("food_urgent") else 0
+        farmer_cap_by_pop = max(2, int(pop * 0.45))
+        farmer_cap_by_farms = max(2, active_farms // 2 + 2)
+        farmer_cap = min(farmer_cap_by_pop, farmer_cap_by_farms)
 
         # Agricultural bootstrap hardening:
         # first village phase must aggressively create farms before other specializations.
@@ -70,6 +75,12 @@ def assign_village_roles(world: "World") -> None:
         # from farming so logistics/building can progress.
         if needs.get("food_surplus"):
             desired_farmers = min(desired_farmers, max(2, pop // 4))
+        desired_farmers = min(desired_farmers, farmer_cap)
+
+        # Mature village balance: keep non-farmer workforce active during stable phases.
+        if storage_exists and active_farms >= min_farms_target and needs.get("secure_food_deescalate"):
+            desired_builders = max(1, desired_builders)
+            desired_haulers = max(2, desired_haulers)
 
         # ordina per "affidabilità"
         workers_sorted = sorted(
@@ -100,6 +111,7 @@ def assign_village_roles(world: "World") -> None:
         take(desired_builders, "builder")
         take(desired_haulers, "hauler")
         take(desired_foragers, "forager")
+        current_farmers = sum(1 for a in workers_sorted if getattr(a, "role", "") == "farmer")
 
         # resto guard / generic worker?
         # per ora li teniamo farmer se c'è bisogno, altrimenti hauler
@@ -107,8 +119,9 @@ def assign_village_roles(world: "World") -> None:
             aid = id(a)
             if aid in assigned_ids:
                 continue
-            if needs.get("food_low"):
+            if needs.get("food_low") and current_farmers < farmer_cap:
                 a.role = "farmer"
+                current_farmers += 1
             else:
                 a.role = "hauler"
             assigned_ids.add(aid)

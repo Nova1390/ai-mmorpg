@@ -19,6 +19,10 @@ def update_village_ai(world: "World") -> None:
         ]
 
         pop = len(members)
+        avg_hunger = (
+            sum(a.hunger for a in members) / len(members)
+            if members else 0.0
+        )
         houses = village.get("houses", 0)
         storage = village.get("storage", {"food": 0, "wood": 0, "stone": 0})
 
@@ -58,9 +62,16 @@ def update_village_ai(world: "World") -> None:
         need_farms = active_farms < min_farms_target
         need_roads = active_farms >= 3 and len(world.roads) < active_farms
         need_materials = wood_stock < 6 or stone_stock < 4
+        hunger_critical = avg_hunger < 45
+        secure_food_deescalate = (
+            storage_exists
+            and active_farms >= min_farms_target
+            and avg_hunger >= 55
+        )
 
         village["metrics"] = {
             "population": pop,
+            "avg_hunger": round(avg_hunger, 2),
             "housing_capacity": housing_capacity,
             "food_stock": food_stock,
             "food_buffer_target": food_buffer_target,
@@ -78,6 +89,8 @@ def update_village_ai(world: "World") -> None:
             "food_buffer_critical": food_buffer_critical,
             "food_low": food_low,
             "food_urgent": food_urgent,
+            "hunger_critical": hunger_critical,
+            "secure_food_deescalate": secure_food_deescalate,
             "overcrowded": overcrowded,
             "need_housing": need_housing,
             "need_storage": need_storage,
@@ -95,6 +108,8 @@ def update_village_ai(world: "World") -> None:
             baseline_priority = "build_storage"
         if food_buffer_low and not food_surplus:
             baseline_priority = "secure_food"
+        if baseline_priority == "secure_food" and secure_food_deescalate and not food_buffer_critical:
+            baseline_priority = "stabilize"
 
         # If no active leader, keep village governance moving with deterministic baseline.
         if village.get("leader_id") is None:
