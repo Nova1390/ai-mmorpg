@@ -208,6 +208,15 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
     bx, by = best_pos
     world.structures.add((bx, by))
     _pay(world, agent, HOUSE_WOOD_COST, HOUSE_STONE_COST)
+    world.emit_event(
+        "house_built",
+        {
+            "agent_id": agent.agent_id,
+            "x": bx,
+            "y": by,
+            "village_uid": world.resolve_village_uid(getattr(agent, "village_id", None)),
+        },
+    )
     return True
 
 

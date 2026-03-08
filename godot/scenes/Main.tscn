@@ -1,0 +1,47 @@
+[gd_scene load_steps=11 format=3 uid="uid://main_scene_observer"]
+
+[ext_resource type="Script" path="res://scripts/network/StateClient.gd" id="1_state_client"]
+[ext_resource type="Script" path="res://scripts/renderers/WorldRenderer.gd" id="2_world_renderer"]
+[ext_resource type="Script" path="res://scripts/renderers/TileRenderer.gd" id="3_tile_renderer"]
+[ext_resource type="Script" path="res://scripts/renderers/VillageRenderer.gd" id="4_village_renderer"]
+[ext_resource type="Script" path="res://scripts/renderers/AgentRenderer.gd" id="5_agent_renderer"]
+[ext_resource type="Script" path="res://scripts/ui/DebugOverlay.gd" id="6_debug_overlay"]
+[ext_resource type="Script" path="res://scripts/Main.gd" id="7_main"]
+[ext_resource type="Script" path="res://scripts/renderers/StructureLayer.gd" id="8_structure_layer"]
+[ext_resource type="Script" path="res://scripts/renderers/RoadLayer.gd" id="9_road_layer"]
+[ext_resource type="Script" path="res://scripts/renderers/FarmLayer.gd" id="10_farm_layer"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("7_main")
+
+[node name="StateClient" type="Node" parent="."]
+script = ExtResource("1_state_client")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+enabled = true
+position_smoothing_enabled = true
+position_smoothing_speed = 12.0
+
+[node name="WorldRenderer" type="Node2D" parent="."]
+script = ExtResource("2_world_renderer")
+
+[node name="TileRenderer" type="Node2D" parent="WorldRenderer"]
+script = ExtResource("3_tile_renderer")
+
+[node name="StructureLayer" type="Node2D" parent="WorldRenderer"]
+script = ExtResource("8_structure_layer")
+
+[node name="RoadLayer" type="Node2D" parent="WorldRenderer"]
+script = ExtResource("9_road_layer")
+
+[node name="FarmLayer" type="Node2D" parent="WorldRenderer"]
+script = ExtResource("10_farm_layer")
+
+[node name="VillageRenderer" type="Node2D" parent="WorldRenderer"]
+script = ExtResource("4_village_renderer")
+
+[node name="AgentRenderer" type="Node2D" parent="WorldRenderer"]
+script = ExtResource("5_agent_renderer")
+
+[node name="UIOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("6_debug_overlay")

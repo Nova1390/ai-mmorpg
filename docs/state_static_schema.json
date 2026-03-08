@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-civ-sandbox.local/state-static.schema.json",
+  "title": "AI Civilization /state/static Response",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "static_state_version",
+    "width",
+    "height",
+    "tiles"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "static_state_version": { "type": "integer", "minimum": 1 },
+    "width": { "type": "integer", "minimum": 1 },
+    "height": { "type": "integer", "minimum": 1 },
+    "tiles": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["G", "F", "M", "W", "H"]
+        }
+      }
+    },
+    "world_seed": {}
+  },
+  "additionalProperties": true
+}

@@ -9,6 +9,10 @@ if TYPE_CHECKING:
 CORE_ROLES = ("farmer", "builder", "forager", "hauler")
 
 
+def _set_role(world: "World", agent, role: str, reason: str) -> None:
+    world.set_agent_role(agent, role, reason=reason)
+
+
 def assign_village_roles(world: "World") -> None:
     """
     Assegna ruoli stabili agli agenti vivi in base ai bisogni del villaggio.
@@ -101,7 +105,7 @@ def assign_village_roles(world: "World") -> None:
                 aid = id(a)
                 if aid in assigned_ids:
                     continue
-                a.role = role
+                _set_role(world, a, role, reason="role_allocation")
                 assigned_ids.add(aid)
                 count += 1
                 if count >= n:
@@ -120,8 +124,8 @@ def assign_village_roles(world: "World") -> None:
             if aid in assigned_ids:
                 continue
             if needs.get("food_low") and current_farmers < farmer_cap:
-                a.role = "farmer"
+                _set_role(world, a, "farmer", reason="food_priority")
                 current_farmers += 1
             else:
-                a.role = "hauler"
+                _set_role(world, a, "hauler", reason="fallback_logistics")
             assigned_ids.add(aid)

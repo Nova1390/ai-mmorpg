@@ -11,6 +11,12 @@ from world import World
 from agent import Agent
 from brain import FoodBrain, LLMBrain
 from planner import Planner
+from state_serializer import (
+    SCHEMA_VERSION,
+    serialize_dynamic_world_state,
+    serialize_static_world_state,
+)
+from config import LLM_ENABLED
 
 
 app = FastAPI()
@@ -19,8 +25,12 @@ world = World()
 
 npc_brain = FoodBrain(vision_radius=8)
 planner = Planner(model="phi3")
-player_brain = LLMBrain(planner=planner, fallback=npc_brain, think_every_ticks=60)
-leader_brain = LLMBrain(planner=planner, fallback=npc_brain, think_every_ticks=240)
+if LLM_ENABLED:
+    player_brain = LLMBrain(planner=planner, fallback=npc_brain, think_every_ticks=60)
+    leader_brain = LLMBrain(planner=planner, fallback=npc_brain, think_every_ticks=240)
+else:
+    player_brain = npc_brain
+    leader_brain = npc_brain
 
 SPRITES_DIR = "sprites"
 FRONTEND_DIR = "frontend"
@@ -100,79 +110,26 @@ def sprites_manifest():
 
 @app.get("/state")
 def get_state():
-    alive_agents = [a for a in world.agents if a.alive]
+    return serialize_dynamic_world_state(world)
 
-    players = [a for a in alive_agents if a.is_player]
-    npcs = [a for a in alive_agents if not a.is_player]
 
-    avg_hunger = 0.0
-    if alive_agents:
-        avg_hunger = sum(a.hunger for a in alive_agents) / len(alive_agents)
+@app.get("/state/static")
+def get_static_state():
+    return serialize_static_world_state(world)
 
-    farms = []
-    for plot in world.farm_plots.values():
-        farms.append(
-            {
-                "x": plot["x"],
-                "y": plot["y"],
-                "state": plot.get("state", "prepared"),
-                "growth": plot.get("growth", 0),
-                "village_id": plot.get("village_id"),
-            }
-        )
 
-    villages = []
-    for v in world.villages:
-        villages.append(
-            {
-                **v,
-                "storage": v.get("storage", {"food": 0, "wood": 0, "stone": 0}),
-                "storage_pos": v.get("storage_pos"),
-                "farm_zone_center": v.get("farm_zone_center"),
-                "needs": v.get("needs", {}),
-                "priority": v.get("priority", "stabilize"),
-                "metrics": v.get("metrics", {}),
-            }
-        )
-
+@app.get("/state/events")
+def get_events(since_tick: int = -1):
+    events = world.get_events_since(since_tick)
+    retained = world.events
+    oldest_tick = retained[0]["tick"] if retained else None
+    newest_tick = retained[-1]["tick"] if retained else None
     return {
-        "tick": world.tick,
-        "width": world.width,
-        "height": world.height,
-        "tiles": world.tiles,
-        "food": [{"x": x, "y": y} for x, y in world.food],
-        "wood": [{"x": x, "y": y} for x, y in world.wood],
-        "stone": [{"x": x, "y": y} for x, y in world.stone],
-        "farms": farms,
-        "farms_count": len(world.farm_plots),
-        "structures": [{"x": x, "y": y} for x, y in world.structures],
-        "roads": [{"x": x, "y": y} for x, y in world.roads],
-        "storage_buildings": [{"x": x, "y": y} for x, y in world.storage_buildings],
-        "villages": villages,
-        "civ_stats": world.get_civilization_stats(),
-        "agents": [
-            {
-                "x": a.x,
-                "y": a.y,
-                "is_player": a.is_player,
-                "player_id": a.player_id,
-                "role": getattr(a, "role", "npc"),
-                "village_id": getattr(a, "village_id", None),
-                "task": getattr(a, "task", "idle"),
-            }
-            for a in alive_agents
-        ],
-        "population": len(alive_agents),
-        "players": len(players),
-        "npcs": len(npcs),
-        "avg_hunger": round(avg_hunger, 2),
-        "food_count": len(world.food),
-        "wood_count": len(world.wood),
-        "stone_count": len(world.stone),
-        "houses_count": len(world.structures),
-        "villages_count": len(world.villages),
-        "leaders_count": world.count_leaders(),
-        "llm_interactions": world.llm_interactions,
+        "schema_version": SCHEMA_VERSION,
+        "events": events,
+        "oldest_retained_tick": oldest_tick,
+        "newest_retained_tick": newest_tick,
+        "retained_event_count": len(retained),
     }
 
 
@@ -201,6 +158,7 @@ def get_player(player_id: str):
             inv = getattr(p, "inventory", {})
             return {
                 "id": p.player_id,
+                "agent_id": p.agent_id,
                 "x": p.x,
                 "y": p.y,
                 "hunger": p.hunger,

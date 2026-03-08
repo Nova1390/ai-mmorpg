@@ -98,6 +98,12 @@ def _match_previous_village(center: Coord, old_villages: List[Dict]) -> Optional
     return None
 
 
+def _village_uid(world: "World", previous: Optional[Dict]) -> str:
+    if previous and previous.get("village_uid"):
+        return str(previous["village_uid"])
+    return world.new_village_uid()
+
+
 def _default_strategy_for_new_village(houses: int, population: int) -> str:
     if houses >= 5:
         return "expand village"
@@ -132,6 +138,7 @@ def _structure_neighbors(world: "World", pos: Coord, radius: int = 4) -> List[Co
 
 def detect_villages(world: "World") -> None:
     old_villages = list(world.villages)
+    unmatched_old = list(old_villages)
 
     visited: Set[Coord] = set()
     villages: List[Dict] = []
@@ -170,12 +177,15 @@ def detect_villages(world: "World") -> None:
                 pop += 1
 
         center = (cx, cy)
-        previous = _match_previous_village(center, old_villages)
+        previous = _match_previous_village(center, unmatched_old)
+        if previous is not None:
+            unmatched_old.remove(previous)
         default_strategy = _default_strategy_for_new_village(len(cluster), pop)
 
         villages.append(
             {
                 "id": village_id,
+                "village_uid": _village_uid(world, previous),
                 "center": {"x": cx, "y": cy},
                 "houses": len(cluster),
                 "population": pop,
@@ -204,6 +214,16 @@ def detect_villages(world: "World") -> None:
                 "leader_profile": previous["leader_profile"] if previous and "leader_profile" in previous else None,
             }
         )
+        if previous is None:
+            world.emit_event(
+                "village_created",
+                {
+                    "village_uid": villages[-1]["village_uid"],
+                    "village_id": village_id,
+                    "center": {"x": cx, "y": cy},
+                    "houses": len(cluster),
+                },
+            )
         village_id += 1
 
     world.villages = villages
@@ -223,10 +243,10 @@ def assign_village_leaders(world: "World") -> None:
             continue
 
         if a.is_player:
-            a.role = "player"
+            world.set_agent_role(a, "player", reason="player_guard")
             continue
 
-        a.role = "npc"
+        world.set_agent_role(a, "npc", reason="village_recompute")
         a.village_id = None
 
     for village in world.villages:
@@ -320,7 +340,7 @@ def assign_village_leaders(world: "World") -> None:
                 ),
             )
 
-        leader.role = "leader"
+        world.set_agent_role(leader, "leader", reason="village_leadership")
         leader.village_id = village["id"]
         village["leader_id"] = id(leader)
         _ensure_leader_traits(leader, village)
@@ -360,7 +380,7 @@ def assign_village_leaders(world: "World") -> None:
                 + a.inventory.get("stone", 0),
             ),
         )
-        leader.role = "leader"
+        world.set_agent_role(leader, "leader", reason="village_leadership_fallback")
         leader.village_id = village["id"]
         village["leader_id"] = id(leader)
         _ensure_leader_traits(leader, village)

@@ -124,6 +124,15 @@ def try_build_farm(world, agent) -> bool:
     }
 
     wallet["wood"] = wallet.get("wood", 0) - PREPARE_WOOD_COST
+    world.emit_event(
+        "farm_created",
+        {
+            "agent_id": agent.agent_id,
+            "x": x,
+            "y": y,
+            "village_uid": world.resolve_village_uid(village_id),
+        },
+    )
     return True
 
 
@@ -155,6 +164,18 @@ def work_farm(world, agent) -> bool:
 
         plot["state"] = "prepared"
         plot["growth"] = 0
+        world.emit_event(
+            "resource_harvested",
+            {
+                "agent_id": agent.agent_id,
+                "resource": "food",
+                "amount": harvest_amount,
+                "source": "farm",
+                "x": pos[0],
+                "y": pos[1],
+                "village_uid": world.resolve_village_uid(getattr(agent, "village_id", None)),
+            },
+        )
         return True
 
     return False
@@ -182,6 +203,18 @@ def haul_harvest(world, agent) -> bool:
     agent.inventory["food"] = agent.inventory.get("food", 0) + harvest_amount
     plot["state"] = "prepared"
     plot["growth"] = 0
+    world.emit_event(
+        "resource_harvested",
+        {
+            "agent_id": agent.agent_id,
+            "resource": "food",
+            "amount": harvest_amount,
+            "source": "farm_haul",
+            "x": pos[0],
+            "y": pos[1],
+            "village_uid": world.resolve_village_uid(getattr(agent, "village_id", None)),
+        },
+    )
     return True
 
 

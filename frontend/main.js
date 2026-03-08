@@ -194,5 +194,10 @@ document.querySelectorAll(".toggle").forEach(el => {
   });
 
 });
-refreshButtons();
-loop();
+async function start() {
+  await State.init();
+  refreshButtons();
+  loop();
+}
+
+start();

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 import random
+import uuid
 
 from config import (
     FOOD_EAT_GAIN,
@@ -23,6 +24,7 @@ class Agent:
     brain: Any
     is_player: bool = False
     player_id: Optional[str] = None
+    agent_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     alive: bool = True
     hunger: float = float(AGENT_START_HUNGER)
@@ -362,7 +364,7 @@ class Agent:
 
         self.hunger -= 1
         if self.hunger <= 0:
-            self.alive = False
+            world.set_agent_dead(self, reason="hunger")
             return
 
         action = self.run_brain(world)

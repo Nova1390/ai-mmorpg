@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-civ-sandbox.local/state-events.schema.json",
+  "title": "AI Civilization /state/events Response",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "events",
+    "oldest_retained_tick",
+    "newest_retained_tick",
+    "retained_event_count"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "oldest_retained_tick": { "type": ["integer", "null"], "minimum": 0 },
+    "newest_retained_tick": { "type": ["integer", "null"], "minimum": 0 },
+    "retained_event_count": { "type": "integer", "minimum": 0 },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/event" }
+    }
+  },
+  "$defs": {
+    "event": {
+      "type": "object",
+      "required": ["event_id", "tick", "event_type", "payload"],
+      "properties": {
+        "event_id": { "type": "string", "minLength": 1 },
+        "tick": { "type": "integer", "minimum": 0 },
+        "event_type": { "type": "string", "minLength": 1 },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

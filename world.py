@@ -20,6 +20,8 @@ from config import (
     MAX_AGENTS,
     HOUSE_WOOD_COST,
     HOUSE_STONE_COST,
+    LLM_ENABLED,
+    LLM_TIMEOUT_SECONDS,
 )
 
 from agent import Agent
@@ -48,9 +50,16 @@ class World:
         self.height = int(HEIGHT)
 
         self.tick = 0
+        self._state_version = 0
         self.llm_interactions = 0
         self.llm_calls_this_tick = 0
         self.max_llm_calls_per_tick = 1
+        self.llm_enabled = bool(LLM_ENABLED)
+        self.llm_timeout_seconds = float(LLM_TIMEOUT_SECONDS)
+        self._village_uid_counter = 0
+        self._event_id_counter = 0
+        self.events: List[Dict] = []
+        self.max_retained_events = 5000
 
         self.tiles: List[List[str]] = self._generate_tiles()
 
@@ -100,6 +109,76 @@ class World:
 
     def record_llm_interaction(self) -> None:
         self.llm_interactions += 1
+
+    def next_state_version(self) -> int:
+        self._state_version += 1
+        return self._state_version
+
+    def new_village_uid(self) -> str:
+        self._village_uid_counter += 1
+        return f"v-{self._village_uid_counter:06d}"
+
+    def _next_event_id(self) -> str:
+        self._event_id_counter += 1
+        return f"e-{self._event_id_counter:06d}"
+
+    def resolve_village_uid(self, village_id: Optional[int]) -> Optional[str]:
+        village = self.get_village_by_id(village_id)
+        if village is None:
+            return None
+        uid = village.get("village_uid")
+        if uid is None:
+            return None
+        return str(uid)
+
+    def emit_event(self, event_type: str, payload: Dict) -> Dict:
+        event = {
+            "event_id": self._next_event_id(),
+            "tick": int(self.tick),
+            "event_type": str(event_type),
+            "payload": payload if isinstance(payload, dict) else {},
+        }
+        self.events.append(event)
+        # Bounded in-memory retention to prevent unbounded growth.
+        if self.max_retained_events > 0 and len(self.events) > self.max_retained_events:
+            overflow = len(self.events) - self.max_retained_events
+            del self.events[:overflow]
+        return event
+
+    def get_events_since(self, since_tick: int = -1) -> List[Dict]:
+        cutoff = int(since_tick)
+        return [e for e in self.events if int(e.get("tick", -1)) > cutoff]
+
+    def set_agent_role(self, agent: Agent, new_role: str, reason: str = "") -> None:
+        old_role = getattr(agent, "role", "npc")
+        if old_role == new_role:
+            agent.role = new_role
+            return
+        agent.role = new_role
+        self.emit_event(
+            "role_changed",
+            {
+                "agent_id": agent.agent_id,
+                "from_role": old_role,
+                "to_role": new_role,
+                "reason": reason,
+                "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
+            },
+        )
+
+    def set_agent_dead(self, agent: Agent, reason: str = "unknown") -> None:
+        if not agent.alive:
+            return
+        agent.alive = False
+        self.emit_event(
+            "agent_died",
+            {
+                "agent_id": agent.agent_id,
+                "is_player": bool(agent.is_player),
+                "reason": reason,
+                "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
+            },
+        )
 
     def get_village_by_id(self, village_id: Optional[int]) -> Optional[Dict]:
         return village_system.get_village_by_id(self, village_id)
@@ -157,6 +236,15 @@ class World:
             agent.inventory["stone"] = max(agent.inventory.get("stone", 0), HOUSE_STONE_COST)
 
         self.agents.append(agent)
+        self.emit_event(
+            "agent_born",
+            {
+                "agent_id": agent.agent_id,
+                "is_player": bool(agent.is_player),
+                "player_id": agent.player_id,
+                "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
+            },
+        )
 
     def find_random_free(self) -> Optional[Coord]:
         for _ in range(2000):
@@ -303,6 +391,18 @@ class World:
             agent.hunger += FOOD_EAT_GAIN
             if agent.hunger > 100:
                 agent.hunger = 100
+            self.emit_event(
+                "resource_harvested",
+                {
+                    "agent_id": agent.agent_id,
+                    "resource": "food",
+                    "amount": 1,
+                    "source": "wild_food",
+                    "x": agent.x,
+                    "y": agent.y,
+                    "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
+                },
+            )
 
     def gather_resource(self, agent: Agent):
         pos = (agent.x, agent.y)
@@ -314,6 +414,18 @@ class World:
                 village["storage"]["wood"] = village["storage"].get("wood", 0) + 1
             else:
                 agent.inventory["wood"] = agent.inventory.get("wood", 0) + 1
+            self.emit_event(
+                "resource_harvested",
+                {
+                    "agent_id": agent.agent_id,
+                    "resource": "wood",
+                    "amount": 1,
+                    "source": "wild",
+                    "x": agent.x,
+                    "y": agent.y,
+                    "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
+                },
+            )
             return True
 
         if pos in self.stone:
@@ -322,6 +434,18 @@ class World:
                 village["storage"]["stone"] = village["storage"].get("stone", 0) + 1
             else:
                 agent.inventory["stone"] = agent.inventory.get("stone", 0) + 1
+            self.emit_event(
+                "resource_harvested",
+                {
+                    "agent_id": agent.agent_id,
+                    "resource": "stone",
+                    "amount": 1,
+                    "source": "wild",
+                    "x": agent.x,
+                    "y": agent.y,
+                    "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
+                },
+            )
             return True
 
         return False
@@ -383,7 +507,7 @@ class World:
                 if extra <= 0:
                     break
                 if not a.is_player:
-                    a.alive = False
+                    self.set_agent_dead(a, reason="population_cap")
                     extra -= 1
 
             self.agents = [a for a in self.agents if a.alive]

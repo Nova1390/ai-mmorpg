@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional, Tuple, Set
 import random
 import asyncio
+import logging
 
 from planner import Planner
 from pathfinder import astar
@@ -11,6 +12,7 @@ from systems.building_system import STORAGE_WOOD_COST, STORAGE_STONE_COST
 
 
 Coord = Tuple[int, int]
+logger = logging.getLogger(__name__)
 
 VALID_GOALS = {
     "expand village",
@@ -915,6 +917,9 @@ class LLMBrain:
         return ("wait",)
 
     def _should_think(self, agent, world) -> bool:
+        if not getattr(world, "llm_enabled", True):
+            return False
+
         if agent.llm_pending:
             return False
 
@@ -932,11 +937,15 @@ class LLMBrain:
         return True
 
     def _schedule_llm_request(self, agent, world) -> None:
+        if not getattr(world, "llm_enabled", True):
+            logger.warning("LLM disabled: using deterministic fallback for agent_id=%s", getattr(agent, "agent_id", "unknown"))
+            return
+
         agent.llm_pending = True
         agent.last_llm_tick = world.tick
 
         prompt = self._make_prompt(agent, world)
-        print(f"LLM thinking for {agent.role}: {agent.player_id or 'npc'}")
+        logger.info("LLM request scheduled role=%s agent_id=%s", getattr(agent, "role", "npc"), getattr(agent, "agent_id", "unknown"))
 
         if hasattr(world, "record_llm_interaction"):
             world.record_llm_interaction()
@@ -958,15 +967,16 @@ class LLMBrain:
                     traits = getattr(agent, "leader_traits", None) or village.get("leader_profile", {})
                     p = deterministic_priority_from_needs(village.get("needs", {}), traits, village)
                     apply_village_priority(village, p, world.tick, "deterministic_no_loop")
-            print("LLM scheduling failed: no running event loop")
+            logger.warning("LLM scheduling failed: no running event loop; deterministic fallback remains active")
 
     async def _request_leader_priority(self, agent, world, prompt: str) -> None:
         village = world.get_village_by_id(getattr(agent, "village_id", None))
         traits = getattr(agent, "leader_traits", None) or (village.get("leader_profile", {}) if village else {})
+        timeout_s = float(getattr(world, "llm_timeout_seconds", 3.0))
         try:
             raw = await asyncio.wait_for(
                 self.planner.propose_goal_async(prompt),
-                timeout=3.0,
+                timeout=timeout_s,
             )
             priority = self._extract_priority_from_llm(raw)
 
@@ -977,6 +987,11 @@ class LLMBrain:
             if village is not None:
                 apply_village_priority(village, priority, world.tick, "llm")
         except Exception:
+            logger.warning(
+                "LLM leader request failed or timed out; fallback priority applied agent_id=%s timeout_s=%.2f",
+                getattr(agent, "agent_id", "unknown"),
+                timeout_s,
+            )
             needs = village.get("needs", {}) if village else {}
             priority = deterministic_priority_from_needs(needs, traits, village)
             if village is not None:
@@ -1005,20 +1020,21 @@ class LLMBrain:
         return normalize_priority(line)
 
     async def _request_goal(self, agent, world, prompt: str) -> None:
+        timeout_s = float(getattr(world, "llm_timeout_seconds", 3.0))
         try:
             raw_goal = await asyncio.wait_for(
                 self.planner.propose_goal_async(prompt),
-                timeout=3.0,
+                timeout=timeout_s,
             )
             normalized = normalize_goal(raw_goal)
 
             if normalized is None:
-                print(f"LLM invalid goal: {raw_goal}")
+                logger.warning("LLM returned invalid goal; fallback used agent_id=%s raw=%r", getattr(agent, "agent_id", "unknown"), raw_goal)
                 agent.goal = "survive"
                 return
 
             agent.goal = normalized
-            print(f"LLM goal ({agent.role}): {agent.goal}")
+            logger.info("LLM goal accepted role=%s agent_id=%s goal=%s", getattr(agent, "role", "npc"), getattr(agent, "agent_id", "unknown"), agent.goal)
 
             if getattr(agent, "role", "") == "leader" and getattr(agent, "village_id", None) is not None:
                 village = world.get_village_by_id(agent.village_id)
@@ -1027,7 +1043,12 @@ class LLMBrain:
 
         except Exception as e:
             agent.goal = "survive"
-            print(f"LLM error: {e}")
+            logger.warning(
+                "LLM request failed or timed out; fallback goal applied agent_id=%s timeout_s=%.2f error=%s",
+                getattr(agent, "agent_id", "unknown"),
+                timeout_s,
+                e,
+            )
         finally:
             agent.llm_pending = False
 

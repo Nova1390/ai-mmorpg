@@ -61,3 +61,9 @@ NUM_VILLAGES_MAX = 4
 VILLAGE_RADIUS = 4
 VILLAGE_HOUSES_MIN = 6
 VILLAGE_HOUSES_MAX = 12
+
+# -------------------------
+# LLM
+# -------------------------
+LLM_ENABLED = True
+LLM_TIMEOUT_SECONDS = 3.0

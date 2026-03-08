@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-civ-sandbox.local/state.schema.json",
+  "title": "AI Civilization /state Response",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "state_version",
+    "tick",
+    "food",
+    "wood",
+    "stone",
+    "farms",
+    "farms_count",
+    "structures",
+    "roads",
+    "storage_buildings",
+    "villages",
+    "civ_stats",
+    "agents",
+    "population",
+    "players",
+    "npcs",
+    "avg_hunger",
+    "food_count",
+    "wood_count",
+    "stone_count",
+    "houses_count",
+    "villages_count",
+    "leaders_count",
+    "llm_interactions"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "state_version": { "type": "integer", "minimum": 1 },
+    "tick": { "type": "integer", "minimum": 0 },
+    "food": { "$ref": "#/$defs/coordArray" },
+    "wood": { "$ref": "#/$defs/coordArray" },
+    "stone": { "$ref": "#/$defs/coordArray" },
+    "farms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["x", "y", "state", "growth", "village_id"],
+        "properties": {
+          "x": { "type": "integer" },
+          "y": { "type": "integer" },
+          "state": {
+            "type": "string",
+            "enum": ["prepared", "planted", "growing", "ripe", "dead"]
+          },
+          "growth": { "type": "integer", "minimum": 0 },
+          "village_id": { "type": ["integer", "null"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "farms_count": { "type": "integer", "minimum": 0 },
+    "structures": { "$ref": "#/$defs/coordArray" },
+    "roads": { "$ref": "#/$defs/coordArray" },
+    "storage_buildings": { "$ref": "#/$defs/coordArray" },
+    "villages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "village_uid",
+          "center",
+          "houses",
+          "population",
+          "tiles",
+          "leader_id",
+          "strategy",
+          "color",
+          "relation",
+          "target_village_id",
+          "migration_target_id",
+          "power",
+          "storage",
+          "storage_pos",
+          "farm_zone_center",
+          "needs",
+          "priority",
+          "metrics"
+        ],
+        "properties": {
+          "id": { "type": "integer" },
+          "village_uid": { "type": "string", "minLength": 1 },
+          "center": { "$ref": "#/$defs/coord" },
+          "houses": { "type": "integer", "minimum": 0 },
+          "population": { "type": "integer", "minimum": 0 },
+          "tiles": { "$ref": "#/$defs/coordArray" },
+          "leader_id": { "type": ["integer", "null"] },
+          "strategy": { "type": "string" },
+          "color": { "type": "string" },
+          "relation": { "type": "string" },
+          "target_village_id": { "type": ["integer", "null"] },
+          "migration_target_id": { "type": ["integer", "null"] },
+          "power": { "type": "number" },
+          "storage": { "$ref": "#/$defs/storage" },
+          "storage_pos": {
+            "anyOf": [
+              { "$ref": "#/$defs/coord" },
+              { "type": "null" }
+            ]
+          },
+          "farm_zone_center": {
+            "anyOf": [
+              { "$ref": "#/$defs/coord" },
+              { "type": "null" }
+            ]
+          },
+          "priority_history": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "leader_profile": {
+            "anyOf": [
+              { "type": "object" },
+              { "type": "null" }
+            ]
+          },
+          "phase": { "type": "string" },
+          "needs": { "type": "object" },
+          "priority": { "type": "string" },
+          "metrics": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "civ_stats": {
+      "type": "object",
+      "required": [
+        "largest_village_id",
+        "largest_village_houses",
+        "strongest_village_id",
+        "strongest_village_power",
+        "expanding_village_id",
+        "warring_villages",
+        "migrating_villages"
+      ],
+      "properties": {
+        "largest_village_id": { "type": ["integer", "null"] },
+        "largest_village_houses": { "type": "integer", "minimum": 0 },
+        "strongest_village_id": { "type": ["integer", "null"] },
+        "strongest_village_power": { "type": "number", "minimum": 0 },
+        "expanding_village_id": { "type": ["integer", "null"] },
+        "warring_villages": { "type": "integer", "minimum": 0 },
+        "migrating_villages": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["agent_id", "x", "y", "is_player", "player_id", "role", "village_id", "task"],
+        "properties": {
+          "agent_id": { "type": "string", "minLength": 1 },
+          "x": { "type": "integer" },
+          "y": { "type": "integer" },
+          "is_player": { "type": "boolean" },
+          "player_id": { "type": ["string", "null"] },
+          "role": { "type": "string" },
+          "village_id": { "type": ["integer", "null"] },
+          "task": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "population": { "type": "integer", "minimum": 0 },
+    "players": { "type": "integer", "minimum": 0 },
+    "npcs": { "type": "integer", "minimum": 0 },
+    "avg_hunger": { "type": "number" },
+    "food_count": { "type": "integer", "minimum": 0 },
+    "wood_count": { "type": "integer", "minimum": 0 },
+    "stone_count": { "type": "integer", "minimum": 0 },
+    "houses_count": { "type": "integer", "minimum": 0 },
+    "villages_count": { "type": "integer", "minimum": 0 },
+    "leaders_count": { "type": "integer", "minimum": 0 },
+    "llm_interactions": { "type": "integer", "minimum": 0 }
+  },
+  "$defs": {
+    "coord": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "coordArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/coord" }
+    },
+    "storage": {
+      "type": "object",
+      "required": ["food", "wood", "stone"],
+      "properties": {
+        "food": { "type": "integer" },
+        "wood": { "type": "integer" },
+        "stone": { "type": "integer" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
