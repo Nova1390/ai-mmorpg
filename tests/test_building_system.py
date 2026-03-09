@@ -596,6 +596,142 @@ def test_direct_gathering_still_works_without_production_buildings() -> None:
     assert metrics.get("wood_from_lumberyards", 0) == 0
 
 
+def test_direct_wood_gathering_increments_total_and_direct_counters() -> None:
+    world = _flat_grass_world()
+    village = _village(tier=1, population=8, houses=4)
+    world.villages = [village]
+    world.wood.add((8, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.village_id = 1
+
+    assert world.gather_resource(agent) is True
+
+    vm = world.villages[0]["production_metrics"]
+    assert int(vm.get("total_wood_gathered", 0)) == 1
+    assert int(vm.get("direct_wood_gathered", 0)) == 1
+    assert int(vm.get("wood_from_lumberyards", 0)) == 0
+    wm = world.production_metrics
+    assert int(wm.get("total_wood_gathered", 0)) == 1
+    assert int(wm.get("direct_wood_gathered", 0)) == 1
+    assert int(wm.get("wood_from_lumberyards", 0)) == 0
+
+
+def test_direct_stone_gathering_increments_total_and_direct_counters() -> None:
+    world = _flat_grass_world()
+    village = _village(tier=1, population=8, houses=4)
+    world.villages = [village]
+    world.stone.add((8, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.village_id = 1
+
+    assert world.gather_resource(agent) is True
+
+    vm = world.villages[0]["production_metrics"]
+    assert int(vm.get("total_stone_gathered", 0)) == 1
+    assert int(vm.get("direct_stone_gathered", 0)) == 1
+    assert int(vm.get("stone_from_mines", 0)) == 0
+    wm = world.production_metrics
+    assert int(wm.get("total_stone_gathered", 0)) == 1
+    assert int(wm.get("direct_stone_gathered", 0)) == 1
+    assert int(wm.get("stone_from_mines", 0)) == 0
+
+
+def test_food_gathering_increments_food_counters() -> None:
+    world = _flat_grass_world()
+    village = _village(tier=1, population=8, houses=4)
+    world.villages = [village]
+    world.food.add((8, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.village_id = 1
+
+    world.autopickup(agent)
+
+    vm = world.villages[0]["production_metrics"]
+    assert int(vm.get("total_food_gathered", 0)) == 1
+    assert int(vm.get("direct_food_gathered", 0)) == 1
+    wm = world.production_metrics
+    assert int(wm.get("total_food_gathered", 0)) == 1
+    assert int(wm.get("direct_food_gathered", 0)) == 1
+
+
+def test_lumberyard_supported_gathering_splits_direct_and_specialized() -> None:
+    world = _flat_grass_world()
+    village = _village(tier=2, population=12, houses=5, center_x=10, center_y=10)
+    world.villages = [village]
+    world.roads.add((10, 9))
+    world.place_building("storage", 10, 10, village_id=1, village_uid=village["village_uid"])
+    world.wood.update({(9, 9), (9, 10), (9, 11), (8, 10)})
+    world.tiles[9][9] = "F"
+    world.tiles[10][9] = "F"
+    world.tiles[11][9] = "F"
+    world.tiles[10][8] = "F"
+    world.buildings["b-lumber"] = {
+        "building_id": "b-lumber",
+        "type": "lumberyard",
+        "x": 9,
+        "y": 10,
+        "village_id": 1,
+        "village_uid": village["village_uid"],
+        "operational_state": "active",
+        "linked_resource_type": "wood",
+        "linked_resource_tiles_count": 4,
+        "connected_to_road": True,
+    }
+    world.wood.add((9, 12))
+    world.tiles[12][9] = "F"
+    bonus, source = building_system.production_bonus_details_for_resource(world, village, "wood", (9, 12))
+    assert source == "lumberyard"
+    expected_total = 1 + int(bonus)
+
+    agent = Agent(x=9, y=12, brain=None, is_player=False, player_id=None)
+    agent.village_id = 1
+    assert world.gather_resource(agent) is True
+
+    vm = world.villages[0]["production_metrics"]
+    assert int(vm.get("total_wood_gathered", 0)) == expected_total
+    assert int(vm.get("wood_from_lumberyards", 0)) == int(bonus)
+    assert int(vm.get("direct_wood_gathered", 0)) == (expected_total - int(bonus))
+
+
+def test_mine_supported_gathering_splits_direct_and_specialized() -> None:
+    world = _flat_grass_world()
+    village = _village(tier=2, population=12, houses=5, center_x=10, center_y=10)
+    world.villages = [village]
+    world.roads.add((10, 9))
+    world.place_building("storage", 10, 10, village_id=1, village_uid=village["village_uid"])
+    world.stone.update({(11, 9), (11, 10), (11, 11), (12, 10)})
+    world.tiles[9][11] = "M"
+    world.tiles[10][11] = "M"
+    world.tiles[11][11] = "M"
+    world.tiles[10][12] = "M"
+    world.buildings["b-mine"] = {
+        "building_id": "b-mine",
+        "type": "mine",
+        "x": 11,
+        "y": 10,
+        "village_id": 1,
+        "village_uid": village["village_uid"],
+        "operational_state": "active",
+        "linked_resource_type": "stone",
+        "linked_resource_tiles_count": 4,
+        "connected_to_road": True,
+    }
+    world.stone.add((11, 12))
+    world.tiles[12][11] = "M"
+    bonus, source = building_system.production_bonus_details_for_resource(world, village, "stone", (11, 12))
+    assert source == "mine"
+    expected_total = 1 + int(bonus)
+
+    agent = Agent(x=11, y=12, brain=None, is_player=False, player_id=None)
+    agent.village_id = 1
+    assert world.gather_resource(agent) is True
+
+    vm = world.villages[0]["production_metrics"]
+    assert int(vm.get("total_stone_gathered", 0)) == expected_total
+    assert int(vm.get("stone_from_mines", 0)) == int(bonus)
+    assert int(vm.get("direct_stone_gathered", 0)) == (expected_total - int(bonus))
+
+
 def test_choose_next_building_type_is_deterministic() -> None:
     world = _flat_grass_world()
     village = _village(tier=2, population=14, houses=6)
@@ -1176,7 +1312,12 @@ def test_build_house_consumes_builder_inventory_not_global_magic() -> None:
     assert builder._withdraw_build_materials(world, wood_need=5, stone_need=3) is True
     pre_w = builder.inventory["wood"]
     pre_s = builder.inventory["stone"]
-    assert world.try_build_house(builder) is True
+    assert world.try_build_house(builder) is False
+    site = [b for b in world.buildings.values() if b.get("type") == "house" and b.get("operational_state") == "under_construction"][0]
+    required_work = int(site.get("construction_required_work", 0))
+    for _ in range(max(0, required_work - 1)):
+        world.try_build_house(builder)
+    assert world.buildings[site["building_id"]]["operational_state"] == "active"
     assert builder.inventory["wood"] < pre_w
     assert builder.inventory["stone"] < pre_s
 
@@ -1300,11 +1441,63 @@ def test_builder_consumes_delivered_buffer_and_completes_house() -> None:
 
     builder.x = site["x"]
     builder.y = site["y"]
+    required_work = int(site.get("construction_required_work", 0))
+    assert required_work >= 2
+    for _ in range(required_work - 1):
+        assert building_system.try_build_house(world, builder) is False
+        still_pending = world.buildings[bid]
+        assert still_pending["operational_state"] == "under_construction"
     assert building_system.try_build_house(world, builder) is True
     built = world.buildings[bid]
     assert built["operational_state"] == "active"
     assert built.get("construction_request") is None
     assert built.get("construction_buffer") is None
+    assert int(built.get("construction_progress", 0)) == int(built.get("construction_required_work", 0))
+
+
+def test_builder_cannot_progress_construction_from_far_away() -> None:
+    world, _, builder, _ = _construction_ready_world()
+    world.agents = [builder]
+    assert building_system.try_build_house(world, builder) is False
+    site = [b for b in world.buildings.values() if b.get("type") == "house" and b.get("operational_state") == "under_construction"][0]
+    bid = site["building_id"]
+    assert building_system.reserve_materials_for_construction(world, bid, "wood", HOUSE_WOOD_COST) == HOUSE_WOOD_COST
+    assert building_system.reserve_materials_for_construction(world, bid, "stone", HOUSE_STONE_COST) == HOUSE_STONE_COST
+    assert building_system.fulfill_reserved_delivery(world, bid, "wood", HOUSE_WOOD_COST) == HOUSE_WOOD_COST
+    assert building_system.fulfill_reserved_delivery(world, bid, "stone", HOUSE_STONE_COST) == HOUSE_STONE_COST
+
+    builder.x = site["x"] + 4
+    builder.y = site["y"] + 4
+    assert building_system.try_build_house(world, builder) is False
+    assert int(world.buildings[bid].get("construction_progress", 0)) == 0
+
+
+def test_materials_alone_do_not_complete_construction_without_work_ticks() -> None:
+    world, _, builder, _ = _construction_ready_world()
+    world.agents = [builder]
+    assert building_system.try_build_house(world, builder) is False
+    site = [b for b in world.buildings.values() if b.get("type") == "house" and b.get("operational_state") == "under_construction"][0]
+    bid = site["building_id"]
+    assert building_system.reserve_materials_for_construction(world, bid, "wood", HOUSE_WOOD_COST) == HOUSE_WOOD_COST
+    assert building_system.reserve_materials_for_construction(world, bid, "stone", HOUSE_STONE_COST) == HOUSE_STONE_COST
+    assert building_system.fulfill_reserved_delivery(world, bid, "wood", HOUSE_WOOD_COST) == HOUSE_WOOD_COST
+    assert building_system.fulfill_reserved_delivery(world, bid, "stone", HOUSE_STONE_COST) == HOUSE_STONE_COST
+    assert world.buildings[bid]["operational_state"] == "under_construction"
+    assert int(world.buildings[bid].get("construction_progress", 0)) == 0
+
+
+def test_work_alone_does_not_complete_construction_without_materials() -> None:
+    world, _, builder, _ = _construction_ready_world()
+    world.agents = [builder]
+    assert building_system.try_build_house(world, builder) is False
+    site = [b for b in world.buildings.values() if b.get("type") == "house" and b.get("operational_state") == "under_construction"][0]
+    bid = site["building_id"]
+    builder.x = site["x"]
+    builder.y = site["y"]
+    for _ in range(3):
+        assert building_system.try_build_house(world, builder) is False
+    assert world.buildings[bid]["operational_state"] == "under_construction"
+    assert int(world.buildings[bid].get("construction_progress", 0)) == 0
 
 
 def test_construction_reservation_is_deterministic_for_same_setup() -> None:
@@ -1330,6 +1523,9 @@ def test_serialized_buildings_include_construction_logistics_fields() -> None:
     pending = [b for b in payload["buildings"] if b["type"] == "house" and b["operational_state"] == "under_construction"][0]
     assert "construction_request" in pending
     assert "construction_buffer" in pending
+    assert "construction_progress" in pending
+    assert "construction_required_work" in pending
+    assert "construction_complete_ratio" in pending
 
 
 def test_storage_surplus_deficit_detection() -> None:

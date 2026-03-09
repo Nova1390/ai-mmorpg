@@ -213,6 +213,8 @@ def detect_villages(world: "World") -> None:
                 "priority_history": previous["priority_history"] if previous and "priority_history" in previous else [],
                 "leader_profile": previous["leader_profile"] if previous and "leader_profile" in previous else None,
                 "tier": int(previous["tier"]) if previous and "tier" in previous else 1,
+                "proto_culture": previous["proto_culture"] if previous and "proto_culture" in previous else None,
+                "culture_summary": previous["culture_summary"] if previous and "culture_summary" in previous else None,
             }
         )
         if previous is None:

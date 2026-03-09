@@ -6,10 +6,166 @@ if TYPE_CHECKING:
     from world import World
 
 MARKET_UPDATE_INTERVAL_TICKS = 5
+CULTURE_UPDATE_INTERVAL_TICKS = 120
 
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
+
+
+def ensure_village_proto_culture(village: Dict[str, Any]) -> Dict[str, Any]:
+    culture = village.get("proto_culture")
+    if isinstance(culture, dict):
+        return culture
+
+    storage = village.get("storage", {}) if isinstance(village.get("storage"), dict) else {}
+    food_stock = max(0, int(storage.get("food", 0)))
+    wood_stock = max(0, int(storage.get("wood", 0)))
+    stone_stock = max(0, int(storage.get("stone", 0)))
+    total = max(1, food_stock + wood_stock + stone_stock)
+
+    food_focus = _clamp(food_stock / total, 0.0, 1.0)
+    wood_focus = _clamp(wood_stock / total, 0.0, 1.0)
+    stone_focus = _clamp(stone_stock / total, 0.0, 1.0)
+
+    # Slight deterministic offsets from founding/local state.
+    pop = max(1, int(village.get("population", 0)))
+    houses = max(1, int(village.get("houses", 0)))
+    coop_base = 0.48 + min(0.08, pop * 0.01)
+    work_base = 0.50 + min(0.07, houses * 0.01)
+    explore_base = 0.45 + (0.05 if wood_focus + stone_focus > food_focus else 0.0)
+    risk_base = 0.45 + (0.04 if food_focus < 0.33 else 0.0)
+
+    culture = {
+        "cooperation_norm": round(_clamp(coop_base, 0.0, 1.0), 3),
+        "work_norm": round(_clamp(work_base, 0.0, 1.0), 3),
+        "exploration_norm": round(_clamp(explore_base, 0.0, 1.0), 3),
+        "risk_norm": round(_clamp(risk_base, 0.0, 1.0), 3),
+        "resource_focus": {
+            "food": round(food_focus, 3),
+            "wood": round(wood_focus, 3),
+            "stone": round(stone_focus, 3),
+        },
+        "cultural_stability": 0.92,
+        "last_culture_update_tick": -1,
+    }
+    village["proto_culture"] = culture
+    return culture
+
+
+def _dominant_resource_key(resource_focus: Dict[str, float]) -> str:
+    ordered = ("food", "wood", "stone")
+    return max(ordered, key=lambda r: (float(resource_focus.get(r, 0.0)), -ordered.index(r)))
+
+
+def update_village_proto_culture(
+    world: "World",
+    village: Dict[str, Any],
+    members: List[Any],
+) -> Dict[str, Any]:
+    culture = ensure_village_proto_culture(village)
+    tick = int(getattr(world, "tick", 0))
+    last_tick = int(culture.get("last_culture_update_tick", -1))
+    if last_tick >= 0 and tick - last_tick < CULTURE_UPDATE_INTERVAL_TICKS:
+        return culture
+
+    market_state = village.get("market_state", {}) if isinstance(village.get("market_state"), dict) else {}
+    production_metrics = village.get("production_metrics", {}) if isinstance(village.get("production_metrics"), dict) else {}
+
+    coop_count = 0
+    work_count = 0
+    explore_count = 0
+    failure_count = 0
+    events_seen = 0
+
+    for agent in members:
+        recent = (getattr(agent, "episodic_memory", {}) or {}).get("recent_events", [])
+        if not isinstance(recent, list):
+            continue
+        for ev in recent[-20:]:
+            if not isinstance(ev, dict):
+                continue
+            ev_tick = int(ev.get("tick", tick))
+            if tick - ev_tick > CULTURE_UPDATE_INTERVAL_TICKS:
+                continue
+            events_seen += 1
+            etype = str(ev.get("type", ""))
+            outcome = str(ev.get("outcome", ""))
+            if etype == "co_present_success" and outcome == "success":
+                coop_count += 1
+            if etype in {"construction_progress", "delivered_material", "found_resource"} and outcome == "success":
+                work_count += 1
+            if etype in {"found_resource", "hunger_relief"} and outcome == "success":
+                explore_count += 1
+            if outcome == "failure":
+                failure_count += 1
+
+    coop_obs = _clamp(0.35 + coop_count / max(1, len(members) * 2), 0.0, 1.0)
+    work_obs = _clamp(
+        0.35
+        + (work_count + int(production_metrics.get("wood_from_lumberyards", 0)) + int(production_metrics.get("stone_from_mines", 0)) * 0.5)
+        / max(1.0, len(members) * 4.0),
+        0.0,
+        1.0,
+    )
+    explore_obs = _clamp(0.30 + explore_count / max(1, len(members) * 2), 0.0, 1.0)
+    risk_obs = _clamp((failure_count / max(1, events_seen)) * 0.8 + (0.15 if failure_count > work_count else 0.0), 0.0, 1.0)
+
+    prev_focus = culture.get("resource_focus", {}) if isinstance(culture.get("resource_focus"), dict) else {}
+    scarcity_food = float((market_state.get("food") or {}).get("pressure", 0.0))
+    scarcity_wood = float((market_state.get("wood") or {}).get("pressure", 0.0))
+    scarcity_stone = float((market_state.get("stone") or {}).get("pressure", 0.0))
+    total_scarcity = max(0.0001, scarcity_food + scarcity_wood + scarcity_stone)
+    focus_obs = {
+        "food": _clamp(scarcity_food / total_scarcity, 0.0, 1.0),
+        "wood": _clamp(scarcity_wood / total_scarcity, 0.0, 1.0),
+        "stone": _clamp(scarcity_stone / total_scarcity, 0.0, 1.0),
+    }
+
+    stability = _clamp(float(culture.get("cultural_stability", 0.92)), 0.78, 0.98)
+    for key, obs in (
+        ("cooperation_norm", coop_obs),
+        ("work_norm", work_obs),
+        ("exploration_norm", explore_obs),
+        ("risk_norm", risk_obs),
+    ):
+        prev = _clamp(float(culture.get(key, 0.5)), 0.0, 1.0)
+        blended = prev * stability + float(obs) * (1.0 - stability)
+        culture[key] = round(_clamp(blended, 0.0, 1.0), 3)
+
+    focus_out = {}
+    for r in ("food", "wood", "stone"):
+        prev = _clamp(float(prev_focus.get(r, 1.0 / 3.0)), 0.0, 1.0)
+        blended = prev * stability + float(focus_obs[r]) * (1.0 - stability)
+        focus_out[r] = round(_clamp(blended, 0.0, 1.0), 3)
+    culture["resource_focus"] = focus_out
+
+    # Reinforcement loop: coherence with observed behavior increases stability; divergence decreases it.
+    coherence = (
+        1.0
+        - (
+            abs(float(culture["cooperation_norm"]) - coop_obs)
+            + abs(float(culture["work_norm"]) - work_obs)
+            + abs(float(culture["exploration_norm"]) - explore_obs)
+        )
+        / 3.0
+    )
+    if coherence > 0.7:
+        stability = min(0.98, stability + 0.01)
+    elif coherence < 0.4:
+        stability = max(0.78, stability - 0.015)
+    culture["cultural_stability"] = round(_clamp(stability, 0.78, 0.98), 3)
+    culture["last_culture_update_tick"] = tick
+
+    village["proto_culture"] = culture
+    village["culture_summary"] = {
+        "dominant_resource_focus": _dominant_resource_key(focus_out),
+        "cooperation_norm": float(culture["cooperation_norm"]),
+        "work_norm": float(culture["work_norm"]),
+        "exploration_norm": float(culture["exploration_norm"]),
+        "risk_norm": float(culture["risk_norm"]),
+    }
+    return culture
 
 
 def _resource_market_entry(
@@ -213,8 +369,12 @@ def update_village_ai(world: "World") -> None:
         village_phase = _detect_village_phase(houses, active_farms, storage_exists, food_stock, pop)
         village["phase"] = village_phase
         production_metrics = village.get("production_metrics", {})
+        total_food_gathered = int(production_metrics.get("total_food_gathered", 0))
         total_wood_gathered = int(production_metrics.get("total_wood_gathered", 0))
         total_stone_gathered = int(production_metrics.get("total_stone_gathered", 0))
+        direct_food_gathered = int(production_metrics.get("direct_food_gathered", 0))
+        direct_wood_gathered = int(production_metrics.get("direct_wood_gathered", 0))
+        direct_stone_gathered = int(production_metrics.get("direct_stone_gathered", 0))
         wood_from_lumberyards = int(production_metrics.get("wood_from_lumberyards", 0))
         stone_from_mines = int(production_metrics.get("stone_from_mines", 0))
         logistics_metrics = village.get("logistics_metrics", {})
@@ -247,8 +407,12 @@ def update_village_ai(world: "World") -> None:
             "active_farms": active_farms,
             "ripe_farms": ripe_farms,
             "storage_exists": storage_exists,
+            "total_food_gathered": total_food_gathered,
             "total_wood_gathered": total_wood_gathered,
             "total_stone_gathered": total_stone_gathered,
+            "direct_food_gathered": direct_food_gathered,
+            "direct_wood_gathered": direct_wood_gathered,
+            "direct_stone_gathered": direct_stone_gathered,
             "wood_from_lumberyards": wood_from_lumberyards,
             "stone_from_mines": stone_from_mines,
             "internal_transfers_count": internal_transfers_count,
@@ -318,6 +482,8 @@ def update_village_ai(world: "World") -> None:
         else:
             village["priority"] = village.get("priority") or baseline_priority
             village["strategy"] = village.get("strategy") or _priority_to_strategy(village["priority"])
+
+        update_village_proto_culture(world, village, members)
 
 
 def _choose_priority(needs: Dict) -> str:

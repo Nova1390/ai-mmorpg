@@ -155,6 +155,19 @@
               { "$ref": "#/$defs/storage" },
               { "type": "null" }
             ]
+          },
+          "construction_progress": {
+            "type": ["integer", "null"],
+            "minimum": 0
+          },
+          "construction_required_work": {
+            "type": ["integer", "null"],
+            "minimum": 0
+          },
+          "construction_complete_ratio": {
+            "type": ["number", "null"],
+            "minimum": 0.0,
+            "maximum": 1.0
           }
         },
         "additionalProperties": true

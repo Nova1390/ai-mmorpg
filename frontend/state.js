@@ -1,6 +1,8 @@
 const State = {
   staticData: null,
   dynamicData: null,
+  debugMetrics: null,
+  debugHistory: [],
   playerData: null,
   playerId: null,
   _staticPromise: null,
@@ -18,6 +20,14 @@ const State = {
 
   get dynamic() {
     return this.dynamicData;
+  },
+
+  get metrics() {
+    return this.debugMetrics;
+  },
+
+  get history() {
+    return this.debugHistory;
   },
 
   get static() {
@@ -54,6 +64,20 @@ const State = {
 
     const r = await fetch("/state", { cache: "no-store" });
     this.dynamicData = await r.json();
+
+    try {
+      const mr = await fetch("/debug/metrics", { cache: "no-store" });
+      if (mr.ok) {
+        this.debugMetrics = await mr.json();
+      }
+      const hr = await fetch("/debug/history?limit=80", { cache: "no-store" });
+      if (hr.ok) {
+        const payload = await hr.json();
+        this.debugHistory = Array.isArray(payload.history) ? payload.history : [];
+      }
+    } catch (_) {
+      // Debug metrics are optional and must not break rendering.
+    }
 
     if (this.playerId) {
       const pr = await fetch(`/player/${this.playerId}`, { cache: "no-store" });

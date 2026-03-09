@@ -60,6 +60,38 @@ const Renderer = {
       })
       .join("\n");
 
+    const dbg = State.metrics || {};
+    const dbgWorld = dbg.world || {};
+    const dbgLogistics = dbg.logistics || {};
+    const dbgProd = dbg.production || {};
+    const dbgCog = dbg.cognition_society || {};
+    const dbgLLM = dbg.llm_reflection || {};
+    const history = Array.isArray(State.history) ? State.history : [];
+    const recentTicks = history.slice(-8).map(s => `${s.tick}:${(s.world || {}).population || 0}`).join(" | ");
+    const topIntentions = Object.entries(dbgCog.active_intentions_by_type || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(", ");
+    const specialists = Object.entries(dbgCog.specialists_by_role || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `${k}=${v}`)
+      .join(", ");
+    const llmReasons = Object.entries(dbgLLM.reflection_reason_counts || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(", ");
+    const llmSkips = Object.entries(dbgLLM.reflection_skip_reason_counts || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(", ");
+    const topReflectionAgents = (dbgLLM.llm_calls_per_agent_top || [])
+      .slice(0, 5)
+      .map(a => `${(a.agent_id || "").slice(0, 8)}=${a.calls}`)
+      .join(", ");
+
     this.statsEl.textContent =
 `WORLD STATS
 tick: ${data.tick}
@@ -102,6 +134,38 @@ stored_wood: ${totalStoredWood}
 stored_stone: ${totalStoredStone}
 
 VILLAGES
-${topVillages || "-"}`;
+${topVillages || "-"}
+
+OBSERVABILITY OVERVIEW
+obs_tick: ${dbg.tick ?? "-"}
+obs_population: ${dbgWorld.population ?? "-"}
+obs_villages: ${dbgWorld.villages ?? "-"}
+obs_stored: food=${dbgWorld.stored_food ?? "-"} wood=${dbgWorld.stored_wood ?? "-"} stone=${dbgWorld.stored_stone ?? "-"}
+obs_under_construction: ${dbgWorld.under_construction_count ?? "-"}
+obs_transport: ${JSON.stringify(dbgWorld.transport_network_counts || {})}
+
+ECONOMY / LOGISTICS
+prod_food_total=${dbgProd.total_food_gathered ?? "-"} (direct=${dbgProd.direct_food_gathered ?? "-"})
+prod_wood_total=${dbgProd.total_wood_gathered ?? "-"} (direct=${dbgProd.direct_wood_gathered ?? "-"}, lumberyard=${dbgProd.wood_from_lumberyards ?? "-"})
+prod_stone_total=${dbgProd.total_stone_gathered ?? "-"} (direct=${dbgProd.direct_stone_gathered ?? "-"}, mine=${dbgProd.stone_from_mines ?? "-"})
+internal_transfers=${dbgLogistics.internal_transfers_count ?? "-"}
+construction_deliveries=${dbgLogistics.construction_deliveries_count ?? "-"}
+blocked_construction=${dbgLogistics.blocked_construction_count ?? "-"}
+storage_utilization_avg=${dbgLogistics.storage_utilization_avg ?? "-"}
+
+COGNITION / SOCIETY
+blocked_intentions=${dbgCog.blocked_intentions_count ?? "-"}
+top_intentions=${topIntentions || "-"}
+specialists=${specialists || "-"}
+leadership_changes=${dbgCog.leadership_changes ?? "-"}
+
+LLM REFLECTION
+attempts=${dbgLLM.reflection_attempt_count ?? "-"} accepted=${dbgLLM.reflection_success_count ?? "-"} rejected=${dbgLLM.reflection_rejection_count ?? "-"} fallback=${dbgLLM.reflection_fallback_count ?? "-"}
+reason_counts=${llmReasons || "-"}
+skip_reasons=${llmSkips || "-"}
+top_agents=${topReflectionAgents || "-"}
+
+RECENT POP HISTORY
+${recentTicks || "-"}`;
   }
 };

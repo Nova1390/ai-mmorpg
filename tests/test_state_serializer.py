@@ -212,7 +212,7 @@ def test_state_snapshot_regression_on_canonical_world() -> None:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
-    assert digest == "13111925d6fd15d0f73cd2be91085408bdf3893dca3fcc24f273a90d22adfb8e"
+    assert digest == "17d1262863e0880350f22a9d889286cd47741336a35721e920280d6e6dbebd48"
 
 
 def test_static_payload_is_deterministic() -> None:

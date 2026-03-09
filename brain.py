@@ -1,9 +1,29 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple, Set
+from typing import Any, Dict, Optional, Tuple, Set
 import random
 import asyncio
 import logging
+import json
+import re
+from agent import (
+    build_agent_cognitive_context,
+    detect_agent_innovation_opportunity,
+    detect_agent_reflection_reason,
+    evaluate_local_survival_pressure,
+    ensure_agent_cognitive_profile,
+    ensure_agent_proto_traits,
+    find_recent_resource_memory,
+    maybe_generate_innovation_proposal,
+    get_known_resource_spot,
+    get_known_useful_building_target,
+    get_recent_memory_events,
+    should_agent_reflect,
+    update_agent_cognitive_profile,
+    validate_proto_asset_proposal,
+    write_episodic_memory_event,
+)
+from agent import interpret_local_signals_with_self_model
 
 from planner import Planner
 from pathfinder import astar
@@ -35,6 +55,10 @@ ALLOWED_PRIORITIES = {
     "improve_logistics",
     "stabilize",
 }
+
+
+def _manhattan(a: Coord, b: Coord) -> int:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
 def phase_allowed_priorities(village: Optional[dict]) -> Set[str]:
@@ -289,8 +313,447 @@ class FoodBrain:
     def __init__(self, vision_radius: int = 8):
         self.vision_radius = vision_radius
 
+    def _new_intention(
+        self,
+        world,
+        intention_type: str,
+        *,
+        target: Optional[Coord] = None,
+        target_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "type": str(intention_type),
+            "target_id": str(target_id) if target_id is not None else None,
+            "resource_type": str(resource_type) if resource_type is not None else None,
+            "started_tick": int(getattr(world, "tick", 0)),
+            "status": "active",
+            "failed_ticks": 0,
+        }
+        if target is not None:
+            payload["target"] = {"x": int(target[0]), "y": int(target[1])}
+        else:
+            payload["target"] = None
+        return payload
+
+    def _attention_resource_target(self, agent, resource_type: str) -> Optional[Coord]:
+        subjective = getattr(agent, "subjective_state", {})
+        if not isinstance(subjective, dict):
+            return None
+        attention = subjective.get("attention", {})
+        if not isinstance(attention, dict):
+            return None
+        targets = attention.get("top_resource_targets", [])
+        if not isinstance(targets, list):
+            return None
+        for entry in targets:
+            if not isinstance(entry, dict):
+                continue
+            if str(entry.get("resource", "")) != str(resource_type):
+                continue
+            return (int(entry.get("x", 0)), int(entry.get("y", 0)))
+        return None
+
+    def _increment_intention_fail(self, agent) -> None:
+        intention = getattr(agent, "current_intention", None)
+        if not isinstance(intention, dict):
+            return
+        intention["failed_ticks"] = int(intention.get("failed_ticks", 0)) + 1
+
+    def _clear_intention(self, agent) -> None:
+        setattr(agent, "current_intention", None)
+
+    def select_agent_intention(self, world, agent) -> Optional[Dict[str, Any]]:
+        task = str(getattr(agent, "task", "idle")).lower()
+        role = str(getattr(agent, "role", "npc")).lower()
+        hunger = float(getattr(agent, "hunger", 100.0))
+        self_model = getattr(agent, "self_model", {}) if isinstance(getattr(agent, "self_model", {}), dict) else {}
+        proto_traits = ensure_agent_proto_traits(agent)
+        survival_w = float(self_model.get("survival_weight", 0.6))
+        work_w = float(self_model.get("work_weight", 0.5))
+        explore_w = float(self_model.get("exploration_weight", 0.3))
+        stress = float(self_model.get("stress_level", 0.2))
+        caution = float(proto_traits.get("caution", 0.5))
+        curiosity = float(proto_traits.get("curiosity", 0.5))
+        local_culture = (
+            getattr(agent, "subjective_state", {}).get("local_culture", {})
+            if isinstance(getattr(agent, "subjective_state", {}), dict)
+            else {}
+        )
+        culture_coop = float(local_culture.get("cooperation_norm", 0.5)) if isinstance(local_culture, dict) else 0.5
+        culture_work = float(local_culture.get("work_norm", 0.5)) if isinstance(local_culture, dict) else 0.5
+        culture_explore = float(local_culture.get("exploration_norm", 0.5)) if isinstance(local_culture, dict) else 0.5
+        dominant_focus = str(local_culture.get("dominant_resource_focus", "")) if isinstance(local_culture, dict) else ""
+        leader_nearby = self._salient_local_leader(agent) is not None
+        interpreted = interpret_local_signals_with_self_model(world, agent)
+        survival = evaluate_local_survival_pressure(world, agent)
+        survival_pressure = float(survival.get("survival_pressure", 0.0))
+        food_crisis = bool(survival.get("food_crisis", False))
+        preferred_resource = str(interpreted.get("preferred_resource", "food"))
+        if dominant_focus in {"food", "wood", "stone"} and preferred_resource != dominant_focus:
+            # Culture focus is a weak village-level deterministic bias, not an override.
+            if max(culture_work, culture_coop, culture_explore) >= 0.55:
+                preferred_resource = dominant_focus
+
+        if food_crisis or hunger < 35 or (survival_w + caution * 0.08 + survival_pressure * 0.25 > 0.72 and hunger < 55):
+            target = self._attention_resource_target(agent, "food")
+            return self._new_intention(world, "gather_food", target=target, resource_type="food")
+
+        if role == "miner" or task == "mine_cycle":
+            assigned_id = getattr(agent, "assigned_building_id", None)
+            building = getattr(world, "buildings", {}).get(str(assigned_id)) if assigned_id is not None else None
+            target = None
+            if isinstance(building, dict):
+                target = (int(building.get("x", 0)), int(building.get("y", 0)))
+            return self._new_intention(
+                world,
+                "work_mine",
+                target=target,
+                target_id=(str(assigned_id) if assigned_id is not None else None),
+                resource_type="stone",
+            )
+
+        if role == "woodcutter" or task == "lumber_cycle":
+            assigned_id = getattr(agent, "assigned_building_id", None)
+            building = getattr(world, "buildings", {}).get(str(assigned_id)) if assigned_id is not None else None
+            target = None
+            if isinstance(building, dict):
+                target = (int(building.get("x", 0)), int(building.get("y", 0)))
+            return self._new_intention(
+                world,
+                "work_lumberyard",
+                target=target,
+                target_id=(str(assigned_id) if assigned_id is not None else None),
+                resource_type="wood",
+            )
+
+        if role == "hauler" or task in {"village_logistics", "food_logistics"}:
+            village = world.get_village_by_id(getattr(agent, "village_id", None))
+            storage_pos = village.get("storage_pos") if isinstance(village, dict) else None
+            target = None
+            if isinstance(storage_pos, dict):
+                target = (int(storage_pos.get("x", 0)), int(storage_pos.get("y", 0)))
+            if food_crisis:
+                return self._new_intention(world, "deliver_resource", target=target, resource_type="food")
+            return self._new_intention(world, "deliver_resource", target=target)
+
+        if role == "builder" or task in {"build_storage", "build_house", "gather_materials"}:
+            if food_crisis:
+                target = self._attention_resource_target(agent, "food")
+                return self._new_intention(world, "gather_food", target=target, resource_type="food")
+            village = world.get_village_by_id(getattr(agent, "village_id", None))
+            center = village.get("center") if isinstance(village, dict) else None
+            target = None
+            if isinstance(center, dict):
+                target = (int(center.get("x", 0)), int(center.get("y", 0)))
+            return self._new_intention(world, "build_structure", target=target)
+
+        if leader_nearby and role in {"builder", "hauler"} and culture_coop >= 0.45:
+            village = world.get_village_by_id(getattr(agent, "village_id", None))
+            storage_pos = village.get("storage_pos") if isinstance(village, dict) else None
+            if isinstance(storage_pos, dict):
+                return self._new_intention(
+                    world,
+                    "deliver_resource",
+                    target=(int(storage_pos.get("x", 0)), int(storage_pos.get("y", 0))),
+                )
+            if isinstance(village, dict) and isinstance(village.get("center"), dict):
+                center = village["center"]
+                return self._new_intention(
+                    world,
+                    "build_structure",
+                    target=(int(center.get("x", 0)), int(center.get("y", 0))),
+                )
+
+        if task == "gather_food_wild":
+            target = self._attention_resource_target(agent, "food")
+            return self._new_intention(world, "gather_food", target=target, resource_type="food")
+
+        resources = ("food", "wood", "stone")
+        if preferred_resource in {"food", "wood", "stone"}:
+            resources = (preferred_resource,) + tuple(r for r in resources if r != preferred_resource)
+        for resource in resources:
+            target = self._attention_resource_target(agent, resource)
+            if target is not None:
+                itype = "gather_food" if resource == "food" else "gather_resource"
+                return self._new_intention(world, itype, target=target, resource_type=resource)
+
+        if (
+            explore_w + curiosity * 0.10 + culture_explore * 0.08 > 0.55
+            and stress - float(proto_traits.get("resilience", 0.5)) * 0.08 < 0.5
+            and work_w + culture_work * 0.08 < 0.72
+            and not leader_nearby
+            and survival_pressure < 0.45
+        ):
+            return self._new_intention(world, "explore")
+
+        if leader_nearby and role in {"builder", "hauler"}:
+            return self._new_intention(world, "deliver_resource")
+        return self._new_intention(world, "explore")
+
+    def progress_agent_intention(self, world, agent, intention: Dict[str, Any]) -> Optional[Tuple[str, ...]]:
+        itype = str(intention.get("type", ""))
+        resource_type = str(intention.get("resource_type", ""))
+        max_failed_ticks = max(1, int(intention.get("max_failed_ticks", 2)))
+        target_data = intention.get("target")
+        target: Optional[Coord] = None
+        if isinstance(target_data, dict):
+            target = (int(target_data.get("x", 0)), int(target_data.get("y", 0)))
+
+        if itype == "gather_food":
+            if int(getattr(agent, "inventory", {}).get("food", 0)) > 0:
+                write_episodic_memory_event(
+                    agent,
+                    tick=int(getattr(world, "tick", 0)),
+                    event_type="hunger_relief",
+                    outcome="success",
+                    location=(int(agent.x), int(agent.y)),
+                    resource_type="food",
+                    salience=2.5,
+                )
+                self._clear_intention(agent)
+                return None
+            target = target or self._attention_resource_target(agent, "food") or self.find_nearest(
+                agent, getattr(world, "food", set()), "food", self.vision_radius + 4
+            )
+            if target is None:
+                write_episodic_memory_event(
+                    agent,
+                    tick=int(getattr(world, "tick", 0)),
+                    event_type="failed_resource_search",
+                    outcome="failure",
+                    location=(int(agent.x), int(agent.y)),
+                    resource_type="food",
+                    salience=1.6,
+                )
+                self._increment_intention_fail(agent)
+                if int(intention.get("failed_ticks", 0)) >= max_failed_ticks:
+                    self._clear_intention(agent)
+                return None
+            write_episodic_memory_event(
+                agent,
+                tick=int(getattr(world, "tick", 0)),
+                event_type="found_resource",
+                outcome="success",
+                location=target,
+                resource_type="food",
+                salience=1.4,
+            )
+            intention["target"] = {"x": int(target[0]), "y": int(target[1])}
+            if target not in getattr(world, "food", set()) and _manhattan((agent.x, agent.y), target) > 1:
+                self._increment_intention_fail(agent)
+                if int(intention.get("failed_ticks", 0)) >= max_failed_ticks:
+                    self._clear_intention(agent)
+                    return None
+            return self.move_towards(agent, world, target)
+
+        if itype == "gather_resource":
+            if resource_type not in {"wood", "stone"}:
+                self._clear_intention(agent)
+                return None
+            if int(getattr(agent, "inventory", {}).get(resource_type, 0)) > 0:
+                self._clear_intention(agent)
+                return None
+            source = getattr(world, resource_type, set())
+            target = target or self._attention_resource_target(agent, resource_type) or self.find_nearest(
+                agent, source, resource_type, self.vision_radius + 5
+            )
+            if target is None:
+                write_episodic_memory_event(
+                    agent,
+                    tick=int(getattr(world, "tick", 0)),
+                    event_type="failed_resource_search",
+                    outcome="failure",
+                    location=(int(agent.x), int(agent.y)),
+                    resource_type=resource_type,
+                    salience=1.4,
+                )
+                self._increment_intention_fail(agent)
+                if int(intention.get("failed_ticks", 0)) >= max_failed_ticks:
+                    self._clear_intention(agent)
+                return None
+            write_episodic_memory_event(
+                agent,
+                tick=int(getattr(world, "tick", 0)),
+                event_type="found_resource",
+                outcome="success",
+                location=target,
+                resource_type=resource_type,
+                salience=1.2,
+            )
+            intention["target"] = {"x": int(target[0]), "y": int(target[1])}
+            if target not in source and _manhattan((agent.x, agent.y), target) > 1:
+                self._increment_intention_fail(agent)
+                if int(intention.get("failed_ticks", 0)) >= max_failed_ticks:
+                    self._clear_intention(agent)
+                    return None
+            return self.move_towards(agent, world, target)
+
+        if itype == "deliver_resource":
+            inv = getattr(agent, "inventory", {})
+            if int(inv.get("food", 0)) + int(inv.get("wood", 0)) + int(inv.get("stone", 0)) <= 0:
+                write_episodic_memory_event(
+                    agent,
+                    tick=int(getattr(world, "tick", 0)),
+                    event_type="delivered_material",
+                    outcome="success",
+                    location=(int(agent.x), int(agent.y)),
+                    salience=1.5,
+                )
+                self._clear_intention(agent)
+                return None
+            village = world.get_village_by_id(getattr(agent, "village_id", None))
+            storage_pos = village.get("storage_pos") if isinstance(village, dict) else None
+            if isinstance(storage_pos, dict):
+                target = (int(storage_pos.get("x", 0)), int(storage_pos.get("y", 0)))
+                intention["target"] = {"x": int(target[0]), "y": int(target[1])}
+                write_episodic_memory_event(
+                    agent,
+                    tick=int(getattr(world, "tick", 0)),
+                    event_type="useful_building",
+                    outcome="success",
+                    location=target,
+                    building_type="storage",
+                    salience=1.1,
+                )
+                return self.move_towards(agent, world, target)
+            self._clear_intention(agent)
+            return None
+
+        if itype in {"work_mine", "work_lumberyard"}:
+            target_resource = "stone" if itype == "work_mine" else "wood"
+            if int(getattr(agent, "inventory", {}).get(target_resource, 0)) > 0:
+                write_episodic_memory_event(
+                    agent,
+                    tick=int(getattr(world, "tick", 0)),
+                    event_type="construction_progress",
+                    outcome="success",
+                    location=(int(agent.x), int(agent.y)),
+                    resource_type=target_resource,
+                    salience=1.3,
+                )
+                self._clear_intention(agent)
+                return None
+            target_id = intention.get("target_id")
+            if target_id is not None:
+                building = getattr(world, "buildings", {}).get(str(target_id))
+                if not isinstance(building, dict):
+                    write_episodic_memory_event(
+                        agent,
+                        tick=int(getattr(world, "tick", 0)),
+                        event_type="unreachable_target",
+                        outcome="failure",
+                        location=(int(agent.x), int(agent.y)),
+                        target_id=str(target_id),
+                        salience=1.8,
+                    )
+                    self._clear_intention(agent)
+                    return None
+                linked_anchor = building.get("linked_resource_anchor")
+                if isinstance(linked_anchor, dict):
+                    target = (int(linked_anchor.get("x", 0)), int(linked_anchor.get("y", 0)))
+                    intention["target"] = {"x": int(target[0]), "y": int(target[1])}
+                    return self.move_towards(agent, world, target)
+                target = (int(building.get("x", 0)), int(building.get("y", 0)))
+                intention["target"] = {"x": int(target[0]), "y": int(target[1])}
+                return self.move_towards(agent, world, target)
+            source = getattr(world, target_resource, set())
+            target = self.find_nearest(agent, source, target_resource, self.vision_radius + 6)
+            if target is None:
+                write_episodic_memory_event(
+                    agent,
+                    tick=int(getattr(world, "tick", 0)),
+                    event_type="failed_resource_search",
+                    outcome="failure",
+                    location=(int(agent.x), int(agent.y)),
+                    resource_type=target_resource,
+                    salience=1.2,
+                )
+                self._increment_intention_fail(agent)
+                if int(intention.get("failed_ticks", 0)) >= max_failed_ticks:
+                    self._clear_intention(agent)
+                return None
+            intention["target"] = {"x": int(target[0]), "y": int(target[1])}
+            return self.move_towards(agent, world, target)
+
+        if itype == "build_structure":
+            task = str(getattr(agent, "task", "idle")).lower()
+            if task not in {"build_storage", "build_house", "gather_materials"}:
+                self._clear_intention(agent)
+                return None
+            salient = self._attention_building_target(agent, world, {"storage", "house"})
+            if salient is not None:
+                intention["target"] = {"x": int(salient[0]), "y": int(salient[1])}
+                write_episodic_memory_event(
+                    agent,
+                    tick=int(getattr(world, "tick", 0)),
+                    event_type="useful_building",
+                    outcome="success",
+                    location=salient,
+                    salience=1.0,
+                )
+                return self.move_towards(agent, world, salient)
+            village = world.get_village_by_id(getattr(agent, "village_id", None))
+            if isinstance(village, dict) and isinstance(village.get("center"), dict):
+                center = village["center"]
+                target = (int(center.get("x", agent.x)), int(center.get("y", agent.y)))
+                intention["target"] = {"x": int(target[0]), "y": int(target[1])}
+                return self.move_towards(agent, world, target)
+            write_episodic_memory_event(
+                agent,
+                tick=int(getattr(world, "tick", 0)),
+                event_type="construction_blocked",
+                outcome="failure",
+                location=(int(agent.x), int(agent.y)),
+                salience=1.4,
+            )
+            self._clear_intention(agent)
+            return None
+
+        if itype == "explore":
+            started_tick = int(intention.get("started_tick", int(getattr(world, "tick", 0))))
+            if int(getattr(world, "tick", 0)) - started_tick >= 8:
+                self._clear_intention(agent)
+                return None
+            return self.wander(agent, world)
+
+        self._clear_intention(agent)
+        return None
+
+    def _evaluate_intention(self, world, agent) -> Optional[Tuple[str, ...]]:
+        task = str(getattr(agent, "task", "idle")).lower()
+        if task in {"bootstrap_gather", "bootstrap_build_house", "manage_village", "player_controlled"}:
+            return None
+
+        hunger = float(getattr(agent, "hunger", 100.0))
+        proto_traits = ensure_agent_proto_traits(agent)
+        diligence = float(proto_traits.get("diligence", 0.5))
+        current = getattr(agent, "current_intention", None)
+        if hunger < 35 and (not isinstance(current, dict) or str(current.get("type", "")) != "gather_food"):
+            target = self._attention_resource_target(agent, "food")
+            current = self._new_intention(world, "gather_food", target=target, resource_type="food")
+            setattr(agent, "current_intention", current)
+
+        if not isinstance(current, dict):
+            selected = self.select_agent_intention(world, agent)
+            setattr(agent, "current_intention", selected)
+            current = selected
+
+        if not isinstance(current, dict):
+            return None
+
+        # High diligence slightly increases persistence before intention churn.
+        if isinstance(current, dict) and diligence > 0.65:
+            current["max_failed_ticks"] = 3
+        action = self.progress_agent_intention(world, agent, current)
+        return action
+
     def decide(self, agent, world) -> Tuple[str, ...]:
         task = str(getattr(agent, "task", "idle")).lower()
+
+        intention_action = self._evaluate_intention(world, agent)
+        if intention_action is not None:
+            return intention_action
 
         # -----------------------------
         # 1) bootstrap founding
@@ -384,6 +847,12 @@ class FoodBrain:
                 return self.move_towards(agent, world, target)
 
         if task == "build_storage":
+            salient_storage = self._attention_building_target(agent, world, {"storage"})
+            if salient_storage is not None:
+                return self.move_towards(agent, world, salient_storage)
+            collaborator = self._attention_social_target(agent, same_village_only=True)
+            if collaborator is not None and random.random() < 0.2:
+                return self.move_towards(agent, world, collaborator)
             village = world.get_village_by_id(getattr(agent, "village_id", None))
             if village:
                 gather_radius = max(world.width, world.height)
@@ -410,6 +879,12 @@ class FoodBrain:
                     return self.move_towards(agent, world, (storage_pos["x"], storage_pos["y"]))
 
         if task == "build_house":
+            salient_house = self._attention_building_target(agent, world, {"house", "storage"})
+            if salient_house is not None:
+                return self.move_towards(agent, world, salient_house)
+            collaborator = self._attention_social_target(agent, same_village_only=True)
+            if collaborator is not None and random.random() < 0.2:
+                return self.move_towards(agent, world, collaborator)
             if (
                 agent.inventory.get("wood", 0) < HOUSE_WOOD_COST
                 or agent.inventory.get("stone", 0) < HOUSE_STONE_COST
@@ -439,6 +914,43 @@ class FoodBrain:
                     if target is not None:
                         return self.move_towards(agent, world, target)
 
+        if task == "prototype_attempt":
+            target = None
+            if hasattr(world, "_active_prototype_for_agent"):
+                try:
+                    instance = world._active_prototype_for_agent(agent)
+                except Exception:
+                    instance = None
+                if isinstance(instance, dict):
+                    loc = instance.get("location", {})
+                    if isinstance(loc, dict):
+                        target = (int(loc.get("x", agent.x)), int(loc.get("y", agent.y)))
+            if target is not None:
+                needs = {"wood": 0, "stone": 0}
+                if hasattr(world, "get_proto_material_needs_for_agent"):
+                    try:
+                        candidate_needs = world.get_proto_material_needs_for_agent(agent)
+                    except Exception:
+                        candidate_needs = {}
+                    if isinstance(candidate_needs, dict):
+                        needs = {
+                            "wood": max(0, int(candidate_needs.get("wood", 0))),
+                            "stone": max(0, int(candidate_needs.get("stone", 0))),
+                        }
+                if (
+                    int(agent.inventory.get("wood", 0)) < int(needs.get("wood", 0))
+                    or int(agent.inventory.get("stone", 0)) < int(needs.get("stone", 0))
+                ):
+                    village = world.get_village_by_id(getattr(agent, "village_id", None))
+                    if village:
+                        sp = village.get("storage_pos")
+                        if sp:
+                            return self.move_towards(agent, world, (int(sp["x"]), int(sp["y"])))
+                return self.move_towards(agent, world, target)
+            village_home = self._get_known_village_center(agent, world)
+            if village_home is not None:
+                return self.move_towards(agent, world, village_home)
+
         if task == "gather_food_wild":
             target = self.find_nearest(agent, world.food, "food", self.vision_radius + 3)
             if target is not None:
@@ -461,6 +973,12 @@ class FoodBrain:
                 return self.move_towards(agent, world, village_home)
 
         if task == "village_logistics":
+            salient_logistics = self._attention_building_target(agent, world, {"storage", "house"})
+            if salient_logistics is not None and random.random() < 0.25:
+                return self.move_towards(agent, world, salient_logistics)
+            collaborator = self._attention_social_target(agent, same_village_only=True)
+            if collaborator is not None and random.random() < 0.25:
+                return self.move_towards(agent, world, collaborator)
             transfer_source = getattr(agent, "transfer_source_storage_id", None)
             transfer_target = getattr(agent, "transfer_target_storage_id", None)
             transfer_resource = str(getattr(agent, "transfer_resource_type", ""))
@@ -592,6 +1110,13 @@ class FoodBrain:
         return self.wander(agent, world)
 
     def _get_village_strategy(self, agent, world) -> str:
+        subjective = getattr(agent, "subjective_state", {})
+        if isinstance(subjective, dict):
+            local_signals = subjective.get("local_signals", {})
+            if isinstance(local_signals, dict):
+                priority = str(local_signals.get("priority", "")).strip().lower()
+                if priority:
+                    return strategy_from_priority(priority)
         village_id = getattr(agent, "village_id", None)
         if village_id is None:
             return ""
@@ -617,6 +1142,63 @@ class FoodBrain:
             return min(mem, key=lambda p: abs(p[0] - ax) + abs(p[1] - ay))
 
         return None
+
+    def _attention_building_target(self, agent, world, allowed_types: Set[str]) -> Optional[Coord]:
+        subjective = getattr(agent, "subjective_state", {})
+        if not isinstance(subjective, dict):
+            return get_known_useful_building_target(agent, allowed_types)
+        attention = subjective.get("attention", {})
+        if not isinstance(attention, dict):
+            return get_known_useful_building_target(agent, allowed_types)
+        targets = attention.get("top_building_targets", [])
+        if not isinstance(targets, list):
+            return get_known_useful_building_target(agent, allowed_types)
+        allowed = {str(t) for t in allowed_types}
+        for entry in targets:
+            if not isinstance(entry, dict):
+                continue
+            if str(entry.get("type", "")) not in allowed:
+                continue
+            return (int(entry.get("x", 0)), int(entry.get("y", 0)))
+        known = get_known_useful_building_target(agent, allowed)
+        if known is None:
+            return None
+        kx, ky = known
+        if 0 <= int(kx) < int(getattr(world, "width", 0)) and 0 <= int(ky) < int(getattr(world, "height", 0)):
+            return known
+        return None
+
+    def _attention_social_target(self, agent, *, same_village_only: bool = True) -> Optional[Coord]:
+        subjective = getattr(agent, "subjective_state", {})
+        if not isinstance(subjective, dict):
+            return None
+        attention = subjective.get("attention", {})
+        if not isinstance(attention, dict):
+            return None
+        targets = attention.get("top_social_targets", [])
+        if not isinstance(targets, list):
+            return None
+        for entry in targets:
+            if not isinstance(entry, dict):
+                continue
+            if same_village_only and not bool(entry.get("same_village", False)):
+                continue
+            return (int(entry.get("x", 0)), int(entry.get("y", 0)))
+        return None
+
+    def _salient_local_leader(self, agent) -> Optional[Dict[str, Any]]:
+        subjective = getattr(agent, "subjective_state", {})
+        if not isinstance(subjective, dict):
+            return None
+        attention = subjective.get("attention", {})
+        if not isinstance(attention, dict):
+            return None
+        leader = attention.get("salient_local_leader")
+        if not isinstance(leader, dict):
+            return None
+        if not str(leader.get("agent_id", "")):
+            return None
+        return leader
 
     def _decide_from_strategy(self, agent, world, strategy: str) -> Optional[Tuple[str, ...]]:
         if "food" in strategy or "hunt" in strategy or "eat" in strategy or "farm" in strategy:
@@ -688,6 +1270,93 @@ class FoodBrain:
 
         best: Optional[Coord] = None
         best_d = 999999
+
+        # Practical knowledge bias: use compact learned spots before pure search.
+        known_spot = get_known_resource_spot(agent, memory_key, min_confidence=0.35)
+        if known_spot is not None:
+            kx, ky = known_spot
+            d = abs(kx - ax) + abs(ky - ay)
+            if d <= radius:
+                return known_spot
+
+        # Episodic bias: reuse recent successful finds when still plausible.
+        recent_resource = find_recent_resource_memory(agent, memory_key)
+        for ev in reversed(recent_resource):
+            if str(ev.get("type", "")) not in {"found_resource", "construction_progress", "hunger_relief"}:
+                continue
+            loc = ev.get("location", {})
+            if not isinstance(loc, dict):
+                continue
+            x = int(loc.get("x", 0))
+            y = int(loc.get("y", 0))
+            d = abs(x - ax) + abs(y - ay)
+            if d <= radius:
+                return (x, y)
+
+        # Episodic bias: avoid immediate retry loops after recent local failures.
+        failed_recent = get_recent_memory_events(agent, "failed_resource_search", limit=6)
+        proto_traits = ensure_agent_proto_traits(agent)
+        caution = float(proto_traits.get("caution", 0.5))
+        resilience = float(proto_traits.get("resilience", 0.5))
+        local_culture = (
+            getattr(agent, "subjective_state", {}).get("local_culture", {})
+            if isinstance(getattr(agent, "subjective_state", {}), dict)
+            else {}
+        )
+        culture_risk = float(local_culture.get("risk_norm", 0.5)) if isinstance(local_culture, dict) else 0.5
+        avoid_window_ticks = 4 + int(caution * 6) - int(culture_risk * 2)
+        avoid_radius = 2 + int(caution * 2) - int(culture_risk)
+        avoid_window_ticks = max(2, avoid_window_ticks)
+        avoid_radius = max(1, avoid_radius)
+        if resilience > 0.7:
+            avoid_window_ticks = max(3, avoid_window_ticks - 1)
+        for ev in reversed(failed_recent):
+            if str(ev.get("resource_type", "")) != str(memory_key):
+                continue
+            if int(getattr(agent, "subjective_state", {}).get("last_perception_tick", 0)) - int(ev.get("tick", 0)) > avoid_window_ticks:
+                continue
+            loc = ev.get("location", {})
+            if not isinstance(loc, dict):
+                continue
+            fx = int(loc.get("x", 0))
+            fy = int(loc.get("y", 0))
+            if abs(fx - ax) + abs(fy - ay) <= avoid_radius:
+                return None
+
+        subjective = getattr(agent, "subjective_state", {})
+        if isinstance(subjective, dict):
+            attention = subjective.get("attention", {})
+            if isinstance(attention, dict):
+                top_targets = attention.get("top_resource_targets", [])
+                if isinstance(top_targets, list):
+                    for entry in top_targets:
+                        if not isinstance(entry, dict):
+                            continue
+                        if str(entry.get("resource", "")) != str(memory_key):
+                            continue
+                        x = int(entry.get("x", 0))
+                        y = int(entry.get("y", 0))
+                        d = abs(x - ax) + abs(y - ay)
+                        if d <= radius:
+                            return (x, y)
+
+        # Prefer situated perception if available; do not pull distant unseen targets.
+        if isinstance(subjective, dict):
+            nearby_resources = subjective.get("nearby_resources", {})
+            if isinstance(nearby_resources, dict):
+                perceived = nearby_resources.get(memory_key, [])
+                if isinstance(perceived, list):
+                    for entry in perceived:
+                        if not isinstance(entry, dict):
+                            continue
+                        x = int(entry.get("x", 0))
+                        y = int(entry.get("y", 0))
+                        d = abs(x - ax) + abs(y - ay)
+                        if d <= radius and d < best_d:
+                            best_d = d
+                            best = (x, y)
+                    if best is not None:
+                        return best
 
         for (x, y) in resource_set:
             d = abs(x - ax) + abs(y - ay)
@@ -968,14 +1637,15 @@ class LLMBrain:
         self.think_every_ticks = think_every_ticks
 
     def decide(self, agent, world) -> Tuple[str, ...]:
+        update_agent_cognitive_profile(world, agent)
+        self._apply_reflection_guidance(agent, world)
         if agent.hunger < 60 or agent.inventory.get("food", 0) == 0:
             return self.fallback.decide(agent, world)
 
         if getattr(agent, "role", "") == "leader":
             return self._decide_leader_governance(agent, world)
 
-        if self._should_think(agent, world):
-            self._schedule_llm_request(agent, world)
+        self.maybe_reflect_with_llm(agent, world)
 
         # se l'LLM è in pending, fallback immediato: niente freeze percepito
         if agent.llm_pending:
@@ -993,8 +1663,7 @@ class LLMBrain:
                 p = deterministic_priority_from_needs(needs, traits, village)
                 apply_village_priority(village, p, world.tick, "deterministic_boot")
 
-        if self._should_think(agent, world):
-            self._schedule_llm_request(agent, world)
+        self.maybe_reflect_with_llm(agent, world)
 
         # Leader stays mostly near village center; workers execute operations.
         if village is not None:
@@ -1005,62 +1674,134 @@ class LLMBrain:
         return ("wait",)
 
     def _should_think(self, agent, world) -> bool:
-        if not getattr(world, "llm_enabled", True):
+        profile = ensure_agent_cognitive_profile(agent)
+        if not should_agent_reflect(world, agent):
             return False
-
-        if agent.llm_pending:
+        min_interval = min(int(self.think_every_ticks), int(profile.get("reflection_cooldown_ticks", self.think_every_ticks)))
+        if int(world.tick) - int(agent.last_llm_tick) < int(min_interval):
+            profile["reflection_block_reason"] = "brain_interval"
             return False
-
-        think_interval = self.think_every_ticks
-        if getattr(agent, "role", "") == "leader":
-            think_interval = min(self.think_every_ticks, 120)
-
-        if world.tick - agent.last_llm_tick < think_interval:
-            return False
-
-        # rate limit per tick
-        if getattr(world, "llm_calls_this_tick", 0) >= getattr(world, "max_llm_calls_per_tick", 1):
-            return False
-
         return True
 
-    def _schedule_llm_request(self, agent, world) -> None:
+    def maybe_reflect_with_llm(self, agent, world) -> bool:
+        if not self._should_think(agent, world):
+            block_reason = str(ensure_agent_cognitive_profile(agent).get("reflection_block_reason", "blocked"))
+            if hasattr(world, "record_reflection_skip"):
+                world.record_reflection_skip(block_reason)
+            return False
+        profile = ensure_agent_cognitive_profile(agent)
+        reason = detect_agent_reflection_reason(world, agent)
+        if reason is None:
+            profile["reflection_block_reason"] = "no_trigger_reason"
+            if hasattr(world, "record_reflection_skip"):
+                world.record_reflection_skip("no_trigger_reason")
+            return False
+        state = getattr(agent, "subjective_state", {})
+        attention = state.get("attention", {}) if isinstance(state, dict) else {}
+        if bool(attention.get("salient_local_leader")):
+            reason = reason or "social_importance"
+        current_intention = getattr(agent, "current_intention", {})
+        if isinstance(current_intention, dict) and int(current_intention.get("failed_ticks", 0)) >= 2:
+            reason = "blocked_intention"
+        profile["last_reflection_reason"] = reason
+        if hasattr(world, "record_reflection_trigger"):
+            world.record_reflection_trigger(str(reason))
+        self._schedule_llm_request(agent, world, reflection_reason=reason)
+        return True
+
+    def _schedule_llm_request(self, agent, world, reflection_reason: str = "general") -> None:
         if not getattr(world, "llm_enabled", True):
             logger.warning("LLM disabled: using deterministic fallback for agent_id=%s", getattr(agent, "agent_id", "unknown"))
             return
 
         agent.llm_pending = True
         agent.last_llm_tick = world.tick
+        profile = ensure_agent_cognitive_profile(agent)
+        profile["last_reflection_tick"] = int(world.tick)
+        profile["reflection_count"] = int(profile.get("reflection_count", 0)) + 1
 
-        prompt = self._make_prompt(agent, world)
+        context = build_agent_cognitive_context(world, agent)
+        context["reflection_reason"] = str(reflection_reason)
+        prompt = self._make_prompt(agent, world, context=context, reflection_reason=reflection_reason)
         logger.info("LLM request scheduled role=%s agent_id=%s", getattr(agent, "role", "npc"), getattr(agent, "agent_id", "unknown"))
+        if hasattr(world, "record_reflection_attempt"):
+            world.record_reflection_attempt(agent, str(reflection_reason))
+
+        if hasattr(world, "llm_calls_this_tick"):
+            world.llm_calls_this_tick += 1
+        mode = self._reflection_mode(world)
+        force_stub = mode == "force_local_stub"
+
+        if force_stub:
+            if hasattr(world, "record_reflection_executed"):
+                world.record_reflection_executed(agent, str(reflection_reason))
+            self._apply_deterministic_stub_reflection(agent, world, context, str(reflection_reason))
+            agent.llm_pending = False
+            return
 
         if hasattr(world, "record_llm_interaction"):
             world.record_llm_interaction()
 
-        if hasattr(world, "llm_calls_this_tick"):
-            world.llm_calls_this_tick += 1
-
         try:
             loop = asyncio.get_running_loop()
             if getattr(agent, "role", "") == "leader":
-                loop.create_task(self._request_leader_priority(agent, world, prompt))
+                loop.create_task(
+                    self._request_leader_priority(
+                        agent,
+                        world,
+                        prompt,
+                        reflection_reason=str(reflection_reason),
+                    )
+                )
             else:
-                loop.create_task(self._request_goal(agent, world, prompt))
+                loop.create_task(self._request_reflection(agent, world, prompt, reflection_reason=reflection_reason))
         except RuntimeError:
-            agent.llm_pending = False
-            if getattr(agent, "role", "") == "leader":
-                village = world.get_village_by_id(getattr(agent, "village_id", None))
-                if village is not None:
-                    traits = getattr(agent, "leader_traits", None) or village.get("leader_profile", {})
-                    p = deterministic_priority_from_needs(village.get("needs", {}), traits, village)
-                    apply_village_priority(village, p, world.tick, "deterministic_no_loop")
-            logger.warning("LLM scheduling failed: no running event loop; deterministic fallback remains active")
+            # Scenario/test mode fallback: execute bounded request synchronously if
+            # no loop is running, otherwise deterministic fallback remains active.
+            allow_sync = bool(getattr(world, "llm_sync_execution", True))
+            if not allow_sync:
+                agent.llm_pending = False
+                if getattr(agent, "role", "") == "leader":
+                    village = world.get_village_by_id(getattr(agent, "village_id", None))
+                    if village is not None:
+                        traits = getattr(agent, "leader_traits", None) or village.get("leader_profile", {})
+                        p = deterministic_priority_from_needs(village.get("needs", {}), traits, village)
+                        apply_village_priority(village, p, world.tick, "deterministic_no_loop")
+                logger.warning("LLM scheduling failed: no running event loop; deterministic fallback remains active")
+                return
+            try:
+                if getattr(agent, "role", "") == "leader":
+                    asyncio.run(
+                        self._request_leader_priority(
+                            agent,
+                            world,
+                            prompt,
+                            reflection_reason=str(reflection_reason),
+                        )
+                    )
+                else:
+                    asyncio.run(
+                        self._request_reflection(
+                            agent,
+                            world,
+                            prompt,
+                            reflection_reason=str(reflection_reason),
+                        )
+                    )
+            except Exception:
+                agent.llm_pending = False
+                profile["last_reflection_outcome"] = "error_fallback"
+                profile["reflection_fallback_count"] = int(profile.get("reflection_fallback_count", 0)) + 1
+                if hasattr(world, "record_reflection_outcome"):
+                    world.record_reflection_outcome("fallback", reason="fallback_used")
+                logger.warning("LLM sync execution failed; deterministic fallback remains active")
 
-    async def _request_leader_priority(self, agent, world, prompt: str) -> None:
+    async def _request_leader_priority(self, agent, world, prompt: str, reflection_reason: str = "general") -> None:
         village = world.get_village_by_id(getattr(agent, "village_id", None))
         traits = getattr(agent, "leader_traits", None) or (village.get("leader_profile", {}) if village else {})
         timeout_s = float(getattr(world, "llm_timeout_seconds", 3.0))
+        if hasattr(world, "record_reflection_executed"):
+            world.record_reflection_executed(agent, str(reflection_reason))
         try:
             raw = await asyncio.wait_for(
                 self.planner.propose_goal_async(prompt),
@@ -1071,10 +1812,15 @@ class LLMBrain:
             if priority is None:
                 needs = village.get("needs", {}) if village else {}
                 priority = deterministic_priority_from_needs(needs, traits, village)
+                if hasattr(world, "record_reflection_outcome"):
+                    world.record_reflection_outcome("rejected", reason="invalid_schema")
+            else:
+                if hasattr(world, "record_reflection_outcome"):
+                    world.record_reflection_outcome("accepted", reason="accepted", source="provider")
 
             if village is not None:
                 apply_village_priority(village, priority, world.tick, "llm")
-        except Exception:
+        except asyncio.TimeoutError:
             logger.warning(
                 "LLM leader request failed or timed out; fallback priority applied agent_id=%s timeout_s=%.2f",
                 getattr(agent, "agent_id", "unknown"),
@@ -1084,6 +1830,16 @@ class LLMBrain:
             priority = deterministic_priority_from_needs(needs, traits, village)
             if village is not None:
                 apply_village_priority(village, priority, world.tick, "deterministic_fallback")
+            if hasattr(world, "record_reflection_outcome"):
+                world.record_reflection_outcome("fallback", reason="timeout")
+        except Exception as exc:
+            needs = village.get("needs", {}) if village else {}
+            priority = deterministic_priority_from_needs(needs, traits, village)
+            if village is not None:
+                apply_village_priority(village, priority, world.tick, "deterministic_fallback")
+            reason = "provider_unavailable" if self._is_provider_unavailable_error(exc) else "fallback_used"
+            if hasattr(world, "record_reflection_outcome"):
+                world.record_reflection_outcome("fallback", reason=reason)
         finally:
             agent.llm_pending = False
 
@@ -1107,7 +1863,376 @@ class LLMBrain:
         line = txt.splitlines()[0][:120]
         return normalize_priority(line)
 
+    def _extract_first_json_object_text(self, raw: str) -> Optional[str]:
+        text = (raw or "").strip()
+        if not text:
+            return None
+        if text.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE).strip()
+            cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+            text = cleaned
+        start = text.find("{")
+        if start < 0:
+            return None
+        depth = 0
+        in_string = False
+        escaped = False
+        for idx in range(start, len(text)):
+            ch = text[idx]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : idx + 1]
+        return None
+
+    def _parse_reflection_payload(self, raw: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        text = (raw or "").strip()
+        if not text:
+            return None, "malformed_output"
+        candidates = [text]
+        extracted = self._extract_first_json_object_text(text)
+        if extracted and extracted != text:
+            candidates.append(extracted)
+        for candidate in candidates:
+            try:
+                obj = json.loads(candidate)
+            except Exception:
+                continue
+            if isinstance(obj, dict):
+                return obj, ""
+            return None, "invalid_schema"
+        return None, "malformed_output"
+
+    def _validate_reflection_output(
+        self,
+        payload: Dict[str, Any],
+        *,
+        world: Any = None,
+        agent: Any = None,
+    ) -> Tuple[Optional[Dict[str, Any]], str]:
+        if not isinstance(payload, dict):
+            return None, "invalid_schema"
+        allowed_intentions = {
+            "gather_food",
+            "gather_resource",
+            "deliver_resource",
+            "build_structure",
+            "work_mine",
+            "work_lumberyard",
+            "explore",
+        }
+        allowed_target_kind = {"resource", "building", "social", "none"}
+        allowed_resource = {"food", "wood", "stone", ""}
+        allowed_tags = {
+            "survival",
+            "cooperation",
+            "work",
+            "exploration",
+            "logistics",
+            "risk_management",
+        }
+        for required_key in (
+            "suggested_intention_type",
+            "suggested_target_kind",
+            "suggested_resource_type",
+            "reasoning_tags",
+        ):
+            if required_key not in payload:
+                return None, "invalid_schema"
+        intention = str(payload.get("suggested_intention_type", "")).strip().lower()
+        target_kind = str(payload.get("suggested_target_kind", "")).strip().lower()
+        resource_type = str(payload.get("suggested_resource_type", "")).strip().lower()
+        tags = payload.get("reasoning_tags", [])
+        if intention not in allowed_intentions:
+            return None, "unsupported_values"
+        if target_kind not in allowed_target_kind:
+            return None, "unsupported_values"
+        if resource_type not in allowed_resource:
+            return None, "unsupported_values"
+        if not isinstance(tags, list):
+            return None, "invalid_schema"
+        cleaned_tags = [str(t).strip().lower() for t in tags if str(t).strip().lower() in allowed_tags][:3]
+        cleaned: Dict[str, Any] = {
+            "suggested_intention_type": intention,
+            "suggested_target_kind": target_kind,
+            "suggested_resource_type": resource_type if resource_type else None,
+            "reasoning_tags": cleaned_tags,
+        }
+
+        innovation = payload.get("innovation_proposal")
+        if innovation is not None:
+            if world is None or agent is None or not isinstance(innovation, dict):
+                return None, "invalid_schema"
+            local_reason = detect_agent_innovation_opportunity(world, agent)
+            if local_reason is None:
+                if hasattr(world, "record_proto_asset_proposal_rejected"):
+                    world.record_proto_asset_proposal_rejected("no_local_opportunity")
+                return None, "unsupported_values"
+            proposal_seed = {
+                "proposal_id": str(innovation.get("proposal_id", f"tmp-{getattr(agent, 'agent_id', 'unknown')}-{int(getattr(world, 'tick', 0))}")),
+                "inventor_agent_id": str(getattr(agent, "agent_id", "")),
+                "tick_created": int(getattr(world, "tick", 0)),
+                "reason": str(innovation.get("reason", local_reason) or local_reason),
+                "name": str(innovation.get("name", "")),
+                "asset_kind": str(innovation.get("asset_kind", "")),
+                "category": str(innovation.get("category", "")),
+                "intended_effects": list(innovation.get("intended_effects", [])),
+                "required_materials": dict(innovation.get("required_materials", {})),
+                "footprint_hint": dict(innovation.get("footprint_hint", {})),
+                "status": "proposed",
+            }
+            validated_proposal, proposal_reason = validate_proto_asset_proposal(proposal_seed)
+            if validated_proposal is None:
+                if hasattr(world, "record_proto_asset_proposal_rejected"):
+                    world.record_proto_asset_proposal_rejected(proposal_reason or "invalid_schema")
+                return None, proposal_reason or "invalid_schema"
+            cleaned["innovation_proposal"] = {
+                "reason": str(validated_proposal.get("reason", local_reason)),
+                "name": str(validated_proposal.get("name", "")),
+                "asset_kind": str(validated_proposal.get("asset_kind", "")),
+                "category": str(validated_proposal.get("category", "")),
+                "intended_effects": list(validated_proposal.get("intended_effects", [])),
+                "required_materials": dict(validated_proposal.get("required_materials", {})),
+                "footprint_hint": dict(validated_proposal.get("footprint_hint", {})),
+            }
+        return cleaned, ""
+
+    def _is_provider_unavailable_error(self, exc: Exception) -> bool:
+        text = str(exc).lower()
+        markers = ("connection", "refused", "unreachable", "name resolution", "failed to establish", "timed out")
+        return any(marker in text for marker in markers) or isinstance(exc, OSError)
+
+    def _reflection_mode(self, world) -> str:
+        if bool(getattr(world, "llm_force_local_stub", False)):
+            return "force_local_stub"
+        mode = str(getattr(world, "llm_reflection_mode", "provider_with_stub_fallback"))
+        if mode not in {"provider_only", "provider_with_stub_fallback", "force_local_stub"}:
+            return "provider_with_stub_fallback"
+        return mode
+
+    def _stub_allowed(self, world) -> bool:
+        mode = self._reflection_mode(world)
+        return bool(getattr(world, "llm_stub_enabled", True)) and mode in {
+            "provider_with_stub_fallback",
+            "force_local_stub",
+        }
+
+    def _deterministic_stub_hint(
+        self,
+        agent,
+        world,
+        context: Dict[str, Any],
+        reflection_reason: str,
+    ) -> Dict[str, Any]:
+        role = str(getattr(agent, "role", "npc"))
+        state = getattr(agent, "subjective_state", {})
+        attention = state.get("attention", {}) if isinstance(state, dict) else {}
+        local_signals = state.get("local_signals", {}) if isinstance(state, dict) else {}
+        needs = local_signals.get("needs", {}) if isinstance(local_signals, dict) else {}
+        hunger = float(getattr(agent, "hunger", 100.0))
+        survival = evaluate_local_survival_pressure(world, agent)
+        survival_pressure = float(survival.get("survival_pressure", 0.0))
+        food_crisis = bool(survival.get("food_crisis", False))
+        top_resources = attention.get("top_resource_targets", []) if isinstance(attention.get("top_resource_targets"), list) else []
+
+        def top_resource_type(default: str = "food") -> str:
+            if top_resources and isinstance(top_resources[0], dict):
+                found = str(top_resources[0].get("resource", "")).strip().lower()
+                if found in {"food", "wood", "stone"}:
+                    return found
+            return default
+
+        if food_crisis or survival_pressure >= 0.60:
+            return {
+                "suggested_intention_type": "deliver_resource" if role in {"hauler", "builder"} else "gather_food",
+                "suggested_target_kind": "building" if role in {"hauler", "builder"} else "resource",
+                "suggested_resource_type": "food",
+                "reasoning_tags": ["survival", "logistics"],
+            }
+
+        if reflection_reason == "blocked_intention":
+            if role == "miner":
+                return {
+                    "suggested_intention_type": "work_mine",
+                    "suggested_target_kind": "building",
+                    "suggested_resource_type": "stone",
+                    "reasoning_tags": ["work", "logistics"],
+                }
+            if role == "woodcutter":
+                return {
+                    "suggested_intention_type": "work_lumberyard",
+                    "suggested_target_kind": "building",
+                    "suggested_resource_type": "wood",
+                    "reasoning_tags": ["work", "logistics"],
+                }
+            if role in {"builder", "hauler"}:
+                return {
+                    "suggested_intention_type": "deliver_resource",
+                    "suggested_target_kind": "building",
+                    "suggested_resource_type": "wood" if bool(needs.get("need_materials")) else "stone",
+                    "reasoning_tags": ["work", "cooperation"],
+                }
+        if reflection_reason == "uncertain_cooperative_choice":
+            return {
+                "suggested_intention_type": "deliver_resource" if role in {"builder", "hauler"} else "gather_resource",
+                "suggested_target_kind": "social" if bool(attention.get("salient_local_leader")) else "building",
+                "suggested_resource_type": top_resource_type("food"),
+                "reasoning_tags": ["cooperation", "logistics"],
+            }
+        if reflection_reason == "conflicting_local_needs":
+            if hunger < 45:
+                return {
+                    "suggested_intention_type": "gather_food",
+                    "suggested_target_kind": "resource",
+                    "suggested_resource_type": "food",
+                    "reasoning_tags": ["survival"],
+                }
+            return {
+                "suggested_intention_type": "deliver_resource" if role in {"builder", "hauler"} else "gather_resource",
+                "suggested_target_kind": "building" if role in {"builder", "hauler"} else "resource",
+                "suggested_resource_type": top_resource_type("wood"),
+                "reasoning_tags": ["work", "survival"],
+            }
+        return {
+            "suggested_intention_type": "gather_food" if hunger < 45 else "gather_resource",
+            "suggested_target_kind": "resource",
+            "suggested_resource_type": "food" if hunger < 45 else top_resource_type("food"),
+            "reasoning_tags": ["survival"],
+        }
+
+    def _apply_deterministic_stub_reflection(
+        self,
+        agent,
+        world,
+        context: Dict[str, Any],
+        reflection_reason: str,
+    ) -> bool:
+        if not self._stub_allowed(world):
+            return False
+        hint = self._deterministic_stub_hint(agent, world, context, reflection_reason)
+        validated, reason = self._validate_reflection_output(hint, world=world, agent=agent)
+        if validated is None:
+            if hasattr(world, "record_reflection_outcome"):
+                world.record_reflection_outcome("fallback", reason=reason or "fallback_used")
+            return False
+        profile = ensure_agent_cognitive_profile(agent)
+        final_hint = dict(validated)
+        final_hint["reason"] = str(reflection_reason)
+        final_hint["generated_tick"] = int(getattr(world, "tick", 0))
+        final_hint["source"] = "stub"
+        setattr(agent, "reflection_hint", final_hint)
+        profile["last_reflection_outcome"] = "deterministic_stub_used"
+        profile["last_reflection_source"] = "stub"
+        if hasattr(world, "record_reflection_outcome"):
+            world.record_reflection_outcome("accepted", reason="deterministic_stub_used", source="stub")
+        maybe_generate_innovation_proposal(world, agent, source="stub")
+        return True
+
+    async def _request_reflection(self, agent, world, prompt: str, reflection_reason: str) -> None:
+        timeout_s = float(getattr(world, "llm_timeout_seconds", 3.0))
+        profile = ensure_agent_cognitive_profile(agent)
+        context = build_agent_cognitive_context(world, agent)
+        if hasattr(world, "record_reflection_executed"):
+            world.record_reflection_executed(agent, str(reflection_reason))
+        try:
+            raw = await asyncio.wait_for(
+                self.planner.propose_goal_async(prompt),
+                timeout=timeout_s,
+            )
+            parsed, parse_reason = self._parse_reflection_payload(str(raw or ""))
+            if parsed is None:
+                profile["last_reflection_outcome"] = parse_reason
+                if hasattr(world, "record_reflection_outcome"):
+                    world.record_reflection_outcome("rejected", reason=parse_reason)
+                if self._apply_deterministic_stub_reflection(agent, world, context, str(reflection_reason)):
+                    return
+                if hasattr(world, "record_reflection_outcome"):
+                    world.record_reflection_outcome("fallback", reason="fallback_used")
+                return
+
+            validated, validation_reason = self._validate_reflection_output(parsed, world=world, agent=agent)
+            if validated is None:
+                profile["last_reflection_outcome"] = validation_reason
+                profile["reflection_fallback_count"] = int(profile.get("reflection_fallback_count", 0)) + 1
+                if hasattr(world, "record_reflection_outcome"):
+                    world.record_reflection_outcome("rejected", reason=validation_reason)
+                if self._apply_deterministic_stub_reflection(agent, world, context, str(reflection_reason)):
+                    return
+                if hasattr(world, "record_reflection_outcome"):
+                    world.record_reflection_outcome("fallback", reason="fallback_used")
+                logger.warning(
+                    "LLM reflection rejected (malformed/unusable), deterministic fallback remains active agent_id=%s raw=%r",
+                    getattr(agent, "agent_id", "unknown"),
+                    raw,
+                )
+                return
+            hint = dict(validated)
+            hint["reason"] = str(reflection_reason)
+            hint["generated_tick"] = int(getattr(world, "tick", 0))
+            hint["source"] = "provider"
+            setattr(agent, "reflection_hint", hint)
+            if isinstance(hint.get("innovation_proposal"), dict):
+                maybe_generate_innovation_proposal(
+                    world,
+                    agent,
+                    source="provider",
+                    proposal_payload=dict(hint.get("innovation_proposal", {})),
+                )
+            else:
+                maybe_generate_innovation_proposal(world, agent, source="provider")
+            profile["last_reflection_outcome"] = "accepted"
+            profile["last_reflection_source"] = "provider"
+            profile["reflection_success_count"] = int(profile.get("reflection_success_count", 0)) + 1
+            if hasattr(world, "record_reflection_outcome"):
+                world.record_reflection_outcome("accepted", reason="accepted", source="provider")
+            logger.info(
+                "LLM reflection accepted role=%s agent_id=%s intention=%s reason=%s",
+                getattr(agent, "role", "npc"),
+                getattr(agent, "agent_id", "unknown"),
+                hint.get("suggested_intention_type"),
+                reflection_reason,
+            )
+
+        except asyncio.TimeoutError:
+            profile["last_reflection_outcome"] = "timeout"
+            if hasattr(world, "record_reflection_outcome"):
+                world.record_reflection_outcome("fallback", reason="timeout")
+            if self._apply_deterministic_stub_reflection(agent, world, context, str(reflection_reason)):
+                return
+            if hasattr(world, "record_reflection_outcome"):
+                world.record_reflection_outcome("fallback", reason="fallback_used")
+        except Exception as e:
+            outcome_reason = "provider_unavailable" if self._is_provider_unavailable_error(e) else "fallback_used"
+            profile["last_reflection_outcome"] = outcome_reason
+            profile["reflection_fallback_count"] = int(profile.get("reflection_fallback_count", 0)) + 1
+            if hasattr(world, "record_reflection_outcome"):
+                world.record_reflection_outcome("fallback", reason=outcome_reason)
+            if self._apply_deterministic_stub_reflection(agent, world, context, str(reflection_reason)):
+                return
+            logger.warning(
+                "LLM reflection failed or timed out; deterministic fallback remains active agent_id=%s timeout_s=%.2f error=%s",
+                getattr(agent, "agent_id", "unknown"),
+                timeout_s,
+                e,
+            )
+        finally:
+            agent.llm_pending = False
+
     async def _request_goal(self, agent, world, prompt: str) -> None:
+        # Legacy compatibility path kept for existing tests/callers.
         timeout_s = float(getattr(world, "llm_timeout_seconds", 3.0))
         try:
             raw_goal = await asyncio.wait_for(
@@ -1115,30 +2240,66 @@ class LLMBrain:
                 timeout=timeout_s,
             )
             normalized = normalize_goal(raw_goal)
-
             if normalized is None:
-                logger.warning("LLM returned invalid goal; fallback used agent_id=%s raw=%r", getattr(agent, "agent_id", "unknown"), raw_goal)
                 agent.goal = "survive"
                 return
-
             agent.goal = normalized
-            logger.info("LLM goal accepted role=%s agent_id=%s goal=%s", getattr(agent, "role", "npc"), getattr(agent, "agent_id", "unknown"), agent.goal)
-
-            if getattr(agent, "role", "") == "leader" and getattr(agent, "village_id", None) is not None:
-                village = world.get_village_by_id(agent.village_id)
-                if village is not None:
-                    village["strategy"] = normalized
-
-        except Exception as e:
+        except Exception:
             agent.goal = "survive"
-            logger.warning(
-                "LLM request failed or timed out; fallback goal applied agent_id=%s timeout_s=%.2f error=%s",
-                getattr(agent, "agent_id", "unknown"),
-                timeout_s,
-                e,
-            )
         finally:
             agent.llm_pending = False
+
+    def _apply_reflection_guidance(self, agent, world) -> None:
+        hint = getattr(agent, "reflection_hint", None)
+        if not isinstance(hint, dict):
+            return
+        profile = ensure_agent_cognitive_profile(agent)
+        tick = int(getattr(world, "tick", 0))
+        hint_tick = int(hint.get("generated_tick", tick))
+        if tick - hint_tick > 12:
+            setattr(agent, "reflection_hint", None)
+            return
+        intention_type = str(hint.get("suggested_intention_type", ""))
+        resource_type = hint.get("suggested_resource_type")
+        target_kind = str(hint.get("suggested_target_kind", "none"))
+        survival = evaluate_local_survival_pressure(world, agent)
+        survival_pressure = float(survival.get("survival_pressure", 0.0))
+        food_crisis = bool(survival.get("food_crisis", False))
+        if food_crisis and intention_type in {"build_structure", "explore"}:
+            if hasattr(world, "record_survival_reflection_suppressed"):
+                world.record_survival_reflection_suppressed()
+            intention_type = "deliver_resource" if str(getattr(agent, "role", "npc")) in {"builder", "hauler"} else "gather_food"
+            target_kind = "building" if intention_type == "deliver_resource" else "resource"
+            resource_type = "food"
+        elif survival_pressure >= 0.60 and intention_type == "gather_resource" and str(resource_type or "") != "food":
+            if hasattr(world, "record_survival_reflection_suppressed"):
+                world.record_survival_reflection_suppressed()
+            intention_type = "gather_food"
+            target_kind = "resource"
+            resource_type = "food"
+        if (food_crisis or survival_pressure >= 0.60) and hasattr(world, "record_survival_biased_reflection_applied"):
+            world.record_survival_biased_reflection_applied()
+        target = None
+        if target_kind == "resource":
+            target = self.fallback._attention_resource_target(agent, resource_type or "food")
+        elif target_kind == "building":
+            target = self.fallback._attention_building_target(agent, world, {"storage", "house", "mine", "lumberyard"})
+        elif target_kind == "social":
+            target = self.fallback._attention_social_target(agent, same_village_only=True)
+
+        current = getattr(agent, "current_intention", None)
+        blocked = isinstance(current, dict) and int(current.get("failed_ticks", 0)) >= 2
+        if current is None or blocked:
+            agent.current_intention = self.fallback._new_intention(
+                world,
+                intention_type,
+                target=target,
+                resource_type=(str(resource_type) if isinstance(resource_type, str) and resource_type else None),
+            )
+            profile["last_reflection_outcome"] = "applied_guidance"
+        else:
+            profile["last_reflection_outcome"] = "guidance_skipped_active_intention"
+        setattr(agent, "reflection_hint", None)
 
     def _act_from_goal(self, agent, world) -> Tuple[str, ...]:
         g = (agent.goal or "").lower()
@@ -1204,8 +2365,9 @@ class LLMBrain:
 
         return self.fallback.decide(agent, world)
 
-    def _make_prompt(self, agent, world) -> str:
+    def _make_prompt(self, agent, world, context: Optional[Dict[str, Any]] = None, reflection_reason: str = "") -> str:
         role = getattr(agent, "role", "npc")
+        context = context if isinstance(context, dict) else build_agent_cognitive_context(world, agent)
         village_summary = ""
 
         if getattr(agent, "village_id", None) is not None:
@@ -1278,15 +2440,23 @@ class LLMBrain:
                 f"current_strategy={village.get('strategy', 'stabilize') if village else 'stabilize'}\n"
                 f"leader_traits={traits}\n"
                 f"recent_priority_history={priority_history}\n"
+                f"local_cognitive_context={context}\n"
                 f"{village_summary}"
             )
 
         return (
-            "You are the high-level brain of a player character in a tile world.\n"
-            "Return only one short goal.\n"
-            "Allowed goals: gather food, gather wood, gather stone, explore.\n"
+            "You are local bounded cognition for one agent in a tile world.\n"
+            "Use ONLY the provided local_cognitive_context. Do not assume hidden/global knowledge.\n"
+            "Output JSON only (no prose, no markdown) with exactly these keys:\n"
+            "suggested_intention_type, suggested_target_kind, suggested_resource_type, reasoning_tags.\n"
+            "Allowed suggested_intention_type: gather_food, gather_resource, deliver_resource, build_structure, work_mine, work_lumberyard, explore.\n"
+            "Allowed suggested_target_kind: resource, building, social, none.\n"
+            "Allowed suggested_resource_type: food, wood, stone or empty string.\n"
+            "reasoning_tags should be a short list from: survival, cooperation, work, exploration, logistics, risk_management.\n"
+            "Survival-first rule: when survival pressure or food crisis is high, prioritize gather_food or food logistics over expansion/exploration.\n"
+            "Example valid output: {\"suggested_intention_type\":\"gather_food\",\"suggested_target_kind\":\"resource\",\"suggested_resource_type\":\"food\",\"reasoning_tags\":[\"survival\"]}\n"
+            f"reflection_reason={reflection_reason}\n"
             f"tick={world.tick}\n"
-            f"position=({agent.x},{agent.y})\n"
-            f"hunger={agent.hunger}\n"
-            f"inventory={agent.inventory}\n"
+            f"agent_role={getattr(agent, 'role', 'npc')}\n"
+            f"local_cognitive_context={context}\n"
         )

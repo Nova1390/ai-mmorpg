@@ -155,6 +155,31 @@ def _serialize_buildings(world) -> List[Dict[str, Any]]:
                         if isinstance(building.get("construction_buffer"), dict)
                         else None
                     ),
+                    "construction_progress": (
+                        int(building.get("construction_progress", 0))
+                        if "construction_progress" in building
+                        else None
+                    ),
+                    "construction_required_work": (
+                        int(building.get("construction_required_work", 0))
+                        if "construction_required_work" in building
+                        else None
+                    ),
+                    "construction_complete_ratio": (
+                        round(
+                            min(
+                                1.0,
+                                max(
+                                    0.0,
+                                    float(building.get("construction_progress", 0))
+                                    / max(1.0, float(building.get("construction_required_work", 1))),
+                                ),
+                            ),
+                            3,
+                        )
+                        if "construction_progress" in building and "construction_required_work" in building
+                        else None
+                    ),
                 }
             )
     else:
@@ -180,6 +205,9 @@ def _serialize_buildings(world) -> List[Dict[str, Any]]:
                     "storage_capacity": None,
                     "construction_request": None,
                     "construction_buffer": None,
+                    "construction_progress": None,
+                    "construction_required_work": None,
+                    "construction_complete_ratio": None,
                 }
             )
         for x, y in sorted(getattr(world, "storage_buildings", set()), key=_coord_key):
@@ -204,6 +232,9 @@ def _serialize_buildings(world) -> List[Dict[str, Any]]:
                     "storage_capacity": None,
                     "construction_request": None,
                     "construction_buffer": None,
+                    "construction_progress": None,
+                    "construction_required_work": None,
+                    "construction_complete_ratio": None,
                 }
             )
 

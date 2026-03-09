@@ -133,6 +133,23 @@ def get_events(since_tick: int = -1):
     }
 
 
+@app.get("/debug/metrics")
+def get_debug_metrics():
+    if hasattr(world, "metrics_collector"):
+        return world.metrics_collector.latest()
+    return {}
+
+
+@app.get("/debug/history")
+def get_debug_history(limit: int = 120):
+    if hasattr(world, "metrics_collector"):
+        return {
+            "tick": int(getattr(world, "tick", 0)),
+            "history": world.metrics_collector.history(limit=limit),
+        }
+    return {"tick": int(getattr(world, "tick", 0)), "history": []}
+
+
 @app.post("/spawn_player")
 def spawn_player():
     for _ in range(200):

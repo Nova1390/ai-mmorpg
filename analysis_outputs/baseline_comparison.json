@@ -1,0 +1,298 @@
+{
+  "configuration": {
+    "seed": 4242,
+    "width": 72,
+    "height": 72,
+    "initial_population": 40,
+    "ticks": 2500,
+    "snapshot_interval": 10,
+    "llm_enabled": true
+  },
+  "llm_off": {
+    "world_economy": {
+      "tick": 2500,
+      "population": 48,
+      "villages": 1,
+      "avg_hunger_final": 46.65,
+      "avg_hunger_history_mean": 44.789,
+      "storage_resources": {
+        "food": 60,
+        "wood": 68,
+        "stone": 139
+      },
+      "buildings_by_type": {
+        "house": 12,
+        "storage": 67
+      },
+      "transport_network_counts": {
+        "logistics_corridor": 130,
+        "path": 110,
+        "road": 149
+      }
+    },
+    "logistics": {
+      "internal_transfers_count": 0,
+      "construction_deliveries_count": 71,
+      "blocked_construction_count": 0,
+      "storage_utilization_avg": 0.016
+    },
+    "production": {
+      "total_wood_gathered": 0,
+      "total_stone_gathered": 0,
+      "wood_from_lumberyards": 0,
+      "stone_from_mines": 0,
+      "direct_wood_gathered": 0,
+      "direct_stone_gathered": 0
+    },
+    "cognition_society": {
+      "blocked_intentions_count": 2,
+      "specialists_by_role": {
+        "builder": 1,
+        "farmer": 3,
+        "hauler": 28
+      },
+      "top_social_influence_agents": [
+        {
+          "agent_id": "a-000002",
+          "role": "hauler",
+          "social_influence": 0.963
+        },
+        {
+          "agent_id": "a-000009",
+          "role": "npc",
+          "social_influence": 0.963
+        },
+        {
+          "agent_id": "a-000027",
+          "role": "hauler",
+          "social_influence": 0.962
+        },
+        {
+          "agent_id": "a-000007",
+          "role": "npc",
+          "social_influence": 0.96
+        },
+        {
+          "agent_id": "a-000034",
+          "role": "hauler",
+          "social_influence": 0.96
+        }
+      ],
+      "leadership_changes": 0,
+      "village_proto_culture": [
+        {
+          "village_uid": "v-000001",
+          "cooperation_norm": 0.815,
+          "work_norm": 0.807,
+          "exploration_norm": 0.778,
+          "risk_norm": 0.178,
+          "dominant_resource_focus": "food"
+        }
+      ]
+    },
+    "construction_realism": {
+      "under_construction_count_final": 1,
+      "under_construction_count_max_observed": 1,
+      "under_construction_nonzero_sample_ticks": [
+        110,
+        120,
+        130,
+        140,
+        150,
+        160,
+        170,
+        180,
+        190,
+        200,
+        210,
+        220,
+        230,
+        240,
+        250,
+        260,
+        270,
+        280,
+        290,
+        300
+      ],
+      "under_construction_longest_consecutive_snapshot_streak": 240,
+      "completed_buildings_by_type_observed_window": {
+        "house": 5,
+        "storage": 64
+      },
+      "window_start_tick": 110,
+      "window_end_tick": 2500
+    },
+    "reflection_pipeline": {
+      "trigger_detected": 0,
+      "attempted": 0,
+      "executed": 0,
+      "accepted": 0,
+      "rejected": 0,
+      "fallback": 0,
+      "executed_by_reason": {},
+      "executed_by_role": {},
+      "skip_reasons": {}
+    }
+  },
+  "llm_on": {
+    "world_economy": {
+      "tick": 2500,
+      "population": 110,
+      "villages": 1,
+      "avg_hunger_final": 67.59,
+      "avg_hunger_history_mean": 57.29,
+      "storage_resources": {
+        "food": 132,
+        "wood": 56,
+        "stone": 228
+      },
+      "buildings_by_type": {
+        "house": 18,
+        "storage": 85
+      },
+      "transport_network_counts": {
+        "logistics_corridor": 246,
+        "path": 77,
+        "road": 126
+      }
+    },
+    "logistics": {
+      "internal_transfers_count": 0,
+      "construction_deliveries_count": 366,
+      "blocked_construction_count": 0,
+      "storage_utilization_avg": 0.02
+    },
+    "production": {
+      "total_wood_gathered": 0,
+      "total_stone_gathered": 0,
+      "wood_from_lumberyards": 0,
+      "stone_from_mines": 0,
+      "direct_wood_gathered": 0,
+      "direct_stone_gathered": 0
+    },
+    "cognition_society": {
+      "blocked_intentions_count": 0,
+      "specialists_by_role": {
+        "builder": 1,
+        "farmer": 3,
+        "hauler": 58
+      },
+      "top_social_influence_agents": [
+        {
+          "agent_id": "a-000020",
+          "role": "npc",
+          "social_influence": 0.93
+        },
+        {
+          "agent_id": "a-000041",
+          "role": "npc",
+          "social_influence": 0.928
+        },
+        {
+          "agent_id": "a-000005",
+          "role": "npc",
+          "social_influence": 0.92
+        },
+        {
+          "agent_id": "a-000123",
+          "role": "hauler",
+          "social_influence": 0.906
+        },
+        {
+          "agent_id": "a-000006",
+          "role": "npc",
+          "social_influence": 0.903
+        }
+      ],
+      "leadership_changes": 0,
+      "village_proto_culture": [
+        {
+          "village_uid": "v-000001",
+          "cooperation_norm": 0.815,
+          "work_norm": 0.807,
+          "exploration_norm": 0.778,
+          "risk_norm": 0.178,
+          "dominant_resource_focus": "food"
+        }
+      ]
+    },
+    "construction_realism": {
+      "under_construction_count_final": 1,
+      "under_construction_count_max_observed": 1,
+      "under_construction_nonzero_sample_ticks": [
+        110,
+        120,
+        130,
+        140,
+        150,
+        160,
+        170,
+        180,
+        190,
+        200,
+        210,
+        220,
+        230,
+        240,
+        250,
+        260,
+        270,
+        280,
+        290,
+        300
+      ],
+      "under_construction_longest_consecutive_snapshot_streak": 240,
+      "completed_buildings_by_type_observed_window": {
+        "house": 9,
+        "storage": 83
+      },
+      "window_start_tick": 110,
+      "window_end_tick": 2500
+    },
+    "reflection_pipeline": {
+      "trigger_detected": 197,
+      "attempted": 197,
+      "executed": 197,
+      "accepted": 0,
+      "rejected": 197,
+      "fallback": 0,
+      "executed_by_reason": {
+        "conflicting_local_needs": 152,
+        "uncertain_cooperative_choice": 44,
+        "repeated_local_failure": 1
+      },
+      "executed_by_role": {
+        "npc": 87,
+        "farmer": 47,
+        "hauler": 40,
+        "builder": 22,
+        "forager": 1
+      },
+      "skip_reasons": {
+        "low_relevance": 13858,
+        "cooldown": 4302,
+        "no_trigger_reason": 443,
+        "global_budget_exhausted": 411,
+        "brain_interval": 72
+      }
+    }
+  },
+  "deltas_on_minus_off": {
+    "population": 62,
+    "avg_hunger_final": 20.94,
+    "storage_food": 72,
+    "storage_wood": -12,
+    "storage_stone": 89,
+    "internal_transfers_count": 0,
+    "construction_deliveries_count": 295,
+    "blocked_construction_count": 0,
+    "blocked_intentions_count": -2,
+    "reflection_trigger_detected": 197,
+    "reflection_attempted": 197,
+    "reflection_executed": 197,
+    "reflection_accepted": 0,
+    "reflection_rejected": 197,
+    "reflection_fallback": 0
+  }
+}

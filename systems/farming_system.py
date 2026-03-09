@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from typing import Tuple
+import systems.building_system as building_system
 
 Coord = Tuple[int, int]
 
@@ -159,6 +160,9 @@ def work_farm(world, agent) -> bool:
             return False
         gathered = min(harvest_amount, space)
         agent.inventory["food"] = agent.inventory.get("food", 0) + gathered
+        building_system.record_village_resource_gather(village, "food", amount=gathered)
+        if hasattr(world, "record_resource_production"):
+            world.record_resource_production("food", gathered)
 
         plot["state"] = "prepared"
         plot["growth"] = 0
@@ -203,6 +207,9 @@ def haul_harvest(world, agent) -> bool:
         return False
     gathered = min(harvest_amount, space)
     agent.inventory["food"] = agent.inventory.get("food", 0) + gathered
+    building_system.record_village_resource_gather(village, "food", amount=gathered)
+    if hasattr(world, "record_resource_production"):
+        world.record_resource_production("food", gathered)
     plot["state"] = "prepared"
     plot["growth"] = 0
     world.emit_event(

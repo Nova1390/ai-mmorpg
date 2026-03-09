@@ -1,0 +1,325 @@
+{
+  "run_configuration": {
+    "seed": 4242,
+    "width": 72,
+    "height": 72,
+    "initial_population": 40,
+    "ticks": 2500,
+    "snapshot_interval": 10,
+    "llm_enabled": false,
+    "llm_reflection_mode": "provider_with_stub_fallback",
+    "llm_stub_enabled": true,
+    "llm_force_local_stub": false
+  },
+  "modes": {
+    "A_llm_off": {
+      "scenario": {
+        "seed": 4242,
+        "width": 72,
+        "height": 72,
+        "initial_population": 40,
+        "ticks": 2500,
+        "snapshot_interval": 10,
+        "llm_enabled": false,
+        "llm_reflection_mode": "provider_with_stub_fallback",
+        "llm_stub_enabled": true,
+        "llm_force_local_stub": false
+      },
+      "survival": {
+        "final_population": 37,
+        "avg_hunger_final": 34.68,
+        "avg_hunger_trend": {
+          "start": 63.71,
+          "mid": 42.68,
+          "end": 34.68,
+          "delta": -29.03
+        },
+        "stored_food_final": 32,
+        "survival_pressure_avg_final": 0.276,
+        "survival_pressure_avg_mean": 0.296,
+        "food_crisis_count_final": 0,
+        "food_crisis_count_mean": 3.296
+      },
+      "economy_production": {
+        "total_food_gathered": 744,
+        "total_wood_gathered": 138,
+        "total_stone_gathered": 117,
+        "direct_food_gathered": 744,
+        "direct_wood_gathered": 138,
+        "direct_stone_gathered": 117,
+        "wood_from_lumberyards": 0,
+        "stone_from_mines": 0,
+        "wood_specialization_ratio": 0.0,
+        "stone_specialization_ratio": 0.0,
+        "food_direct_ratio": 1.0
+      },
+      "construction_logistics": {
+        "construction_deliveries_count": 0,
+        "internal_transfers_count": 0,
+        "blocked_construction_count": 0,
+        "storage_utilization_avg": 0.005,
+        "under_construction": {
+          "final": 1,
+          "max": 1,
+          "mean": 1.0
+        },
+        "buildings_by_type_final": {
+          "farm_plot": 48,
+          "house": 14,
+          "storage": 71
+        },
+        "completed_buildings_by_type_est": {
+          "farm_plot": 48,
+          "house": 6,
+          "storage": 69
+        },
+        "transport_network_counts": {
+          "logistics_corridor": 175,
+          "path": 66,
+          "road": 154
+        }
+      },
+      "reflection_pipeline": {
+        "trigger_detected": 0,
+        "attempted": 0,
+        "executed": 0,
+        "accepted": 0,
+        "rejected": 0,
+        "fallback": 0,
+        "accepted_by_source": {},
+        "rejection_reasons": {},
+        "skip_reasons": {},
+        "survival_reflection_suppressed_count": 0,
+        "survival_biased_reflection_applied_count": 0,
+        "accepted_executed_ratio": 0.0,
+        "reflections_per_100_ticks": 0.0
+      },
+      "cognition": {
+        "blocked_intentions_count_final": 7,
+        "specialists_by_role": {
+          "builder": 1,
+          "farmer": 3,
+          "hauler": 19
+        },
+        "leadership_changes": 0
+      }
+    },
+    "B_stub_mode": {
+      "scenario": {
+        "seed": 4242,
+        "width": 72,
+        "height": 72,
+        "initial_population": 40,
+        "ticks": 2500,
+        "snapshot_interval": 10,
+        "llm_enabled": true,
+        "llm_reflection_mode": "force_local_stub",
+        "llm_stub_enabled": true,
+        "llm_force_local_stub": true
+      },
+      "survival": {
+        "final_population": 40,
+        "avg_hunger_final": 33.67,
+        "avg_hunger_trend": {
+          "start": 64.81,
+          "mid": 42.69,
+          "end": 33.67,
+          "delta": -31.14
+        },
+        "stored_food_final": 30,
+        "survival_pressure_avg_final": 0.362,
+        "survival_pressure_avg_mean": 0.291,
+        "food_crisis_count_final": 0,
+        "food_crisis_count_mean": 1.65
+      },
+      "economy_production": {
+        "total_food_gathered": 658,
+        "total_wood_gathered": 126,
+        "total_stone_gathered": 69,
+        "direct_food_gathered": 658,
+        "direct_wood_gathered": 126,
+        "direct_stone_gathered": 69,
+        "wood_from_lumberyards": 0,
+        "stone_from_mines": 0,
+        "wood_specialization_ratio": 0.0,
+        "stone_specialization_ratio": 0.0,
+        "food_direct_ratio": 1.0
+      },
+      "construction_logistics": {
+        "construction_deliveries_count": 0,
+        "internal_transfers_count": 0,
+        "blocked_construction_count": 0,
+        "storage_utilization_avg": 0.007,
+        "under_construction": {
+          "final": 0,
+          "max": 0,
+          "mean": 0.0
+        },
+        "buildings_by_type_final": {
+          "house": 11,
+          "storage": 77
+        },
+        "completed_buildings_by_type_est": {
+          "house": 3,
+          "storage": 75
+        },
+        "transport_network_counts": {
+          "logistics_corridor": 116,
+          "path": 78,
+          "road": 120
+        }
+      },
+      "reflection_pipeline": {
+        "trigger_detected": 129,
+        "attempted": 129,
+        "executed": 129,
+        "accepted": 129,
+        "rejected": 0,
+        "fallback": 0,
+        "accepted_by_source": {
+          "stub": 129
+        },
+        "rejection_reasons": {},
+        "skip_reasons": {
+          "low_relevance": 10510,
+          "brain_interval": 72,
+          "no_trigger_reason": 183,
+          "global_budget_exhausted": 463,
+          "cooldown": 4281
+        },
+        "survival_reflection_suppressed_count": 0,
+        "survival_biased_reflection_applied_count": 0,
+        "accepted_executed_ratio": 1.0,
+        "reflections_per_100_ticks": 5.16
+      },
+      "cognition": {
+        "blocked_intentions_count_final": 2,
+        "specialists_by_role": {
+          "builder": 1,
+          "farmer": 2,
+          "hauler": 28
+        },
+        "leadership_changes": 0
+      }
+    },
+    "C_provider_mode": {
+      "scenario": {
+        "seed": 4242,
+        "width": 72,
+        "height": 72,
+        "initial_population": 40,
+        "ticks": 2500,
+        "snapshot_interval": 10,
+        "llm_enabled": true,
+        "llm_reflection_mode": "provider_with_stub_fallback",
+        "llm_stub_enabled": true,
+        "llm_force_local_stub": false
+      },
+      "survival": {
+        "final_population": 40,
+        "avg_hunger_final": 33.67,
+        "avg_hunger_trend": {
+          "start": 64.81,
+          "mid": 42.69,
+          "end": 33.67,
+          "delta": -31.14
+        },
+        "stored_food_final": 30,
+        "survival_pressure_avg_final": 0.362,
+        "survival_pressure_avg_mean": 0.291,
+        "food_crisis_count_final": 0,
+        "food_crisis_count_mean": 1.65
+      },
+      "economy_production": {
+        "total_food_gathered": 658,
+        "total_wood_gathered": 126,
+        "total_stone_gathered": 69,
+        "direct_food_gathered": 658,
+        "direct_wood_gathered": 126,
+        "direct_stone_gathered": 69,
+        "wood_from_lumberyards": 0,
+        "stone_from_mines": 0,
+        "wood_specialization_ratio": 0.0,
+        "stone_specialization_ratio": 0.0,
+        "food_direct_ratio": 1.0
+      },
+      "construction_logistics": {
+        "construction_deliveries_count": 0,
+        "internal_transfers_count": 0,
+        "blocked_construction_count": 0,
+        "storage_utilization_avg": 0.007,
+        "under_construction": {
+          "final": 0,
+          "max": 0,
+          "mean": 0.0
+        },
+        "buildings_by_type_final": {
+          "house": 11,
+          "storage": 77
+        },
+        "completed_buildings_by_type_est": {
+          "house": 3,
+          "storage": 75
+        },
+        "transport_network_counts": {
+          "logistics_corridor": 116,
+          "path": 78,
+          "road": 120
+        }
+      },
+      "reflection_pipeline": {
+        "trigger_detected": 129,
+        "attempted": 129,
+        "executed": 129,
+        "accepted": 129,
+        "rejected": 129,
+        "fallback": 0,
+        "accepted_by_source": {
+          "stub": 129
+        },
+        "rejection_reasons": {
+          "malformed_output": 129
+        },
+        "skip_reasons": {
+          "low_relevance": 10510,
+          "brain_interval": 72,
+          "no_trigger_reason": 183,
+          "global_budget_exhausted": 463,
+          "cooldown": 4281
+        },
+        "survival_reflection_suppressed_count": 0,
+        "survival_biased_reflection_applied_count": 0,
+        "accepted_executed_ratio": 1.0,
+        "reflections_per_100_ticks": 5.16
+      },
+      "cognition": {
+        "blocked_intentions_count_final": 2,
+        "specialists_by_role": {
+          "builder": 1,
+          "farmer": 2,
+          "hauler": 28
+        },
+        "leadership_changes": 0
+      }
+    }
+  },
+  "cross_mode_deltas": {
+    "population_gain_vs_off": {
+      "stub": 3,
+      "provider": 3
+    },
+    "avg_hunger_final_delta_vs_off": {
+      "stub": -1.01,
+      "provider": -1.01
+    },
+    "stored_food_delta_vs_off": {
+      "stub": -2,
+      "provider": -2
+    },
+    "construction_deliveries_delta_vs_off": {
+      "stub": 0,
+      "provider": 0
+    },
+    "provider_effectively_stub_replaced": true
+  }
+}

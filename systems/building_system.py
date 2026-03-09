@@ -20,6 +20,12 @@ STORAGE_REBALANCE_MARGIN = 3
 STORAGE_REBALANCE_TRANSFER_CAP = 2
 POLICY_BUILD_COOLDOWN_TICKS = 60
 POLICY_MAX_ATTEMPTS_PER_WINDOW = 2
+CONSTRUCTION_WORK_RANGE = 1
+CONSTRUCTION_WORK_PER_TICK = 1
+CONSTRUCTION_REQUIRED_WORK_BY_TYPE = {
+    "house": 4,
+    "storage": 6,
+}
 
 BUILDING_CATEGORIES = {
     "residential",
@@ -1290,6 +1296,8 @@ def place_building(
     operational_state: Optional[str] = None,
     construction_request: Optional[Dict[str, int]] = None,
     construction_buffer: Optional[Dict[str, int]] = None,
+    construction_progress: Optional[int] = None,
+    construction_required_work: Optional[int] = None,
 ) -> Optional[Dict]:
     if building_type not in BUILDING_CATALOG:
         return None
@@ -1351,6 +1359,10 @@ def place_building(
         building["construction_request"] = dict(construction_request)
     if construction_buffer is not None:
         building["construction_buffer"] = dict(construction_buffer)
+    if construction_progress is not None:
+        building["construction_progress"] = max(0, int(construction_progress))
+    if construction_required_work is not None:
+        building["construction_required_work"] = max(1, int(construction_required_work))
     if building_type == "storage":
         building["storage"] = _empty_resource_bucket()
         building["storage_capacity"] = STORAGE_BUILDING_CAPACITY
@@ -1420,6 +1432,10 @@ def _construction_costs(building_type: str) -> Dict[str, int]:
     if building_type == "storage":
         return {"wood": STORAGE_WOOD_COST, "stone": STORAGE_STONE_COST, "food": 0}
     return {"wood": 0, "stone": 0, "food": 0}
+
+
+def _construction_required_work(building_type: str) -> int:
+    return max(1, int(CONSTRUCTION_REQUIRED_WORK_BY_TYPE.get(str(building_type), 3)))
 
 
 def _empty_construction_buffer() -> Dict[str, int]:
@@ -1539,6 +1555,30 @@ def _site_ready_for_completion(building: Dict[str, Any], costs: Dict[str, int]) 
     return True
 
 
+def can_agent_work_on_construction(agent: "Agent", building: Dict[str, Any]) -> bool:
+    if not isinstance(building, dict):
+        return False
+    bx = int(building.get("x", 0))
+    by = int(building.get("y", 0))
+    return _distance((int(agent.x), int(agent.y)), (bx, by)) <= int(CONSTRUCTION_WORK_RANGE)
+
+
+def _advance_construction_progress(building: Dict[str, Any], work_amount: int = CONSTRUCTION_WORK_PER_TICK) -> int:
+    progress = max(0, int(building.get("construction_progress", 0)))
+    required = max(1, int(building.get("construction_required_work", 1)))
+    gained = max(0, int(work_amount))
+    new_progress = min(required, progress + gained)
+    building["construction_progress"] = new_progress
+    building["construction_required_work"] = required
+    return new_progress
+
+
+def _site_work_complete(building: Dict[str, Any]) -> bool:
+    required = max(1, int(building.get("construction_required_work", 1)))
+    progress = max(0, int(building.get("construction_progress", 0)))
+    return progress >= required
+
+
 def _attach_carried_materials_to_site(agent: "Agent", building: Dict[str, Any], costs: Dict[str, int]) -> int:
     buf = building.get("construction_buffer")
     if not isinstance(buf, dict):
@@ -1624,6 +1664,8 @@ def _create_construction_site(
         operational_state="under_construction",
         construction_request=_construction_request_from_costs(costs),
         construction_buffer=_empty_construction_buffer(),
+        construction_progress=0,
+        construction_required_work=_construction_required_work(building_type),
     )
 
 
@@ -1631,6 +1673,9 @@ def _complete_construction_site(world: "World", building: Dict[str, Any]) -> Non
     building["operational_state"] = "active"
     building.pop("construction_request", None)
     building.pop("construction_buffer", None)
+    required = max(1, int(building.get("construction_required_work", 1)))
+    building["construction_progress"] = required
+    building["construction_required_work"] = required
     pos = (int(building.get("x", 0)), int(building.get("y", 0)))
     if building.get("type") == "house":
         world.structures.add(pos)
@@ -2041,10 +2086,13 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
         )
     if site is None:
         return False
-    if abs(agent.x - int(site.get("x", 0))) > 2 or abs(agent.y - int(site.get("y", 0))) > 2:
+    if not can_agent_work_on_construction(agent, site):
         return False
     _attach_carried_materials_to_site(agent, site, costs)
     if not _site_ready_for_completion(site, costs):
+        return False
+    _advance_construction_progress(site)
+    if not _site_work_complete(site):
         return False
     if not _use_construction_buffer(site, costs):
         return False
@@ -2091,7 +2139,7 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
         sx, sy = replacement
         village["storage_pos"] = {"x": sx, "y": sy}
 
-    if abs(agent.x - sx) > 2 or abs(agent.y - sy) > 2:
+    if _distance((int(agent.x), int(agent.y)), (int(sx), int(sy))) > int(CONSTRUCTION_WORK_RANGE):
         return False
 
     if existing_site is None and not can_place_building(world, "storage", (sx, sy)):
@@ -2110,8 +2158,13 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
         )
     if site is None:
         return False
+    if not can_agent_work_on_construction(agent, site):
+        return False
     _attach_carried_materials_to_site(agent, site, costs)
     if not _site_ready_for_completion(site, costs):
+        return False
+    _advance_construction_progress(site)
+    if not _site_work_complete(site):
         return False
     if not _use_construction_buffer(site, costs):
         return False
@@ -2210,8 +2263,12 @@ def production_bonus_details_for_resource(
 
 def _default_production_metrics() -> Dict[str, int]:
     return {
+        "total_food_gathered": 0,
         "total_wood_gathered": 0,
         "total_stone_gathered": 0,
+        "direct_food_gathered": 0,
+        "direct_wood_gathered": 0,
+        "direct_stone_gathered": 0,
         "wood_from_lumberyards": 0,
         "stone_from_mines": 0,
     }
@@ -2303,16 +2360,31 @@ def record_village_resource_gather(
 ) -> None:
     if village is None:
         return
+    qty = int(amount)
+    if qty <= 0:
+        return
+    bonus = max(0, int(bonus_amount))
     metrics = get_or_init_village_production_metrics(village)
 
+    if resource_type == "food":
+        metrics["total_food_gathered"] = int(metrics.get("total_food_gathered", 0)) + qty
+        metrics["direct_food_gathered"] = int(metrics.get("direct_food_gathered", 0)) + qty
+        return
+
     if resource_type == "wood":
-        metrics["total_wood_gathered"] = int(metrics.get("total_wood_gathered", 0)) + int(amount)
-        if production_source == "lumberyard" and bonus_amount > 0:
-            metrics["wood_from_lumberyards"] = int(metrics.get("wood_from_lumberyards", 0)) + int(bonus_amount)
+        specialized = min(qty, bonus) if production_source == "lumberyard" else 0
+        direct = max(0, qty - specialized)
+        metrics["total_wood_gathered"] = int(metrics.get("total_wood_gathered", 0)) + qty
+        metrics["direct_wood_gathered"] = int(metrics.get("direct_wood_gathered", 0)) + direct
+        if specialized > 0:
+            metrics["wood_from_lumberyards"] = int(metrics.get("wood_from_lumberyards", 0)) + specialized
     elif resource_type == "stone":
-        metrics["total_stone_gathered"] = int(metrics.get("total_stone_gathered", 0)) + int(amount)
-        if production_source == "mine" and bonus_amount > 0:
-            metrics["stone_from_mines"] = int(metrics.get("stone_from_mines", 0)) + int(bonus_amount)
+        specialized = min(qty, bonus) if production_source == "mine" else 0
+        direct = max(0, qty - specialized)
+        metrics["total_stone_gathered"] = int(metrics.get("total_stone_gathered", 0)) + qty
+        metrics["direct_stone_gathered"] = int(metrics.get("direct_stone_gathered", 0)) + direct
+        if specialized > 0:
+            metrics["stone_from_mines"] = int(metrics.get("stone_from_mines", 0)) + specialized
 
 
 def choose_next_building_type_for_village(world: "World", village: Dict[str, Any]) -> Optional[str]:

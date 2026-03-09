@@ -1,0 +1,1049 @@
+{
+  "campaign_configuration": {
+    "snapshot_interval": 10,
+    "history_limit": 300,
+    "modes_used": [
+      "LLM OFF",
+      "LLM ON + force_local_stub"
+    ],
+    "provider_mode_included": false,
+    "scenarios": {
+      "a": {
+        "name": "GENERAL BASELINE",
+        "seed": 4242,
+        "width": 72,
+        "height": 72,
+        "population": 40,
+        "ticks": 2500
+      },
+      "b": {
+        "name": "LOGISTICS / CONSTRUCTION STRESS",
+        "seed": 4343,
+        "width": 96,
+        "height": 96,
+        "population": 48,
+        "ticks": 2400
+      },
+      "c": {
+        "name": "SPECIALIZATION / PRODUCTION STRESS",
+        "seed": 4444,
+        "width": 72,
+        "height": 72,
+        "population": 44,
+        "ticks": 2400
+      },
+      "d": {
+        "name": "INNOVATION STRESS",
+        "seed": 4545,
+        "width": 72,
+        "height": 72,
+        "population": 40,
+        "ticks": 2800
+      }
+    }
+  },
+  "results": {
+    "a": {
+      "off": {
+        "survival_world": {
+          "population": 37,
+          "avg_hunger": 34.68,
+          "survival_pressure_avg": 0.276,
+          "food_crisis_count": 0,
+          "villages": 1,
+          "stored_resources": {
+            "food": 32,
+            "wood": 5,
+            "stone": 60
+          }
+        },
+        "economy_production": {
+          "total_food_gathered": 744,
+          "total_wood_gathered": 138,
+          "total_stone_gathered": 117,
+          "direct_food_gathered": 744,
+          "direct_wood_gathered": 138,
+          "direct_stone_gathered": 117,
+          "wood_from_lumberyards": 0,
+          "stone_from_mines": 0,
+          "wood_specialization_ratio": 0.0,
+          "stone_specialization_ratio": 0.0
+        },
+        "logistics_construction": {
+          "construction_deliveries_count": 0,
+          "internal_transfers_count": 0,
+          "under_construction_count": 1,
+          "completed_buildings_by_type": {
+            "farm_plot": 48,
+            "house": 14,
+            "storage": 71
+          },
+          "storage_utilization_avg": 0.005,
+          "blocked_construction_count": 0
+        },
+        "cognition_society": {
+          "blocked_intentions_count": 7,
+          "active_intentions_by_type": {
+            "explore": 1,
+            "gather_food": 32
+          },
+          "specialists_by_role": {
+            "builder": 1,
+            "farmer": 3,
+            "hauler": 19
+          },
+          "top_social_influence_agents": [
+            {
+              "agent_id": "a-000042",
+              "role": "hauler",
+              "social_influence": 0.963
+            },
+            {
+              "agent_id": "a-000047",
+              "role": "hauler",
+              "social_influence": 0.961
+            },
+            {
+              "agent_id": "a-000002",
+              "role": "npc",
+              "social_influence": 0.96
+            },
+            {
+              "agent_id": "a-000039",
+              "role": "hauler",
+              "social_influence": 0.96
+            },
+            {
+              "agent_id": "a-000032",
+              "role": "hauler",
+              "social_influence": 0.959
+            }
+          ],
+          "leadership_changes": 0,
+          "village_proto_culture": [
+            {
+              "village_uid": "v-000001",
+              "cooperation_norm": 0.815,
+              "work_norm": 0.807,
+              "exploration_norm": 0.778,
+              "risk_norm": 0.178,
+              "dominant_resource_focus": "food"
+            }
+          ]
+        },
+        "llm_reflection": {
+          "trigger_detected": 0,
+          "attempted": 0,
+          "executed": 0,
+          "accepted": 0,
+          "rejected": 0,
+          "fallback": 0,
+          "accepted_by_source": {},
+          "rejection_reasons": {},
+          "skip_reasons": {},
+          "reflections_per_100_ticks": 0.0,
+          "survival_reflection_suppressed_count": 0,
+          "survival_biased_reflection_applied_count": 0
+        },
+        "innovation": {
+          "proto_asset_proposal_count": 0,
+          "admissible_proposal_count": 0,
+          "rejected_proposal_count": 0,
+          "prototype_attempt_count": 0,
+          "prototype_built_count": 0,
+          "prototype_failed_count": 0,
+          "prototype_useful_count": 0,
+          "prototype_neutral_count": 0,
+          "prototype_ineffective_count": 0,
+          "known_invention_entry_count": 0,
+          "agents_with_known_inventions": 0,
+          "invention_knowledge_by_source": {},
+          "invention_knowledge_by_category": {}
+        }
+      },
+      "stub": {
+        "survival_world": {
+          "population": 40,
+          "avg_hunger": 33.67,
+          "survival_pressure_avg": 0.362,
+          "food_crisis_count": 0,
+          "villages": 1,
+          "stored_resources": {
+            "food": 30,
+            "wood": 53,
+            "stone": 54
+          }
+        },
+        "economy_production": {
+          "total_food_gathered": 658,
+          "total_wood_gathered": 126,
+          "total_stone_gathered": 69,
+          "direct_food_gathered": 658,
+          "direct_wood_gathered": 126,
+          "direct_stone_gathered": 69,
+          "wood_from_lumberyards": 0,
+          "stone_from_mines": 0,
+          "wood_specialization_ratio": 0.0,
+          "stone_specialization_ratio": 0.0
+        },
+        "logistics_construction": {
+          "construction_deliveries_count": 0,
+          "internal_transfers_count": 0,
+          "under_construction_count": 0,
+          "completed_buildings_by_type": {
+            "house": 11,
+            "storage": 77
+          },
+          "storage_utilization_avg": 0.007,
+          "blocked_construction_count": 0
+        },
+        "cognition_society": {
+          "blocked_intentions_count": 2,
+          "active_intentions_by_type": {
+            "gather_food": 38
+          },
+          "specialists_by_role": {
+            "builder": 1,
+            "farmer": 2,
+            "hauler": 28
+          },
+          "top_social_influence_agents": [
+            {
+              "agent_id": "a-000026",
+              "role": "hauler",
+              "social_influence": 0.962
+            },
+            {
+              "agent_id": "a-000002",
+              "role": "hauler",
+              "social_influence": 0.959
+            },
+            {
+              "agent_id": "a-000031",
+              "role": "hauler",
+              "social_influence": 0.955
+            },
+            {
+              "agent_id": "a-000041",
+              "role": "hauler",
+              "social_influence": 0.955
+            },
+            {
+              "agent_id": "a-000050",
+              "role": "hauler",
+              "social_influence": 0.955
+            }
+          ],
+          "leadership_changes": 0,
+          "village_proto_culture": [
+            {
+              "village_uid": "v-000001",
+              "cooperation_norm": 0.815,
+              "work_norm": 0.807,
+              "exploration_norm": 0.778,
+              "risk_norm": 0.178,
+              "dominant_resource_focus": "food"
+            }
+          ]
+        },
+        "llm_reflection": {
+          "trigger_detected": 129,
+          "attempted": 129,
+          "executed": 129,
+          "accepted": 129,
+          "rejected": 0,
+          "fallback": 0,
+          "accepted_by_source": {
+            "stub": 129
+          },
+          "rejection_reasons": {},
+          "skip_reasons": {
+            "low_relevance": 10510,
+            "brain_interval": 72,
+            "no_trigger_reason": 183,
+            "global_budget_exhausted": 463,
+            "cooldown": 4281
+          },
+          "reflections_per_100_ticks": 5.16,
+          "survival_reflection_suppressed_count": 0,
+          "survival_biased_reflection_applied_count": 0
+        },
+        "innovation": {
+          "proto_asset_proposal_count": 0,
+          "admissible_proposal_count": 0,
+          "rejected_proposal_count": 0,
+          "prototype_attempt_count": 0,
+          "prototype_built_count": 0,
+          "prototype_failed_count": 0,
+          "prototype_useful_count": 0,
+          "prototype_neutral_count": 0,
+          "prototype_ineffective_count": 0,
+          "known_invention_entry_count": 0,
+          "agents_with_known_inventions": 0,
+          "invention_knowledge_by_source": {},
+          "invention_knowledge_by_category": {}
+        }
+      }
+    },
+    "b": {
+      "off": {
+        "survival_world": {
+          "population": 7,
+          "avg_hunger": 38.86,
+          "survival_pressure_avg": 0.37,
+          "food_crisis_count": 0,
+          "villages": 1,
+          "stored_resources": {
+            "food": 5,
+            "wood": 0,
+            "stone": 0
+          }
+        },
+        "economy_production": {
+          "total_food_gathered": 320,
+          "total_wood_gathered": 84,
+          "total_stone_gathered": 89,
+          "direct_food_gathered": 320,
+          "direct_wood_gathered": 84,
+          "direct_stone_gathered": 89,
+          "wood_from_lumberyards": 0,
+          "stone_from_mines": 0,
+          "wood_specialization_ratio": 0.0,
+          "stone_specialization_ratio": 0.0
+        },
+        "logistics_construction": {
+          "construction_deliveries_count": 0,
+          "internal_transfers_count": 0,
+          "under_construction_count": 1,
+          "completed_buildings_by_type": {
+            "farm_plot": 118,
+            "house": 7,
+            "storage": 1
+          },
+          "storage_utilization_avg": 0.02,
+          "blocked_construction_count": 0
+        },
+        "cognition_society": {
+          "blocked_intentions_count": 0,
+          "active_intentions_by_type": {
+            "gather_food": 6
+          },
+          "specialists_by_role": {
+            "builder": 1,
+            "farmer": 2,
+            "hauler": 2
+          },
+          "top_social_influence_agents": [
+            {
+              "agent_id": "a-000022",
+              "role": "farmer",
+              "social_influence": 0.918
+            },
+            {
+              "agent_id": "a-000013",
+              "role": "farmer",
+              "social_influence": 0.915
+            },
+            {
+              "agent_id": "a-000039",
+              "role": "builder",
+              "social_influence": 0.914
+            },
+            {
+              "agent_id": "a-000027",
+              "role": "hauler",
+              "social_influence": 0.911
+            },
+            {
+              "agent_id": "a-000026",
+              "role": "hauler",
+              "social_influence": 0.873
+            }
+          ],
+          "leadership_changes": 0,
+          "village_proto_culture": [
+            {
+              "village_uid": "v-000001",
+              "cooperation_norm": 0.807,
+              "work_norm": 0.803,
+              "exploration_norm": 0.773,
+              "risk_norm": 0.182,
+              "dominant_resource_focus": "food"
+            }
+          ]
+        },
+        "llm_reflection": {
+          "trigger_detected": 0,
+          "attempted": 0,
+          "executed": 0,
+          "accepted": 0,
+          "rejected": 0,
+          "fallback": 0,
+          "accepted_by_source": {},
+          "rejection_reasons": {},
+          "skip_reasons": {},
+          "reflections_per_100_ticks": 0.0,
+          "survival_reflection_suppressed_count": 0,
+          "survival_biased_reflection_applied_count": 0
+        },
+        "innovation": {
+          "proto_asset_proposal_count": 0,
+          "admissible_proposal_count": 0,
+          "rejected_proposal_count": 0,
+          "prototype_attempt_count": 0,
+          "prototype_built_count": 0,
+          "prototype_failed_count": 0,
+          "prototype_useful_count": 0,
+          "prototype_neutral_count": 0,
+          "prototype_ineffective_count": 0,
+          "known_invention_entry_count": 0,
+          "agents_with_known_inventions": 0,
+          "invention_knowledge_by_source": {},
+          "invention_knowledge_by_category": {}
+        }
+      },
+      "stub": {
+        "survival_world": {
+          "population": 6,
+          "avg_hunger": 28.67,
+          "survival_pressure_avg": 0.492,
+          "food_crisis_count": 0,
+          "villages": 1,
+          "stored_resources": {
+            "food": 5,
+            "wood": 0,
+            "stone": 0
+          }
+        },
+        "economy_production": {
+          "total_food_gathered": 326,
+          "total_wood_gathered": 111,
+          "total_stone_gathered": 111,
+          "direct_food_gathered": 326,
+          "direct_wood_gathered": 111,
+          "direct_stone_gathered": 111,
+          "wood_from_lumberyards": 0,
+          "stone_from_mines": 0,
+          "wood_specialization_ratio": 0.0,
+          "stone_specialization_ratio": 0.0
+        },
+        "logistics_construction": {
+          "construction_deliveries_count": 0,
+          "internal_transfers_count": 0,
+          "under_construction_count": 1,
+          "completed_buildings_by_type": {
+            "farm_plot": 118,
+            "house": 10,
+            "storage": 1
+          },
+          "storage_utilization_avg": 0.02,
+          "blocked_construction_count": 0
+        },
+        "cognition_society": {
+          "blocked_intentions_count": 0,
+          "active_intentions_by_type": {
+            "gather_food": 5
+          },
+          "specialists_by_role": {
+            "builder": 1,
+            "farmer": 2,
+            "hauler": 1
+          },
+          "top_social_influence_agents": [
+            {
+              "agent_id": "a-000009",
+              "role": "farmer",
+              "social_influence": 0.926
+            },
+            {
+              "agent_id": "a-000026",
+              "role": "builder",
+              "social_influence": 0.922
+            },
+            {
+              "agent_id": "a-000052",
+              "role": "farmer",
+              "social_influence": 0.859
+            },
+            {
+              "agent_id": "a-000045",
+              "role": "hauler",
+              "social_influence": 0.817
+            },
+            {
+              "agent_id": "a-000003",
+              "role": "leader",
+              "social_influence": 0.468
+            }
+          ],
+          "leadership_changes": 0,
+          "village_proto_culture": [
+            {
+              "village_uid": "v-000001",
+              "cooperation_norm": 0.807,
+              "work_norm": 0.803,
+              "exploration_norm": 0.773,
+              "risk_norm": 0.182,
+              "dominant_resource_focus": "food"
+            }
+          ]
+        },
+        "llm_reflection": {
+          "trigger_detected": 21,
+          "attempted": 21,
+          "executed": 21,
+          "accepted": 21,
+          "rejected": 0,
+          "fallback": 0,
+          "accepted_by_source": {
+            "stub": 21
+          },
+          "rejection_reasons": {},
+          "skip_reasons": {
+            "low_relevance": 4524,
+            "brain_interval": 10,
+            "global_budget_exhausted": 98,
+            "cooldown": 564,
+            "no_trigger_reason": 85
+          },
+          "reflections_per_100_ticks": 0.875,
+          "survival_reflection_suppressed_count": 0,
+          "survival_biased_reflection_applied_count": 0
+        },
+        "innovation": {
+          "proto_asset_proposal_count": 0,
+          "admissible_proposal_count": 0,
+          "rejected_proposal_count": 0,
+          "prototype_attempt_count": 0,
+          "prototype_built_count": 0,
+          "prototype_failed_count": 0,
+          "prototype_useful_count": 0,
+          "prototype_neutral_count": 0,
+          "prototype_ineffective_count": 0,
+          "known_invention_entry_count": 0,
+          "agents_with_known_inventions": 0,
+          "invention_knowledge_by_source": {},
+          "invention_knowledge_by_category": {}
+        }
+      }
+    },
+    "c": {
+      "off": {
+        "survival_world": {
+          "population": 35,
+          "avg_hunger": 34.34,
+          "survival_pressure_avg": 0.31,
+          "food_crisis_count": 0,
+          "villages": 1,
+          "stored_resources": {
+            "food": 37,
+            "wood": 80,
+            "stone": 210
+          }
+        },
+        "economy_production": {
+          "total_food_gathered": 724,
+          "total_wood_gathered": 146,
+          "total_stone_gathered": 277,
+          "direct_food_gathered": 724,
+          "direct_wood_gathered": 146,
+          "direct_stone_gathered": 277,
+          "wood_from_lumberyards": 0,
+          "stone_from_mines": 0,
+          "wood_specialization_ratio": 0.0,
+          "stone_specialization_ratio": 0.0
+        },
+        "logistics_construction": {
+          "construction_deliveries_count": 0,
+          "internal_transfers_count": 0,
+          "under_construction_count": 0,
+          "completed_buildings_by_type": {
+            "house": 15,
+            "storage": 80
+          },
+          "storage_utilization_avg": 0.016,
+          "blocked_construction_count": 0
+        },
+        "cognition_society": {
+          "blocked_intentions_count": 3,
+          "active_intentions_by_type": {
+            "gather_food": 33,
+            "gather_resource": 1
+          },
+          "specialists_by_role": {
+            "builder": 1,
+            "farmer": 2,
+            "hauler": 16
+          },
+          "top_social_influence_agents": [
+            {
+              "agent_id": "a-000002",
+              "role": "forager",
+              "social_influence": 0.962
+            },
+            {
+              "agent_id": "a-000004",
+              "role": "hauler",
+              "social_influence": 0.961
+            },
+            {
+              "agent_id": "a-000047",
+              "role": "hauler",
+              "social_influence": 0.961
+            },
+            {
+              "agent_id": "a-000049",
+              "role": "npc",
+              "social_influence": 0.96
+            },
+            {
+              "agent_id": "a-000008",
+              "role": "hauler",
+              "social_influence": 0.959
+            }
+          ],
+          "leadership_changes": 1,
+          "village_proto_culture": [
+            {
+              "village_uid": "v-000001",
+              "cooperation_norm": 0.792,
+              "work_norm": 0.803,
+              "exploration_norm": 0.773,
+              "risk_norm": 0.182,
+              "dominant_resource_focus": "food"
+            }
+          ]
+        },
+        "llm_reflection": {
+          "trigger_detected": 0,
+          "attempted": 0,
+          "executed": 0,
+          "accepted": 0,
+          "rejected": 0,
+          "fallback": 0,
+          "accepted_by_source": {},
+          "rejection_reasons": {},
+          "skip_reasons": {},
+          "reflections_per_100_ticks": 0.0,
+          "survival_reflection_suppressed_count": 0,
+          "survival_biased_reflection_applied_count": 0
+        },
+        "innovation": {
+          "proto_asset_proposal_count": 0,
+          "admissible_proposal_count": 0,
+          "rejected_proposal_count": 0,
+          "prototype_attempt_count": 0,
+          "prototype_built_count": 0,
+          "prototype_failed_count": 0,
+          "prototype_useful_count": 0,
+          "prototype_neutral_count": 0,
+          "prototype_ineffective_count": 0,
+          "known_invention_entry_count": 0,
+          "agents_with_known_inventions": 0,
+          "invention_knowledge_by_source": {},
+          "invention_knowledge_by_category": {}
+        }
+      },
+      "stub": {
+        "survival_world": {
+          "population": 53,
+          "avg_hunger": 67.19,
+          "survival_pressure_avg": 0.12,
+          "food_crisis_count": 0,
+          "villages": 1,
+          "stored_resources": {
+            "food": 59,
+            "wood": 101,
+            "stone": 349
+          }
+        },
+        "economy_production": {
+          "total_food_gathered": 934,
+          "total_wood_gathered": 156,
+          "total_stone_gathered": 453,
+          "direct_food_gathered": 934,
+          "direct_wood_gathered": 156,
+          "direct_stone_gathered": 453,
+          "wood_from_lumberyards": 0,
+          "stone_from_mines": 0,
+          "wood_specialization_ratio": 0.0,
+          "stone_specialization_ratio": 0.0
+        },
+        "logistics_construction": {
+          "construction_deliveries_count": 7,
+          "internal_transfers_count": 0,
+          "under_construction_count": 0,
+          "completed_buildings_by_type": {
+            "house": 14,
+            "storage": 88
+          },
+          "storage_utilization_avg": 0.023,
+          "blocked_construction_count": 0
+        },
+        "cognition_society": {
+          "blocked_intentions_count": 4,
+          "active_intentions_by_type": {
+            "deliver_resource": 3,
+            "explore": 1,
+            "gather_food": 45
+          },
+          "specialists_by_role": {
+            "builder": 1,
+            "farmer": 2,
+            "hauler": 24
+          },
+          "top_social_influence_agents": [
+            {
+              "agent_id": "a-000032",
+              "role": "npc",
+              "social_influence": 0.955
+            },
+            {
+              "agent_id": "a-000063",
+              "role": "hauler",
+              "social_influence": 0.95
+            },
+            {
+              "agent_id": "a-000050",
+              "role": "hauler",
+              "social_influence": 0.949
+            },
+            {
+              "agent_id": "a-000014",
+              "role": "hauler",
+              "social_influence": 0.948
+            },
+            {
+              "agent_id": "a-000003",
+              "role": "builder",
+              "social_influence": 0.947
+            }
+          ],
+          "leadership_changes": 1,
+          "village_proto_culture": [
+            {
+              "village_uid": "v-000001",
+              "cooperation_norm": 0.792,
+              "work_norm": 0.803,
+              "exploration_norm": 0.773,
+              "risk_norm": 0.182,
+              "dominant_resource_focus": "food"
+            }
+          ]
+        },
+        "llm_reflection": {
+          "trigger_detected": 175,
+          "attempted": 175,
+          "executed": 175,
+          "accepted": 175,
+          "rejected": 0,
+          "fallback": 0,
+          "accepted_by_source": {
+            "stub": 175
+          },
+          "rejection_reasons": {},
+          "skip_reasons": {
+            "low_relevance": 5976,
+            "brain_interval": 10,
+            "no_trigger_reason": 499,
+            "global_budget_exhausted": 520,
+            "cooldown": 3906
+          },
+          "reflections_per_100_ticks": 7.292,
+          "survival_reflection_suppressed_count": 0,
+          "survival_biased_reflection_applied_count": 0
+        },
+        "innovation": {
+          "proto_asset_proposal_count": 0,
+          "admissible_proposal_count": 0,
+          "rejected_proposal_count": 0,
+          "prototype_attempt_count": 0,
+          "prototype_built_count": 0,
+          "prototype_failed_count": 0,
+          "prototype_useful_count": 0,
+          "prototype_neutral_count": 0,
+          "prototype_ineffective_count": 0,
+          "known_invention_entry_count": 0,
+          "agents_with_known_inventions": 0,
+          "invention_knowledge_by_source": {},
+          "invention_knowledge_by_category": {}
+        }
+      }
+    },
+    "d": {
+      "off": {
+        "survival_world": {
+          "population": 103,
+          "avg_hunger": 83.48,
+          "survival_pressure_avg": 0.006,
+          "food_crisis_count": 0,
+          "villages": 1,
+          "stored_resources": {
+            "food": 410,
+            "wood": 43,
+            "stone": 6
+          }
+        },
+        "economy_production": {
+          "total_food_gathered": 1579,
+          "total_wood_gathered": 540,
+          "total_stone_gathered": 108,
+          "direct_food_gathered": 1579,
+          "direct_wood_gathered": 540,
+          "direct_stone_gathered": 108,
+          "wood_from_lumberyards": 0,
+          "stone_from_mines": 0,
+          "wood_specialization_ratio": 0.0,
+          "stone_specialization_ratio": 0.0
+        },
+        "logistics_construction": {
+          "construction_deliveries_count": 0,
+          "internal_transfers_count": 0,
+          "under_construction_count": 1,
+          "completed_buildings_by_type": {
+            "house": 20,
+            "storage": 97
+          },
+          "storage_utilization_avg": 0.019,
+          "blocked_construction_count": 0
+        },
+        "cognition_society": {
+          "blocked_intentions_count": 0,
+          "active_intentions_by_type": {
+            "deliver_resource": 96,
+            "gather_food": 4
+          },
+          "specialists_by_role": {
+            "builder": 1,
+            "farmer": 24,
+            "hauler": 70
+          },
+          "top_social_influence_agents": [
+            {
+              "agent_id": "a-000047",
+              "role": "hauler",
+              "social_influence": 0.934
+            },
+            {
+              "agent_id": "a-000040",
+              "role": "farmer",
+              "social_influence": 0.933
+            },
+            {
+              "agent_id": "a-000056",
+              "role": "hauler",
+              "social_influence": 0.93
+            },
+            {
+              "agent_id": "a-000051",
+              "role": "hauler",
+              "social_influence": 0.927
+            },
+            {
+              "agent_id": "a-000002",
+              "role": "hauler",
+              "social_influence": 0.925
+            }
+          ],
+          "leadership_changes": 0,
+          "village_proto_culture": [
+            {
+              "village_uid": "v-000001",
+              "cooperation_norm": 0.821,
+              "work_norm": 0.682,
+              "exploration_norm": 0.714,
+              "risk_norm": 0.177,
+              "dominant_resource_focus": "food"
+            }
+          ]
+        },
+        "llm_reflection": {
+          "trigger_detected": 0,
+          "attempted": 0,
+          "executed": 0,
+          "accepted": 0,
+          "rejected": 0,
+          "fallback": 0,
+          "accepted_by_source": {},
+          "rejection_reasons": {},
+          "skip_reasons": {},
+          "reflections_per_100_ticks": 0.0,
+          "survival_reflection_suppressed_count": 0,
+          "survival_biased_reflection_applied_count": 0
+        },
+        "innovation": {
+          "proto_asset_proposal_count": 0,
+          "admissible_proposal_count": 0,
+          "rejected_proposal_count": 0,
+          "prototype_attempt_count": 0,
+          "prototype_built_count": 0,
+          "prototype_failed_count": 0,
+          "prototype_useful_count": 0,
+          "prototype_neutral_count": 0,
+          "prototype_ineffective_count": 0,
+          "known_invention_entry_count": 0,
+          "agents_with_known_inventions": 0,
+          "invention_knowledge_by_source": {},
+          "invention_knowledge_by_category": {}
+        }
+      },
+      "stub": {
+        "survival_world": {
+          "population": 120,
+          "avg_hunger": 84.33,
+          "survival_pressure_avg": 0.006,
+          "food_crisis_count": 0,
+          "villages": 1,
+          "stored_resources": {
+            "food": 361,
+            "wood": 83,
+            "stone": 36
+          }
+        },
+        "economy_production": {
+          "total_food_gathered": 2319,
+          "total_wood_gathered": 578,
+          "total_stone_gathered": 222,
+          "direct_food_gathered": 2319,
+          "direct_wood_gathered": 578,
+          "direct_stone_gathered": 222,
+          "wood_from_lumberyards": 0,
+          "stone_from_mines": 0,
+          "wood_specialization_ratio": 0.0,
+          "stone_specialization_ratio": 0.0
+        },
+        "logistics_construction": {
+          "construction_deliveries_count": 3,
+          "internal_transfers_count": 0,
+          "under_construction_count": 1,
+          "completed_buildings_by_type": {
+            "farm_plot": 9,
+            "house": 30,
+            "storage": 88
+          },
+          "storage_utilization_avg": 0.022,
+          "blocked_construction_count": 0
+        },
+        "cognition_society": {
+          "blocked_intentions_count": 0,
+          "active_intentions_by_type": {
+            "deliver_resource": 99,
+            "gather_food": 15,
+            "gather_resource": 3
+          },
+          "specialists_by_role": {
+            "builder": 1,
+            "farmer": 27,
+            "hauler": 81
+          },
+          "top_social_influence_agents": [
+            {
+              "agent_id": "a-000047",
+              "role": "hauler",
+              "social_influence": 0.938
+            },
+            {
+              "agent_id": "a-000055",
+              "role": "hauler",
+              "social_influence": 0.935
+            },
+            {
+              "agent_id": "a-000005",
+              "role": "npc",
+              "social_influence": 0.924
+            },
+            {
+              "agent_id": "a-000018",
+              "role": "farmer",
+              "social_influence": 0.921
+            },
+            {
+              "agent_id": "a-000008",
+              "role": "hauler",
+              "social_influence": 0.919
+            }
+          ],
+          "leadership_changes": 0,
+          "village_proto_culture": [
+            {
+              "village_uid": "v-000001",
+              "cooperation_norm": 0.831,
+              "work_norm": 0.739,
+              "exploration_norm": 0.751,
+              "risk_norm": 0.168,
+              "dominant_resource_focus": "food"
+            }
+          ]
+        },
+        "llm_reflection": {
+          "trigger_detected": 1965,
+          "attempted": 1965,
+          "executed": 1965,
+          "accepted": 1965,
+          "rejected": 0,
+          "fallback": 0,
+          "accepted_by_source": {
+            "stub": 1965
+          },
+          "rejection_reasons": {},
+          "skip_reasons": {
+            "low_relevance": 10971,
+            "brain_interval": 15,
+            "global_budget_exhausted": 47493,
+            "cooldown": 98438,
+            "no_trigger_reason": 2931
+          },
+          "reflections_per_100_ticks": 70.179,
+          "survival_reflection_suppressed_count": 0,
+          "survival_biased_reflection_applied_count": 0
+        },
+        "innovation": {
+          "proto_asset_proposal_count": 1,
+          "admissible_proposal_count": 1,
+          "rejected_proposal_count": 0,
+          "prototype_attempt_count": 1,
+          "prototype_built_count": 1,
+          "prototype_failed_count": 0,
+          "prototype_useful_count": 0,
+          "prototype_neutral_count": 0,
+          "prototype_ineffective_count": 1,
+          "known_invention_entry_count": 0,
+          "agents_with_known_inventions": 0,
+          "invention_knowledge_by_source": {},
+          "invention_knowledge_by_category": {}
+        }
+      }
+    }
+  },
+  "cross_scenario_findings": {
+    "activation_counts": {
+      "world_survival_dynamics": 8,
+      "reflection_pipeline": 4,
+      "construction_delivery": 2,
+      "specialized_production": 0,
+      "innovation_pipeline": 1,
+      "invention_knowledge_diffusion": 0
+    },
+    "reliably_activated_systems": [
+      "world_survival_dynamics"
+    ],
+    "stress_only_or_not_activated": [
+      "innovation_pipeline (only scenario D stub)",
+      "construction_delivery (appears only in stress scenarios)",
+      "specialized_production (not activated in any scenario)"
+    ],
+    "questions": {
+      "which_systems_activate_reliably_in_baseline": "Baseline activates survival, village persistence, production totals; does not reliably activate logistics throughput, specialization, or innovation.",
+      "which_systems_only_activate_under_stress": "Construction delivery appears only in stress runs (C/D stub); innovation appears only in D stub and remains very limited.",
+      "are_logistics_and_construction_working_at_scale": "Partially. Construction deliveries are sparse (0-7 in 2400-2800 ticks) and internal transfers stay 0 across all runs.",
+      "is_specialization_emerging": "No. wood_specialization_ratio and stone_specialization_ratio remain 0.0 in all runs.",
+      "is_innovation_emerging": "Barely. Only D stub produced 1 admissible proposal -> 1 built prototype, with no useful/neutral/ineffective conclusion and no knowledge spread.",
+      "is_reflection_helping_or_noise": "Stub reflection correlates with higher population/storage in C/D and slight gain in A, but also very high call volume (up to 1965 attempts in D stub) with low innovation activation."
+    }
+  },
+  "top_bottlenecks": [
+    "Specialization path is not activating (ratios remain 0.0 in all scenarios/modes).",
+    "Logistics throughput is weak at campaign scale (construction deliveries low, internal transfers 0 throughout).",
+    "Innovation chain is rarely triggered and diffusion remains inactive (no known invention entries in all runs)."
+  ]
+}
