@@ -1,9 +1,109 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from world import World
+
+MARKET_UPDATE_INTERVAL_TICKS = 5
+
+
+def _clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(high, value))
+
+
+def _resource_market_entry(
+    supply: int,
+    demand: int,
+    previous: Dict[str, Any] | None = None,
+) -> Dict[str, float]:
+    s = max(0, int(supply))
+    d = max(1, int(demand))
+    scarcity_ratio = max(0.0, float(d - s) / float(d))
+    surplus_ratio = max(0.0, float(s - d) / float(max(1, s)))
+    pressure = _clamp(scarcity_ratio, 0.0, 1.0)
+    local_price_index = _clamp(1.0 + scarcity_ratio * 1.2 - surplus_ratio * 0.6, 0.5, 2.0)
+
+    if isinstance(previous, dict):
+        prev_pressure = float(previous.get("pressure", pressure))
+        prev_price = float(previous.get("local_price_index", local_price_index))
+        # Deterministic smoothing to reduce oscillation near boundaries.
+        pressure = _clamp(prev_pressure * 0.65 + pressure * 0.35, 0.0, 1.0)
+        local_price_index = _clamp(prev_price * 0.65 + local_price_index * 0.35, 0.5, 2.0)
+
+    return {
+        "supply": int(s),
+        "demand": int(d),
+        "pressure": round(float(pressure), 3),
+        "local_price_index": round(float(local_price_index), 3),
+    }
+
+
+def _construction_resource_demand(world: "World", village: Dict[str, Any], resource_type: str) -> int:
+    village_id = village.get("id")
+    village_uid = village.get("village_uid")
+    total = 0
+    for building in getattr(world, "buildings", {}).values():
+        if village_id is not None and building.get("village_id") != village_id:
+            if village_uid is None or building.get("village_uid") != village_uid:
+                continue
+        request = building.get("construction_request", {})
+        if not isinstance(request, dict):
+            continue
+        needed = int(request.get(f"{resource_type}_needed", 0))
+        reserved = int(request.get(f"{resource_type}_reserved", 0))
+        total += max(0, needed - reserved)
+    return int(total)
+
+
+def _compute_village_market_state(
+    world: "World",
+    village: Dict[str, Any],
+    members: List[Any],
+    pop: int,
+    houses: int,
+    avg_hunger: float,
+    food_urgent: bool,
+    need_materials: bool,
+) -> Dict[str, Dict[str, float]]:
+    import systems.building_system as building_system
+
+    storage = building_system.get_village_storage_totals(world, village)
+    inv_food = sum(int(getattr(a, "inventory", {}).get("food", 0)) for a in members)
+    inv_wood = sum(int(getattr(a, "inventory", {}).get("wood", 0)) for a in members)
+    inv_stone = sum(int(getattr(a, "inventory", {}).get("stone", 0)) for a in members)
+
+    food_supply = int(storage.get("food", 0)) + inv_food
+    wood_supply = int(storage.get("wood", 0)) + inv_wood
+    stone_supply = int(storage.get("stone", 0)) + inv_stone
+
+    hunger_pressure = max(0, int(round((60.0 - float(avg_hunger)) / 10.0)))
+    food_demand = max(1, pop * 2 + hunger_pressure + (4 if food_urgent else 0))
+    housing_pressure = max(0, pop - houses * 4)
+    wood_demand = max(
+        1,
+        pop // 2
+        + _construction_resource_demand(world, village, "wood")
+        + housing_pressure
+        + (2 if need_materials else 0),
+    )
+    stone_demand = max(
+        1,
+        pop // 3
+        + _construction_resource_demand(world, village, "stone")
+        + max(0, housing_pressure // 2)
+        + (2 if need_materials else 0),
+    )
+
+    previous_state = village.get("market_state", {})
+    if not isinstance(previous_state, dict):
+        previous_state = {}
+
+    return {
+        "food": _resource_market_entry(food_supply, food_demand, previous_state.get("food")),
+        "wood": _resource_market_entry(wood_supply, wood_demand, previous_state.get("wood")),
+        "stone": _resource_market_entry(stone_supply, stone_demand, previous_state.get("stone")),
+    }
 
 
 def _detect_village_phase(
@@ -38,6 +138,8 @@ def update_village_ai(world: "World") -> None:
             a for a in world.agents
             if a.alive and getattr(a, "village_id", None) == vid
         ]
+        miners_count = sum(1 for a in members if getattr(a, "role", "") == "miner")
+        woodcutters_count = sum(1 for a in members if getattr(a, "role", "") == "woodcutter")
 
         pop = len(members)
         avg_hunger = (
@@ -89,8 +191,48 @@ def update_village_ai(world: "World") -> None:
             and active_farms >= min_farms_target
             and avg_hunger >= 55
         )
+
+        market_last_update_tick = int(village.get("market_last_update_tick", -MARKET_UPDATE_INTERVAL_TICKS))
+        if int(world.tick) - market_last_update_tick >= MARKET_UPDATE_INTERVAL_TICKS:
+            village["market_state"] = _compute_village_market_state(
+                world=world,
+                village=village,
+                members=members,
+                pop=pop,
+                houses=houses,
+                avg_hunger=avg_hunger,
+                food_urgent=food_urgent,
+                need_materials=need_materials,
+            )
+            village["market_last_update_tick"] = int(world.tick)
+        market_state = village.get("market_state", {})
+        if not isinstance(market_state, dict):
+            market_state = {}
+            village["market_state"] = market_state
+
         village_phase = _detect_village_phase(houses, active_farms, storage_exists, food_stock, pop)
         village["phase"] = village_phase
+        production_metrics = village.get("production_metrics", {})
+        total_wood_gathered = int(production_metrics.get("total_wood_gathered", 0))
+        total_stone_gathered = int(production_metrics.get("total_stone_gathered", 0))
+        wood_from_lumberyards = int(production_metrics.get("wood_from_lumberyards", 0))
+        stone_from_mines = int(production_metrics.get("stone_from_mines", 0))
+        logistics_metrics = village.get("logistics_metrics", {})
+        internal_transfers_count = int(logistics_metrics.get("internal_transfers_count", 0))
+        redistributed_wood = int(logistics_metrics.get("redistributed_wood", 0))
+        redistributed_stone = int(logistics_metrics.get("redistributed_stone", 0))
+        redistributed_food = int(logistics_metrics.get("redistributed_food", 0))
+        policy_state = village.get("policy_build_state", {})
+        last_policy_build_tick = int(policy_state.get("last_policy_build_tick", -1))
+        next_policy_build_tick = int(policy_state.get("next_policy_build_tick", 0))
+        policy_attempts_in_window = int(policy_state.get("attempts_in_window", 0))
+        policy_build_cooldown_remaining = max(0, next_policy_build_tick - int(world.tick))
+        existing_metrics = village.get("metrics", {}) if isinstance(village.get("metrics"), dict) else {}
+        miner_target = int(existing_metrics.get("miner_target", 0))
+        woodcutter_target = int(existing_metrics.get("woodcutter_target", 0))
+        specialist_allocation_pressure = int(existing_metrics.get("specialist_allocation_pressure", 0))
+        last_specialist_rebalance_tick = int(existing_metrics.get("last_specialist_rebalance_tick", -1))
+        specialist_rebalance_due = bool(existing_metrics.get("specialist_rebalance_due", False))
 
         village["metrics"] = {
             "population": pop,
@@ -105,6 +247,28 @@ def update_village_ai(world: "World") -> None:
             "active_farms": active_farms,
             "ripe_farms": ripe_farms,
             "storage_exists": storage_exists,
+            "total_wood_gathered": total_wood_gathered,
+            "total_stone_gathered": total_stone_gathered,
+            "wood_from_lumberyards": wood_from_lumberyards,
+            "stone_from_mines": stone_from_mines,
+            "internal_transfers_count": internal_transfers_count,
+            "redistributed_wood": redistributed_wood,
+            "redistributed_stone": redistributed_stone,
+            "redistributed_food": redistributed_food,
+            "last_policy_build_tick": last_policy_build_tick,
+            "next_policy_build_tick": next_policy_build_tick,
+            "policy_attempts_in_window": policy_attempts_in_window,
+            "policy_build_cooldown_remaining": policy_build_cooldown_remaining,
+            "miners_count": miners_count,
+            "woodcutters_count": woodcutters_count,
+            "miner_target": miner_target,
+            "woodcutter_target": woodcutter_target,
+            "specialist_allocation_pressure": specialist_allocation_pressure,
+            "last_specialist_rebalance_tick": last_specialist_rebalance_tick,
+            "specialist_rebalance_due": specialist_rebalance_due,
+            "food_price_index": float(((market_state.get("food") or {}).get("local_price_index", 1.0))),
+            "wood_price_index": float(((market_state.get("wood") or {}).get("local_price_index", 1.0))),
+            "stone_price_index": float(((market_state.get("stone") or {}).get("local_price_index", 1.0))),
         }
 
         village["needs"] = {

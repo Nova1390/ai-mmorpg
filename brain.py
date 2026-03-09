@@ -359,17 +359,48 @@ class FoodBrain:
             if build_pos is not None:
                 return self.move_towards(agent, world, build_pos)
 
+        if task == "mine_cycle":
+            assigned_id = getattr(agent, "assigned_building_id", None)
+            if assigned_id is not None:
+                building = getattr(world, "buildings", {}).get(assigned_id)
+                if isinstance(building, dict):
+                    anchor = building.get("linked_resource_anchor")
+                    if isinstance(anchor, dict) and "x" in anchor and "y" in anchor:
+                        return self.move_towards(agent, world, (int(anchor["x"]), int(anchor["y"])))
+            target = self.find_nearest(agent, world.stone, "stone", self.vision_radius + 5)
+            if target is not None:
+                return self.move_towards(agent, world, target)
+
+        if task == "lumber_cycle":
+            assigned_id = getattr(agent, "assigned_building_id", None)
+            if assigned_id is not None:
+                building = getattr(world, "buildings", {}).get(assigned_id)
+                if isinstance(building, dict):
+                    anchor = building.get("linked_resource_anchor")
+                    if isinstance(anchor, dict) and "x" in anchor and "y" in anchor:
+                        return self.move_towards(agent, world, (int(anchor["x"]), int(anchor["y"])))
+            target = self.find_nearest(agent, world.wood, "wood", self.vision_radius + 5)
+            if target is not None:
+                return self.move_towards(agent, world, target)
+
         if task == "build_storage":
             village = world.get_village_by_id(getattr(agent, "village_id", None))
             if village:
                 gather_radius = max(world.width, world.height)
                 storage = village.get("storage", {})
-                if storage.get("wood", 0) < STORAGE_WOOD_COST:
+                inv = agent.inventory
+                wood_missing = max(0, STORAGE_WOOD_COST - int(inv.get("wood", 0)))
+                stone_missing = max(0, STORAGE_STONE_COST - int(inv.get("stone", 0)))
+                if wood_missing > 0 or stone_missing > 0:
+                    sp = village.get("storage_pos")
+                    if sp and (abs(agent.x - sp["x"]) + abs(agent.y - sp["y"]) > 1):
+                        return self.move_towards(agent, world, (sp["x"], sp["y"]))
+                if storage.get("wood", 0) < wood_missing:
                     target = self.find_nearest(agent, world.wood, "wood", gather_radius)
                     if target is not None:
                         return self.move_towards(agent, world, target)
 
-                if storage.get("stone", 0) < STORAGE_STONE_COST:
+                if storage.get("stone", 0) < stone_missing:
                     target = self.find_nearest(agent, world.stone, "stone", gather_radius)
                     if target is not None:
                         return self.move_towards(agent, world, target)
@@ -379,6 +410,15 @@ class FoodBrain:
                     return self.move_towards(agent, world, (storage_pos["x"], storage_pos["y"]))
 
         if task == "build_house":
+            if (
+                agent.inventory.get("wood", 0) < HOUSE_WOOD_COST
+                or agent.inventory.get("stone", 0) < HOUSE_STONE_COST
+            ):
+                village = world.get_village_by_id(getattr(agent, "village_id", None))
+                if village:
+                    sp = village.get("storage_pos")
+                    if sp:
+                        return self.move_towards(agent, world, (sp["x"], sp["y"]))
             village_home = self._get_known_village_center(agent, world)
             if village_home is not None:
                 return self.move_towards(agent, world, village_home)
@@ -386,7 +426,7 @@ class FoodBrain:
         if task == "gather_materials":
             village = world.get_village_by_id(getattr(agent, "village_id", None))
             needs = village.get("needs", {}) if village else {}
-            wallet = village.get("storage", {}) if village else agent.inventory
+            wallet = village.get("storage", {}) if village else {"wood": 0, "stone": 0}
 
             if needs.get("need_storage") or needs.get("need_housing") or needs.get("need_materials"):
                 if wallet.get("wood", 0) < 4:
@@ -421,6 +461,40 @@ class FoodBrain:
                 return self.move_towards(agent, world, village_home)
 
         if task == "village_logistics":
+            transfer_source = getattr(agent, "transfer_source_storage_id", None)
+            transfer_target = getattr(agent, "transfer_target_storage_id", None)
+            transfer_resource = str(getattr(agent, "transfer_resource_type", ""))
+            transfer_amount = int(getattr(agent, "transfer_amount", 0) or 0)
+            if transfer_source and transfer_target and transfer_resource in {"food", "wood", "stone"} and transfer_amount > 0:
+                source_building = getattr(world, "buildings", {}).get(str(transfer_source))
+                target_building = getattr(world, "buildings", {}).get(str(transfer_target))
+                if isinstance(source_building, dict) and isinstance(target_building, dict):
+                    if int(agent.inventory.get(transfer_resource, 0)) > 0:
+                        return self.move_towards(
+                            agent,
+                            world,
+                            (int(target_building.get("x", 0)), int(target_building.get("y", 0))),
+                        )
+                    return self.move_towards(
+                        agent,
+                        world,
+                        (int(source_building.get("x", 0)), int(source_building.get("y", 0))),
+                    )
+
+            delivery_target = getattr(agent, "delivery_target_building_id", None)
+            delivery_resource = getattr(agent, "delivery_resource_type", None)
+            delivery_reserved = int(getattr(agent, "delivery_reserved_amount", 0) or 0)
+            if delivery_target and delivery_resource in {"wood", "stone", "food"} and delivery_reserved > 0:
+                building = getattr(world, "buildings", {}).get(str(delivery_target))
+                if isinstance(building, dict):
+                    if agent.inventory.get(delivery_resource, 0) > 0:
+                        return self.move_towards(agent, world, (int(building.get("x", 0)), int(building.get("y", 0))))
+                    village = world.get_village_by_id(getattr(agent, "village_id", None))
+                    if village:
+                        sp = village.get("storage_pos")
+                        if sp:
+                            return self.move_towards(agent, world, (sp["x"], sp["y"]))
+
             if (
                 agent.inventory.get("food", 0) > 0
                 or agent.inventory.get("wood", 0) > 0
@@ -435,6 +509,20 @@ class FoodBrain:
             farm_target = self.find_farm_target(agent, world, prefer_ripe=True)
             if farm_target is not None:
                 return self.move_towards(agent, world, farm_target)
+
+            village = world.get_village_by_id(getattr(agent, "village_id", None))
+            needs = village.get("needs", {}) if village else {}
+            if needs.get("need_materials"):
+                wood_target = self.find_nearest(agent, world.wood, "wood", self.vision_radius + 6)
+                stone_target = self.find_nearest(agent, world.stone, "stone", self.vision_radius + 6)
+                if wood_target is not None and stone_target is not None:
+                    dw = abs(wood_target[0] - agent.x) + abs(wood_target[1] - agent.y)
+                    ds = abs(stone_target[0] - agent.x) + abs(stone_target[1] - agent.y)
+                    return self.move_towards(agent, world, wood_target if dw <= ds else stone_target)
+                if wood_target is not None:
+                    return self.move_towards(agent, world, wood_target)
+                if stone_target is not None:
+                    return self.move_towards(agent, world, stone_target)
 
             village_home = self._get_known_village_center(agent, world)
             if village_home is not None and random.random() < 0.5:

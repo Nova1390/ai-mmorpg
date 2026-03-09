@@ -8,8 +8,8 @@ Coord = Tuple[int, int]
 
 
 def heuristic(a: Coord, b: Coord) -> float:
-    # Lower-bound based on minimum movement cost (roads = 0.5).
-    return 0.5 * (abs(a[0] - b[0]) + abs(a[1] - b[1]))
+    # Lower-bound based on minimum movement cost (logistics corridors ~= 0.35).
+    return 0.35 * (abs(a[0] - b[0]) + abs(a[1] - b[1]))
 
 
 def reconstruct_path(came_from: Dict[Coord, Coord], current: Coord) -> List[Coord]:

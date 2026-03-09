@@ -14,9 +14,6 @@ PRIMARY_FARM_ZONE_RADIUS = 6
 
 
 def _get_build_wallet(world, agent):
-    village = world.get_village_by_id(getattr(agent, "village_id", None))
-    if village is not None:
-        return village.get("storage", {})
     return agent.inventory
 
 
@@ -69,14 +66,14 @@ def try_build_farm(world, agent) -> bool:
     if world.tiles[y][x] != "G":
         return False
 
-    if pos in world.structures:
+    if world.is_tile_blocked_by_building(x, y):
         return False
 
     if pos in world.farms or pos in world.farm_plots:
         return False
 
     # non attaccato alle case
-    for sx, sy in world.structures:
+    for sx, sy in world.get_building_occupied_tiles():
         if abs(sx - x) <= 1 and abs(sy - y) <= 1:
             return False
 
@@ -157,10 +154,11 @@ def work_farm(world, agent) -> bool:
         bonus_chance = HARVEST_BONUS_CHANCE + _storage_farm_bonus_chance(world, village, pos)
         if random.random() < bonus_chance:
             harvest_amount += 1
-        if village is not None:
-            village["storage"]["food"] = village["storage"].get("food", 0) + harvest_amount
-        else:
-            agent.inventory["food"] = agent.inventory.get("food", 0) + harvest_amount
+        space = max(0, getattr(agent, "inventory_space", lambda: 0)())
+        if space <= 0:
+            return False
+        gathered = min(harvest_amount, space)
+        agent.inventory["food"] = agent.inventory.get("food", 0) + gathered
 
         plot["state"] = "prepared"
         plot["growth"] = 0
@@ -169,7 +167,7 @@ def work_farm(world, agent) -> bool:
             {
                 "agent_id": agent.agent_id,
                 "resource": "food",
-                "amount": harvest_amount,
+                "amount": gathered,
                 "source": "farm",
                 "x": pos[0],
                 "y": pos[1],
@@ -200,7 +198,11 @@ def haul_harvest(world, agent) -> bool:
     bonus_chance = HARVEST_BONUS_CHANCE + _storage_farm_bonus_chance(world, village, pos)
     if random.random() < bonus_chance:
         harvest_amount += 1
-    agent.inventory["food"] = agent.inventory.get("food", 0) + harvest_amount
+    space = max(0, getattr(agent, "inventory_space", lambda: 0)())
+    if space <= 0:
+        return False
+    gathered = min(harvest_amount, space)
+    agent.inventory["food"] = agent.inventory.get("food", 0) + gathered
     plot["state"] = "prepared"
     plot["growth"] = 0
     world.emit_event(
@@ -208,7 +210,7 @@ def haul_harvest(world, agent) -> bool:
         {
             "agent_id": agent.agent_id,
             "resource": "food",
-            "amount": harvest_amount,
+            "amount": gathered,
             "source": "farm_haul",
             "x": pos[0],
             "y": pos[1],
@@ -267,7 +269,7 @@ def _is_valid_primary_slot(world, village, village_id, x: int, y: int) -> bool:
         return False
     if pos in world.farms or pos in world.farm_plots:
         return False
-    for sx, sy in world.structures:
+    for sx, sy in world.get_building_occupied_tiles():
         if abs(sx - x) <= 1 and abs(sy - y) <= 1:
             return False
     same_village_farms = [

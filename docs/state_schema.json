@@ -15,6 +15,7 @@
     "structures",
     "roads",
     "storage_buildings",
+    "buildings",
     "villages",
     "civ_stats",
     "agents",
@@ -59,6 +60,106 @@
     "structures": { "$ref": "#/$defs/coordArray" },
     "roads": { "$ref": "#/$defs/coordArray" },
     "storage_buildings": { "$ref": "#/$defs/coordArray" },
+    "buildings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "building_id",
+          "type",
+          "category",
+          "tier",
+          "x",
+          "y",
+          "footprint",
+          "village_id",
+          "village_uid",
+          "connected_to_road",
+          "operational_state",
+          "linked_resource_type",
+          "linked_resource_tiles_count"
+        ],
+        "properties": {
+          "building_id": { "type": "string", "minLength": 1 },
+          "type": {
+            "type": "string",
+            "enum": ["house", "storage", "farm_plot", "mine", "lumberyard"]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "residential",
+              "food_storage",
+              "production",
+              "governance",
+              "infrastructure",
+              "security",
+              "knowledge",
+              "health",
+              "culture",
+              "commerce"
+            ]
+          },
+          "tier": { "type": "integer", "minimum": 0 },
+          "x": { "type": "integer" },
+          "y": { "type": "integer" },
+          "footprint": { "$ref": "#/$defs/coordArray" },
+          "village_id": { "type": ["integer", "null"] },
+          "village_uid": { "type": ["string", "null"] },
+          "connected_to_road": { "type": "boolean" },
+          "operational_state": { "type": "string" },
+          "linked_resource_type": { "type": ["string", "null"] },
+          "linked_resource_tiles_count": { "type": "integer", "minimum": 0 },
+          "service": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["transport", "logistics", "efficiency_multiplier"],
+                "properties": {
+                  "transport": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                  "logistics": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                  "efficiency_multiplier": { "type": "number", "minimum": 0.5, "maximum": 1.5 }
+                },
+                "additionalProperties": false
+              },
+              { "type": "null" }
+            ]
+          },
+          "storage": {
+            "anyOf": [
+              { "$ref": "#/$defs/storage" },
+              { "type": "null" }
+            ]
+          },
+          "storage_capacity": { "type": ["integer", "null"] }
+          ,
+          "construction_request": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "wood_needed": { "type": "integer", "minimum": 0 },
+                  "stone_needed": { "type": "integer", "minimum": 0 },
+                  "food_needed": { "type": "integer", "minimum": 0 },
+                  "wood_reserved": { "type": "integer", "minimum": 0 },
+                  "stone_reserved": { "type": "integer", "minimum": 0 },
+                  "food_reserved": { "type": "integer", "minimum": 0 }
+                },
+                "additionalProperties": true
+              },
+              { "type": "null" }
+            ]
+          },
+          "construction_buffer": {
+            "anyOf": [
+              { "$ref": "#/$defs/storage" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
     "villages": {
       "type": "array",
       "items": {
@@ -98,6 +199,7 @@
           "target_village_id": { "type": ["integer", "null"] },
           "migration_target_id": { "type": ["integer", "null"] },
           "power": { "type": "number" },
+          "tier": { "type": "integer", "minimum": 0 },
           "storage": { "$ref": "#/$defs/storage" },
           "storage_pos": {
             "anyOf": [
@@ -164,7 +266,9 @@
           "player_id": { "type": ["string", "null"] },
           "role": { "type": "string" },
           "village_id": { "type": ["integer", "null"] },
-          "task": { "type": "string" }
+          "task": { "type": "string" },
+          "inventory": { "$ref": "#/$defs/storage" },
+          "max_inventory": { "type": "integer", "minimum": 0 }
         },
         "additionalProperties": true
       }
@@ -180,6 +284,15 @@
     "villages_count": { "type": "integer", "minimum": 0 },
     "leaders_count": { "type": "integer", "minimum": 0 },
     "llm_interactions": { "type": "integer", "minimum": 0 }
+    ,
+    "infrastructure_systems_available": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "transport_network_counts": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    }
   },
   "$defs": {
     "coord": {

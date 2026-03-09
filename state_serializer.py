@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Tuple
 
+import systems.building_system as building_system
 
 SCHEMA_VERSION = "1.1.0"
 STATIC_STATE_VERSION = 1
@@ -57,6 +58,7 @@ def _serialize_villages(world) -> List[Dict[str, Any]]:
                 "storage": v.get("storage", {"food": 0, "wood": 0, "stone": 0}),
                 "storage_pos": v.get("storage_pos"),
                 "farm_zone_center": v.get("farm_zone_center"),
+                "tier": int(v.get("tier", 1)),
                 "needs": v.get("needs", {}),
                 "priority": v.get("priority", "stabilize"),
                 "metrics": v.get("metrics", {}),
@@ -78,11 +80,135 @@ def _serialize_agents(alive_agents) -> List[Dict[str, Any]]:
             "role": getattr(a, "role", "npc"),
             "village_id": getattr(a, "village_id", None),
             "task": getattr(a, "task", "idle"),
+            "inventory": {
+                "food": int(getattr(a, "inventory", {}).get("food", 0)),
+                "wood": int(getattr(a, "inventory", {}).get("wood", 0)),
+                "stone": int(getattr(a, "inventory", {}).get("stone", 0)),
+            },
+            "max_inventory": int(getattr(a, "max_inventory", 0)),
         }
         for a in alive_agents
     ]
     agents.sort(key=lambda a: a["agent_id"])
     return agents
+
+
+def _serialize_buildings(world) -> List[Dict[str, Any]]:
+    serialized: List[Dict[str, Any]] = []
+    raw_buildings = getattr(world, "buildings", {})
+
+    if isinstance(raw_buildings, dict) and raw_buildings:
+        for building in raw_buildings.values():
+            footprint = building.get("footprint", [])
+            footprint_sorted = sorted(
+                (
+                    {"x": int(tile["x"]), "y": int(tile["y"])}
+                    for tile in footprint
+                    if isinstance(tile, dict) and "x" in tile and "y" in tile
+                ),
+                key=lambda t: (t["y"], t["x"]),
+            )
+            serialized.append(
+                {
+                    "building_id": str(building.get("building_id", "")),
+                    "type": str(building.get("type", "house")),
+                    "category": str(building.get("category", "residential")),
+                    "tier": int(building.get("tier", 1)),
+                    "x": int(building.get("x", 0)),
+                    "y": int(building.get("y", 0)),
+                    "footprint": footprint_sorted,
+                    "village_id": building.get("village_id"),
+                    "village_uid": building.get("village_uid"),
+                    "connected_to_road": bool(building.get("connected_to_road", False)),
+                    "operational_state": str(building.get("operational_state", "active")),
+                    "linked_resource_type": building.get("linked_resource_type"),
+                    "linked_resource_tiles_count": int(building.get("linked_resource_tiles_count", 0)),
+                    "service": {
+                        **building_system.evaluate_building_infrastructure_service(world, building),
+                        "efficiency_multiplier": building_system.compute_building_efficiency_multiplier(world, building),
+                    },
+                    "storage": (
+                        {
+                            "food": int((building.get("storage") or {}).get("food", 0)),
+                            "wood": int((building.get("storage") or {}).get("wood", 0)),
+                            "stone": int((building.get("storage") or {}).get("stone", 0)),
+                        }
+                        if str(building.get("type", "")) == "storage"
+                        else None
+                    ),
+                    "storage_capacity": (
+                        int(building.get("storage_capacity", 0))
+                        if str(building.get("type", "")) == "storage"
+                        else None
+                    ),
+                    "construction_request": (
+                        dict(building.get("construction_request", {}))
+                        if isinstance(building.get("construction_request"), dict)
+                        else None
+                    ),
+                    "construction_buffer": (
+                        {
+                            "food": int((building.get("construction_buffer") or {}).get("food", 0)),
+                            "wood": int((building.get("construction_buffer") or {}).get("wood", 0)),
+                            "stone": int((building.get("construction_buffer") or {}).get("stone", 0)),
+                        }
+                        if isinstance(building.get("construction_buffer"), dict)
+                        else None
+                    ),
+                }
+            )
+    else:
+        for x, y in sorted(getattr(world, "structures", set()), key=_coord_key):
+            metadata = building_system.get_building_metadata("house") or {}
+            serialized.append(
+                {
+                    "building_id": f"legacy-house-{x}-{y}",
+                    "type": "house",
+                    "category": str(metadata.get("category", "residential")),
+                    "tier": int(metadata.get("tier", 1)),
+                    "x": x,
+                    "y": y,
+                    "footprint": [_coord_dict(x, y)],
+                    "village_id": None,
+                    "village_uid": None,
+                    "connected_to_road": False,
+                    "operational_state": "active",
+                    "linked_resource_type": None,
+                    "linked_resource_tiles_count": 0,
+                    "service": None,
+                    "storage": None,
+                    "storage_capacity": None,
+                    "construction_request": None,
+                    "construction_buffer": None,
+                }
+            )
+        for x, y in sorted(getattr(world, "storage_buildings", set()), key=_coord_key):
+            metadata = building_system.get_building_metadata("storage") or {}
+            serialized.append(
+                {
+                    "building_id": f"legacy-storage-{x}-{y}",
+                    "type": "storage",
+                    "category": str(metadata.get("category", "food_storage")),
+                    "tier": int(metadata.get("tier", 1)),
+                    "x": x,
+                    "y": y,
+                    "footprint": [_coord_dict(x, y)],
+                    "village_id": None,
+                    "village_uid": None,
+                    "connected_to_road": False,
+                    "operational_state": "active",
+                    "linked_resource_type": None,
+                    "linked_resource_tiles_count": 0,
+                    "service": None,
+                    "storage": None,
+                    "storage_capacity": None,
+                    "construction_request": None,
+                    "construction_buffer": None,
+                }
+            )
+
+    serialized.sort(key=lambda b: b["building_id"])
+    return serialized
 
 
 def serialize_static_world_state(world) -> Dict[str, Any]:
@@ -111,6 +237,22 @@ def serialize_dynamic_world_state(world) -> Dict[str, Any]:
     farms = _serialize_farms(world)
     villages = _serialize_villages(world)
     agents = _serialize_agents(alive_agents)
+    buildings = _serialize_buildings(world)
+    infrastructure_state = getattr(world, "infrastructure_state", {})
+    systems_available: List[str] = []
+    transport_network_counts: Dict[str, int] = {}
+    if isinstance(infrastructure_state, dict):
+        systems = infrastructure_state.get("systems", {})
+        if isinstance(systems, dict):
+            systems_available = sorted(str(k) for k in systems.keys())
+        transport = infrastructure_state.get("transport", {})
+        if isinstance(transport, dict):
+            raw_counts = transport.get("tile_counts", {})
+            if isinstance(raw_counts, dict):
+                transport_network_counts = {
+                    str(k): int(v)
+                    for k, v in sorted(raw_counts.items(), key=lambda item: str(item[0]))
+                }
 
     state_version = world.next_state_version()
 
@@ -126,6 +268,7 @@ def serialize_dynamic_world_state(world) -> Dict[str, Any]:
         "structures": _sorted_coords(world.structures),
         "roads": _sorted_coords(world.roads),
         "storage_buildings": _sorted_coords(world.storage_buildings),
+        "buildings": buildings,
         "villages": villages,
         "civ_stats": world.get_civilization_stats(),
         "agents": agents,
@@ -140,6 +283,8 @@ def serialize_dynamic_world_state(world) -> Dict[str, Any]:
         "villages_count": len(world.villages),
         "leaders_count": world.count_leaders(),
         "llm_interactions": world.llm_interactions,
+        "infrastructure_systems_available": systems_available,
+        "transport_network_counts": transport_network_counts,
     }
 
     return payload

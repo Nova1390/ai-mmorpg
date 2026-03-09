@@ -54,10 +54,12 @@ class World:
         self.llm_interactions = 0
         self.llm_calls_this_tick = 0
         self.max_llm_calls_per_tick = 1
+        self.build_policy_interval = 20
         self.llm_enabled = bool(LLM_ENABLED)
         self.llm_timeout_seconds = float(LLM_TIMEOUT_SECONDS)
         self._village_uid_counter = 0
         self._event_id_counter = 0
+        self._building_id_counter = 0
         self.events: List[Dict] = []
         self.max_retained_events = 5000
 
@@ -72,8 +74,28 @@ class World:
 
         self.structures: Set[Coord] = set()
         self.storage_buildings: Set[Coord] = set()
+        self.buildings: Dict[str, Dict] = {}
+        self.building_occupancy: Dict[Coord, str] = {}
         self.roads: Set[Coord] = set()
+        self.transport_tiles: Dict[Coord, str] = {}
         self.road_usage: Dict[Coord, int] = {}
+        self.infrastructure_state: Dict[str, Dict] = {
+            "systems": {
+                system: {"enabled": True}
+                for system in sorted(building_system.INFRASTRUCTURE_SYSTEMS)
+            },
+            "transport": {
+                "road_tiles": 0,
+                "network_types": ["path", "road", "logistics_corridor", "bridge", "tunnel"],
+            },
+            "logistics": {
+                "network_types": ["storage_link", "haul_route"],
+            },
+            "water": {"network_types": ["well_network"]},
+            "energy": {"network_types": ["power_line"]},
+            "communication": {"network_types": ["messenger_route"]},
+            "environment": {"network_types": ["drainage"]},
+        }
 
         self.villages: List[Dict] = []
         self.agents: List[Agent] = []
@@ -106,6 +128,7 @@ class World:
         self.detect_villages()
         self.update_village_ai()
         self.assign_village_roles()
+        self.sync_infrastructure_state()
 
     def record_llm_interaction(self) -> None:
         self.llm_interactions += 1
@@ -121,6 +144,10 @@ class World:
     def _next_event_id(self) -> str:
         self._event_id_counter += 1
         return f"e-{self._event_id_counter:06d}"
+
+    def new_building_id(self) -> str:
+        self._building_id_counter += 1
+        return f"b-{self._building_id_counter:06d}"
 
     def resolve_village_uid(self, village_id: Optional[int]) -> Optional[str]:
         village = self.get_village_by_id(village_id)
@@ -192,6 +219,22 @@ class World:
     def record_road_step(self, x: int, y: int) -> None:
         road_system.record_agent_step(self, x, y)
 
+    def update_road_infrastructure(self) -> None:
+        road_system.update_road_infrastructure(self)
+        self.sync_infrastructure_state()
+
+    def sync_infrastructure_state(self) -> None:
+        transport_state = self.infrastructure_state.setdefault("transport", {})
+        transport_state["road_tiles"] = int(len(self.roads))
+        tile_counts: Dict[str, int] = {}
+        for t in self.transport_tiles.values():
+            tile_counts[t] = int(tile_counts.get(t, 0)) + 1
+        transport_state["tile_counts"] = {k: tile_counts[k] for k in sorted(tile_counts.keys())}
+        road_meta = building_system.get_infrastructure_metadata("road")
+        if isinstance(road_meta, dict):
+            transport_state["road_infrastructure_type"] = str(road_meta.get("type", "road"))
+            transport_state["network_type"] = str(road_meta.get("network_type", "tile_network"))
+
     def update_village_ai(self) -> None:
         village_ai_system.update_village_ai(self)
 
@@ -204,7 +247,13 @@ class World:
     def is_walkable(self, x: int, y: int) -> bool:
         if x < 0 or y < 0 or x >= self.width or y >= self.height:
             return False
-        return self.tiles[y][x] != "W"
+        terrain = str(self.tiles[y][x])
+        transport_type = self.get_transport_type(x, y)
+        if terrain == "W":
+            return transport_type == "bridge"
+        if terrain == "X":
+            return transport_type == "tunnel"
+        return True
 
     def is_occupied(self, x: int, y: int) -> bool:
         for a in self.agents:
@@ -213,12 +262,75 @@ class World:
         return False
 
     def movement_cost(self, x: int, y: int) -> float:
-        if (x, y) in self.roads:
-            return 0.5
-        return 1.0
+        terrain = str(self.tiles[y][x]) if 0 <= x < self.width and 0 <= y < self.height else "G"
+        base_costs = {
+            "G": 1.0,
+            "F": 1.0,
+            "M": 1.2,
+            "W": 1.4,
+            "X": 1.6,
+        }
+        base_cost = float(base_costs.get(terrain, 1.0))
+        transport_type = self.get_transport_type(x, y)
+        if transport_type is None:
+            return base_cost
+        transport_meta = building_system.get_infrastructure_metadata(transport_type) or {}
+        modifier = float(transport_meta.get("movement_modifier", 1.0) or 1.0)
+        return max(0.05, base_cost * modifier)
+
+    def get_transport_type(self, x: int, y: int) -> Optional[str]:
+        pos = (x, y)
+        transport_type = self.transport_tiles.get(pos)
+        if transport_type is not None:
+            return str(transport_type)
+        if pos in self.roads:
+            return "road"
+        return None
+
+    def set_transport_type(self, x: int, y: int, transport_type: Optional[str]) -> None:
+        pos = (x, y)
+        if transport_type is None:
+            self.transport_tiles.pop(pos, None)
+            self.roads.discard(pos)
+            return
+        t = str(transport_type)
+        self.transport_tiles[pos] = t
+        if t in {"road", "logistics_corridor", "bridge", "tunnel"}:
+            self.roads.add(pos)
+        else:
+            self.roads.discard(pos)
+
+    def get_transport_tiles(self) -> Dict[Coord, str]:
+        tiles: Dict[Coord, str] = {}
+        for pos in self.roads:
+            tiles[pos] = "road"
+        for pos, t in self.transport_tiles.items():
+            tiles[pos] = str(t)
+        return tiles
+
+    def minimum_step_cost(self) -> float:
+        # Lower bound for A* heuristic with current transport hierarchy.
+        return 0.35
+
+    def is_tile_blocked_by_building(self, x: int, y: int) -> bool:
+        pos = (x, y)
+        if pos in self.building_occupancy:
+            return True
+        if pos in self.structures:
+            return True
+        if pos in self.storage_buildings:
+            return True
+        return False
+
+    def get_building_occupied_tiles(self) -> Set[Coord]:
+        if self.building_occupancy:
+            return set(self.building_occupancy.keys())
+        return set(self.structures) | set(self.storage_buildings)
 
     def add_agent(self, agent: Agent):
         if (
+            getattr(agent, "brain", None) is not None
+            and
             not agent.is_player
             and getattr(agent, "village_id", None) is None
             and not getattr(agent, "founder", False)
@@ -232,6 +344,7 @@ class World:
                 self.founding_hub = (agent.x, agent.y)
             agent.task_target = self.founding_hub
             # Minimal starter kit so founders can reliably place early houses.
+            agent.max_inventory = max(int(getattr(agent, "max_inventory", 5)), HOUSE_WOOD_COST + HOUSE_STONE_COST)
             agent.inventory["wood"] = max(agent.inventory.get("wood", 0), HOUSE_WOOD_COST)
             agent.inventory["stone"] = max(agent.inventory.get("stone", 0), HOUSE_STONE_COST)
 
@@ -387,7 +500,8 @@ class World:
 
         if pos in self.food:
             self.food.remove(pos)
-            agent.inventory["food"] = agent.inventory.get("food", 0) + 1
+            if agent.inventory_space() > 0:
+                agent.inventory["food"] = agent.inventory.get("food", 0) + 1
             agent.hunger += FOOD_EAT_GAIN
             if agent.hunger > 100:
                 agent.hunger = 100
@@ -407,19 +521,29 @@ class World:
     def gather_resource(self, agent: Agent):
         pos = (agent.x, agent.y)
         village = self.get_village_by_id(getattr(agent, "village_id", None))
+        if agent.inventory_space() <= 0:
+            return False
 
         if pos in self.wood:
             self.wood.remove(pos)
-            if village is not None:
-                village["storage"]["wood"] = village["storage"].get("wood", 0) + 1
-            else:
-                agent.inventory["wood"] = agent.inventory.get("wood", 0) + 1
+            bonus, source = building_system.production_bonus_details_for_resource(self, village, "wood", pos)
+            amount = min(1 + bonus, max(0, agent.inventory_space()))
+            if amount <= 0:
+                return False
+            agent.inventory["wood"] = agent.inventory.get("wood", 0) + amount
+            building_system.record_village_resource_gather(
+                village,
+                "wood",
+                amount=amount,
+                bonus_amount=bonus,
+                production_source=source,
+            )
             self.emit_event(
                 "resource_harvested",
                 {
                     "agent_id": agent.agent_id,
                     "resource": "wood",
-                    "amount": 1,
+                    "amount": amount,
                     "source": "wild",
                     "x": agent.x,
                     "y": agent.y,
@@ -430,16 +554,24 @@ class World:
 
         if pos in self.stone:
             self.stone.remove(pos)
-            if village is not None:
-                village["storage"]["stone"] = village["storage"].get("stone", 0) + 1
-            else:
-                agent.inventory["stone"] = agent.inventory.get("stone", 0) + 1
+            bonus, source = building_system.production_bonus_details_for_resource(self, village, "stone", pos)
+            amount = min(1 + bonus, max(0, agent.inventory_space()))
+            if amount <= 0:
+                return False
+            agent.inventory["stone"] = agent.inventory.get("stone", 0) + amount
+            building_system.record_village_resource_gather(
+                village,
+                "stone",
+                amount=amount,
+                bonus_amount=bonus,
+                production_source=source,
+            )
             self.emit_event(
                 "resource_harvested",
                 {
                     "agent_id": agent.agent_id,
                     "resource": "stone",
-                    "amount": 1,
+                    "amount": amount,
                     "source": "wild",
                     "x": agent.x,
                     "y": agent.y,
@@ -462,11 +594,48 @@ class World:
     def can_build_at(self, x: int, y: int) -> bool:
         return building_system.can_build_at(self, x, y)
 
+    def can_place_building(self, building_type: str, x: int, y: int) -> bool:
+        return building_system.can_place_building(self, building_type, (x, y))
+
+    def place_building(
+        self,
+        building_type: str,
+        x: int,
+        y: int,
+        *,
+        village_id: Optional[int] = None,
+        village_uid: Optional[str] = None,
+        connected_to_road: bool = False,
+    ) -> Optional[Dict]:
+        return building_system.place_building(
+            self,
+            building_type,
+            (x, y),
+            village_id=village_id,
+            village_uid=village_uid,
+            connected_to_road=connected_to_road,
+        )
+
     def try_build_house(self, agent: Agent):
         return building_system.try_build_house(self, agent)
 
     def try_build_storage(self, agent: Agent):
         return building_system.try_build_storage(self, agent)
+
+    def try_build_type(
+        self,
+        agent: Agent,
+        building_type: str,
+        village_id: Optional[int] = None,
+        village_uid: Optional[str] = None,
+    ) -> Dict:
+        return building_system.try_build_type(
+            self,
+            agent,
+            building_type,
+            village_id=village_id,
+            village_uid=village_uid,
+        )
 
     def try_build_farm(self, agent: Agent):
         return farming_system.try_build_farm(self, agent)
@@ -514,4 +683,7 @@ class World:
 
         self.detect_villages()
         self.update_village_ai()
+        if self.build_policy_interval > 0 and self.tick % self.build_policy_interval == 0:
+            building_system.run_village_build_policy(self)
         self.assign_village_roles()
+        self.update_road_infrastructure()

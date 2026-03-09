@@ -9,6 +9,10 @@ Regola fondamentale:
 
 Il renderer non deve prendere decisioni di simulazione, ma solo visualizzare e analizzare lo stato ricevuto.
 
+Distinzione architetturale:
+- **Buildings**: entità locali/siti fisici (house, storage, mine, lumberyard, farm_plot).
+- **Infrastructure**: reti/sistemi abilitanti (transport, logistics, water, energy, communication, environment).
+
 ## Endpoint separation
 - `GET /state/static`: payload mappa/statica (authoritative source dei campi immutabili)
 - `GET /state`: payload runtime dinamico (authoritative source dello stato simulazione evolutivo)
@@ -43,7 +47,7 @@ Il renderer non deve prendere decisioni di simulazione, ma solo visualizzare e a
   - `tick`
   - `food`, `wood`, `stone`
   - `farms`, `farms_count`
-  - `structures`, `roads`, `storage_buildings`
+  - `structures`, `roads`, `storage_buildings`, `buildings`
   - `villages`
   - `civ_stats`
   - `agents`
@@ -51,6 +55,7 @@ Il renderer non deve prendere decisioni di simulazione, ma solo visualizzare e a
   - `food_count`, `wood_count`, `stone_count`
   - `houses_count`, `villages_count`, `leaders_count`
   - `llm_interactions`
+  - `infrastructure_systems_available` (array string, debug compatto)
 - Nota: `/state` **non** contiene più `width`, `height`, `tiles`.
 
 ## GET /state/events
@@ -95,7 +100,27 @@ Semantica ordering e retention:
 - `structures`: coordinate case.
 - `roads`: coordinate strade emerse da utilizzo.
 - `storage_buildings`: coordinate edifici storage.
+- `buildings`: array ricco di entita` edificio tipizzate con footprint.
+  - campi principali: `building_id`, `type`, `category`, `tier`, `x`, `y`, `footprint`, `village_id`, `village_uid`, `connected_to_road`
+  - campi operativi produzione (debug): `operational_state`, `linked_resource_type`, `linked_resource_tiles_count`
+  - categorie attive: `residential`, `food_storage`, `production`, `governance`, `infrastructure`, `security`, `knowledge`, `health`, `culture`, `commerce`
+  - tier civiltà supportati: `0..5` (struttura dati pronta; enforcement gameplay non ancora attivo)
 - `houses_count`: totale strutture.
+
+## Infrastructure systems
+- Catalogo infrastrutture separato da `BUILDING_CATALOG` nel core Python (`INFRASTRUCTURE_CATALOG`).
+- Sistemi supportati:
+  - `transport`
+  - `logistics`
+  - `water`
+  - `energy`
+  - `communication`
+  - `environment`
+- Tipi `transport` attualmente vicini al runtime:
+  - `path`, `road` (attivi semanticamente)
+  - `bridge` (placeholder)
+- `logistics` attuale: base strutturale con `storage_link` e `haul_route` come semantica di rete.
+- Altri sistemi (`water`, `energy`, `communication`, `environment`) sono placeholder strutturali per evoluzioni future.
 
 ## Agents
 - `agents`: array entità vive.
@@ -121,6 +146,7 @@ Metriche aggregate:
   - `houses`, `population` (int)
   - `leader_id` (int|null)
   - `strategy`, `priority`, `phase` (string, se presente)
+  - `tier` (int, placeholder sviluppo insediamento; default corrente `1`)
   - `relation`, `target_village_id`, `migration_target_id`
   - `power` (number)
   - `color` (string)

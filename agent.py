@@ -32,6 +32,7 @@ class Agent:
     inventory: Dict[str, int] = field(
         default_factory=lambda: {"food": 0, "wood": 0, "stone": 0}
     )
+    max_inventory: int = 5
 
     memory: Dict[str, set] = field(
         default_factory=lambda: {
@@ -57,9 +58,22 @@ class Agent:
     task_target: Optional[Tuple[int, int]] = None
     home_pos: Optional[Tuple[int, int]] = None
     work_pos: Optional[Tuple[int, int]] = None
+    delivery_target_building_id: Optional[str] = None
+    delivery_resource_type: Optional[str] = None
+    delivery_reserved_amount: int = 0
+    transfer_source_storage_id: Optional[str] = None
+    transfer_target_storage_id: Optional[str] = None
+    transfer_resource_type: Optional[str] = None
+    transfer_amount: int = 0
     last_pos: Optional[Tuple[int, int]] = None
     stuck_ticks: int = 0
     leader_traits: Optional[Dict[str, str]] = None
+
+    def inventory_load(self) -> int:
+        return int(self.inventory.get("food", 0)) + int(self.inventory.get("wood", 0)) + int(self.inventory.get("stone", 0))
+
+    def inventory_space(self) -> int:
+        return max(0, int(self.max_inventory) - self.inventory_load())
 
     def _near_storage(self, village: Optional[Dict]) -> bool:
         if not village:
@@ -70,40 +84,23 @@ class Agent:
         return abs(self.x - sp["x"]) <= 1 and abs(self.y - sp["y"]) <= 1
 
     def _deposit_inventory_to_storage(self, world: "World") -> bool:
-        village = world.get_village_by_id(self.village_id)
-        if village is None or not self._near_storage(village):
+        try:
+            import systems.building_system as building_system
+            return building_system.deposit_agent_inventory_to_storage(world, self)
+        except Exception:
             return False
-
-        storage = village.get("storage", {})
-        moved = False
-        for key in ("food", "wood", "stone"):
-            qty = self.inventory.get(key, 0)
-            if qty > 0:
-                storage[key] = storage.get(key, 0) + qty
-                self.inventory[key] = 0
-                moved = True
-        return moved
 
     def _withdraw_build_materials(self, world: "World", wood_need: int, stone_need: int) -> bool:
-        village = world.get_village_by_id(self.village_id)
-        if village is None or not self._near_storage(village):
+        try:
+            import systems.building_system as building_system
+            return building_system.withdraw_build_materials_from_storage(
+                world,
+                self,
+                wood_need=wood_need,
+                stone_need=stone_need,
+            )
+        except Exception:
             return False
-
-        storage = village.get("storage", {})
-        missing_wood = max(0, wood_need - self.inventory.get("wood", 0))
-        missing_stone = max(0, stone_need - self.inventory.get("stone", 0))
-
-        take_wood = min(storage.get("wood", 0), missing_wood)
-        take_stone = min(storage.get("stone", 0), missing_stone)
-
-        if take_wood <= 0 and take_stone <= 0:
-            return False
-
-        storage["wood"] = storage.get("wood", 0) - take_wood
-        storage["stone"] = storage.get("stone", 0) - take_stone
-        self.inventory["wood"] = self.inventory.get("wood", 0) + take_wood
-        self.inventory["stone"] = self.inventory.get("stone", 0) + take_stone
-        return True
 
     def update_memory(self, world: "World") -> None:
         vision = 6
@@ -194,6 +191,14 @@ class Agent:
 
         if role == "farmer":
             self.task = "farm_cycle"
+            return
+
+        if role == "miner":
+            self.task = "mine_cycle"
+            return
+
+        if role == "woodcutter":
+            self.task = "lumber_cycle"
             return
 
         if role == "builder":
@@ -420,6 +425,14 @@ class Agent:
             world.try_build_farm(self)
             world.work_farm(self)
 
+        elif self.task == "mine_cycle":
+            # movement/targeting is handled by brain; gather occurs via world.gather_resource.
+            pass
+
+        elif self.task == "lumber_cycle":
+            # movement/targeting is handled by brain; gather occurs via world.gather_resource.
+            pass
+
         elif self.task == "build_storage":
             self._withdraw_build_materials(world, wood_need=4, stone_need=2)
             built = world.try_build_storage(self)
@@ -445,12 +458,30 @@ class Agent:
             pass
 
         elif self.task == "food_logistics":
-            if not self._deposit_inventory_to_storage(world):
+            try:
+                import systems.building_system as building_system
+                delivered = building_system.run_hauler_construction_delivery(world, self)
+                redistributed = False if delivered else building_system.run_hauler_internal_redistribution(world, self)
+                transfer_active = bool(getattr(building_system, "has_active_internal_transfer", lambda *_: False)(self))
+            except Exception:
+                delivered = False
+                redistributed = False
+                transfer_active = False
+            if not delivered and not redistributed and not transfer_active and not self._deposit_inventory_to_storage(world):
                 world.haul_harvest(self)
                 world.work_farm(self)
 
         elif self.task == "village_logistics":
-            if not self._deposit_inventory_to_storage(world):
+            try:
+                import systems.building_system as building_system
+                delivered = building_system.run_hauler_construction_delivery(world, self)
+                redistributed = False if delivered else building_system.run_hauler_internal_redistribution(world, self)
+                transfer_active = bool(getattr(building_system, "has_active_internal_transfer", lambda *_: False)(self))
+            except Exception:
+                delivered = False
+                redistributed = False
+                transfer_active = False
+            if not delivered and not redistributed and not transfer_active and not self._deposit_inventory_to_storage(world):
                 world.haul_harvest(self)
 
         elif self.task == "gather_food_wild":

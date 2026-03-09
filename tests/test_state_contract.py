@@ -60,6 +60,7 @@ def test_dynamic_payload_contains_required_dynamic_fields_without_static_map_fie
         "structures",
         "roads",
         "storage_buildings",
+        "buildings",
         "villages",
         "civ_stats",
         "agents",
@@ -74,6 +75,7 @@ def test_dynamic_payload_contains_required_dynamic_fields_without_static_map_fie
         "villages_count",
         "leaders_count",
         "llm_interactions",
+        "infrastructure_systems_available",
     }
     assert expected_dynamic_fields.issubset(set(payload.keys()))
     assert "width" not in payload

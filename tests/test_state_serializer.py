@@ -31,6 +31,43 @@ class DummyWorld:
         self.structures = {(2, 0), (0, 2)}
         self.roads = {(1, 1), (0, 0)}
         self.storage_buildings = {(1, 2)}
+        self.buildings = {
+            "b-000002": {
+                "building_id": "b-000002",
+                "type": "storage",
+                "category": "food_storage",
+                "tier": 1,
+                "x": 1,
+                "y": 2,
+                "footprint": [
+                    {"x": 2, "y": 3},
+                    {"x": 1, "y": 2},
+                    {"x": 2, "y": 2},
+                    {"x": 1, "y": 3},
+                ],
+                "village_id": 1,
+                "village_uid": "v-000002",
+                "connected_to_road": False,
+                "operational_state": "active",
+                "linked_resource_type": None,
+                "linked_resource_tiles_count": 0,
+            },
+            "b-000001": {
+                "building_id": "b-000001",
+                "type": "house",
+                "category": "residential",
+                "tier": 1,
+                "x": 2,
+                "y": 0,
+                "footprint": [{"x": 2, "y": 0}],
+                "village_id": 2,
+                "village_uid": "v-000010",
+                "connected_to_road": True,
+                "operational_state": "active",
+                "linked_resource_type": None,
+                "linked_resource_tiles_count": 0,
+            },
+        }
         self.villages = [
             {
                 "id": 2,
@@ -118,6 +155,13 @@ class DummyWorld:
 
 def test_ordering_is_deterministic() -> None:
     world = DummyWorld()
+    world.infrastructure_state = {
+        "systems": {
+            "logistics": {"enabled": True},
+            "transport": {"enabled": True},
+            "water": {"enabled": True},
+        }
+    }
     payload = serialize_dynamic_world_state(world)
 
     assert [a["agent_id"] for a in payload["agents"]] == ["agent-a", "agent-b"]
@@ -130,6 +174,20 @@ def test_ordering_is_deterministic() -> None:
     assert [(c["x"], c["y"]) for c in payload["roads"]] == [(0, 0), (1, 1)]
     assert [(c["x"], c["y"]) for c in payload["storage_buildings"]] == [(1, 2)]
     assert [(f["x"], f["y"]) for f in payload["farms"]] == [(0, 1), (2, 2)]
+    assert [b["building_id"] for b in payload["buildings"]] == ["b-000001", "b-000002"]
+    assert payload["infrastructure_systems_available"] == ["logistics", "transport", "water"]
+    assert payload["buildings"][1]["type"] == "storage"
+    assert payload["buildings"][1]["category"] == "food_storage"
+    assert payload["buildings"][1]["tier"] == 1
+    assert payload["buildings"][1]["operational_state"] == "active"
+    assert payload["buildings"][1]["linked_resource_type"] is None
+    assert payload["buildings"][1]["linked_resource_tiles_count"] == 0
+    assert payload["buildings"][1]["footprint"] == [
+        {"x": 1, "y": 2},
+        {"x": 2, "y": 2},
+        {"x": 1, "y": 3},
+        {"x": 2, "y": 3},
+    ]
 
 
 def test_village_uid_is_stable_across_detect_cycles() -> None:
@@ -154,7 +212,7 @@ def test_state_snapshot_regression_on_canonical_world() -> None:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
-    assert digest == "dc0e3243438bef175d51afd50983d08e23a49378b639a4efa1bd4226bdf2fe3a"
+    assert digest == "13111925d6fd15d0f73cd2be91085408bdf3893dca3fcc24f273a90d22adfb8e"
 
 
 def test_static_payload_is_deterministic() -> None:
@@ -163,3 +221,51 @@ def test_static_payload_is_deterministic() -> None:
     second = serialize_static_world_state(world)
     assert first == second
     assert first["static_state_version"] == 1
+
+
+def test_buildings_legacy_fallback_serialization() -> None:
+    class LegacyWorld:
+        def __init__(self) -> None:
+            self.tick = 0
+            self.width = 2
+            self.height = 2
+            self.tiles = [["G", "G"], ["G", "G"]]
+            self.food = set()
+            self.wood = set()
+            self.stone = set()
+            self.farm_plots = {}
+            self.structures = {(1, 0)}
+            self.storage_buildings = {(0, 1)}
+            self.roads = set()
+            self.villages = []
+            self.agents = []
+            self.llm_interactions = 0
+            self._state_version = 0
+
+        def get_civilization_stats(self):
+            return {
+                "largest_village_id": None,
+                "largest_village_houses": 0,
+                "strongest_village_id": None,
+                "strongest_village_power": 0,
+                "expanding_village_id": None,
+                "warring_villages": 0,
+                "migrating_villages": 0,
+            }
+
+        def count_leaders(self):
+            return 0
+
+        def next_state_version(self):
+            self._state_version += 1
+            return self._state_version
+
+    payload = serialize_dynamic_world_state(LegacyWorld())
+    assert [b["building_id"] for b in payload["buildings"]] == [
+        "legacy-house-1-0",
+        "legacy-storage-0-1",
+    ]
+    assert [b["category"] for b in payload["buildings"]] == [
+        "residential",
+        "food_storage",
+    ]
