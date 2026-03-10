@@ -5,6 +5,7 @@ from agent import (
     decay_agent_knowledge_state,
     diffuse_local_knowledge,
     ensure_agent_knowledge_state,
+    get_known_camp_spot,
     get_known_resource_spot,
     update_agent_knowledge_from_experience,
     write_episodic_memory_event,
@@ -247,3 +248,212 @@ def test_no_omniscient_leakage_from_distant_unseen_agent() -> None:
     receiver.subjective_state = {"nearby_agents": []}
     diffuse_local_knowledge(world, receiver)
     assert get_known_resource_spot(receiver, "food", min_confidence=0.2) is None
+
+
+def test_local_camp_knowledge_diffusion_and_usage_metrics() -> None:
+    world = _flat_world()
+    world.tick = 25
+    donor = Agent(x=10, y=10, brain=None)
+    receiver = Agent(x=11, y=10, brain=None)
+    world.agents = [donor, receiver]
+    ensure_agent_knowledge_state(donor)["known_camp_spots"] = [
+        {
+            "type": "camp_spot",
+            "subject": "camp",
+            "location": {"x": 13, "y": 10},
+            "learned_tick": 20,
+            "confidence": 0.9,
+            "source": "direct",
+            "salience": 0.8,
+        }
+    ]
+    receiver.subjective_state = {
+        "nearby_agents": [
+            {
+                "agent_id": donor.agent_id,
+                "distance": 1,
+                "same_village": True,
+                "social_influence": 0.8,
+                "role": donor.role,
+                "x": donor.x,
+                "y": donor.y,
+            }
+        ]
+    }
+    receiver.social_memory = {
+        "known_agents": {
+            donor.agent_id: {
+                "times_seen": 6,
+                "same_village": True,
+                "social_salience": 1.2,
+                "last_seen_tick": 24,
+                "recent_interaction": "co_present_success",
+            }
+        }
+    }
+    diffuse_local_knowledge(world, receiver)
+    camp_spot = get_known_camp_spot(receiver, min_confidence=0.2, world=world)
+    snapshot = world.compute_communication_snapshot()
+    assert camp_spot == (13, 10)
+    assert int(snapshot.get("communication_events", 0)) >= 1
+    assert int(snapshot.get("camp_knowledge_shared_count", 0)) >= 1
+    assert int(snapshot.get("shared_camp_knowledge_used_count", 0)) >= 1
+
+
+def test_knowledge_decay_records_stale_expired_counter() -> None:
+    world = _flat_world()
+    world.tick = 500
+    agent = Agent(x=2, y=2, brain=None)
+    state = ensure_agent_knowledge_state(agent)
+    state["known_resource_spots"] = [
+        {
+            "type": "resource_spot",
+            "subject": "food",
+            "location": {"x": 3, "y": 2},
+            "learned_tick": 0,
+            "confidence": 0.1,
+            "source": "social",
+            "salience": 0.3,
+        }
+    ]
+    state["known_camp_spots"] = [
+        {
+            "type": "camp_spot",
+            "subject": "camp",
+            "location": {"x": 4, "y": 2},
+            "learned_tick": 0,
+            "confidence": 0.1,
+            "source": "social",
+            "salience": 0.3,
+        }
+    ]
+    decay_agent_knowledge_state(world, agent)
+    snapshot = world.compute_communication_snapshot()
+    assert int(snapshot.get("stale_knowledge_expired_count", 0)) >= 2
+
+
+def test_invalid_social_camp_knowledge_is_removed_and_counted() -> None:
+    world = _flat_world()
+    world.tick = 20
+    world.camps = {}
+    agent = Agent(x=10, y=10, brain=None)
+    state = ensure_agent_knowledge_state(agent)
+    state["known_camp_spots"] = [
+        {
+            "type": "camp_spot",
+            "subject": "camp",
+            "location": {"x": 10, "y": 10},
+            "learned_tick": 19,
+            "confidence": 0.16,
+            "source": "social",
+            "salience": 0.6,
+        }
+    ]
+    update_agent_knowledge_from_experience(world, agent)
+    snapshot = world.compute_communication_snapshot()
+    assert len(state["known_camp_spots"]) == 0
+    assert int(snapshot.get("invalidated_shared_knowledge_count", 0)) >= 1
+
+
+def test_stale_social_knowledge_is_rejected_during_diffusion() -> None:
+    world = _flat_world()
+    world.tick = 400
+    donor = Agent(x=10, y=10, brain=None)
+    receiver = Agent(x=11, y=10, brain=None)
+    world.agents = [donor, receiver]
+    ensure_agent_knowledge_state(donor)["known_resource_spots"] = [
+        {
+            "type": "resource_spot",
+            "subject": "food",
+            "location": {"x": 12, "y": 10},
+            "learned_tick": 10,
+            "confidence": 0.9,
+            "source": "direct",
+            "salience": 0.9,
+        }
+    ]
+    receiver.subjective_state = {
+        "nearby_agents": [{"agent_id": donor.agent_id, "distance": 1, "same_village": True, "x": donor.x, "y": donor.y}]
+    }
+    receiver.social_memory = {"known_agents": {donor.agent_id: {"times_seen": 6, "same_village": True}}}
+    diffuse_local_knowledge(world, receiver)
+    snapshot = world.compute_communication_snapshot()
+    assert get_known_resource_spot(receiver, "food", min_confidence=0.2) is None
+    assert int(snapshot.get("social_knowledge_reject_stale", 0)) >= 1
+
+
+def test_direct_local_food_overrides_weaker_social_hint() -> None:
+    world = _flat_world()
+    world.tick = 40
+    agent = Agent(x=10, y=10, brain=None)
+    state = ensure_agent_knowledge_state(agent)
+    state["known_resource_spots"] = [
+        {
+            "type": "resource_spot",
+            "subject": "food",
+            "location": {"x": 19, "y": 10},
+            "learned_tick": 39,
+            "confidence": 0.82,
+            "source": "social",
+            "salience": 0.7,
+        }
+    ]
+    agent.subjective_state = {
+        "nearby_resources": {
+            "food": [{"x": 11, "y": 10, "distance": 1, "salience": 1.0}],
+        }
+    }
+    target = get_known_resource_spot(agent, "food", world=world)
+    snapshot = world.compute_communication_snapshot()
+    assert target == (11, 10)
+    assert int(snapshot.get("direct_overrides_social_count", 0)) >= 1
+
+
+def test_near_critical_hunger_rejects_far_social_food_hint() -> None:
+    world = _flat_world()
+    world.tick = 50
+    agent = Agent(x=10, y=10, brain=None)
+    agent.hunger = 25.0
+    ensure_agent_knowledge_state(agent)["known_resource_spots"] = [
+        {
+            "type": "resource_spot",
+            "subject": "food",
+            "location": {"x": 22, "y": 10},
+            "learned_tick": 48,
+            "confidence": 0.75,
+            "source": "social",
+            "salience": 0.8,
+        }
+    ]
+    target = get_known_resource_spot(agent, "food", world=world)
+    snapshot = world.compute_communication_snapshot()
+    assert target is None
+    assert int(snapshot.get("social_knowledge_reject_survival_priority", 0)) >= 1
+
+
+def test_duplicate_resharing_is_suppressed() -> None:
+    world = _flat_world()
+    world.tick = 60
+    donor = Agent(x=10, y=10, brain=None)
+    receiver = Agent(x=11, y=10, brain=None)
+    world.agents = [donor, receiver]
+    ensure_agent_knowledge_state(donor)["known_resource_spots"] = [
+        {
+            "type": "resource_spot",
+            "subject": "food",
+            "location": {"x": 12, "y": 10},
+            "learned_tick": 59,
+            "confidence": 0.95,
+            "source": "direct",
+            "salience": 0.95,
+        }
+    ]
+    receiver.subjective_state = {
+        "nearby_agents": [{"agent_id": donor.agent_id, "distance": 1, "same_village": True, "x": donor.x, "y": donor.y}]
+    }
+    receiver.social_memory = {"known_agents": {donor.agent_id: {"times_seen": 8, "same_village": True}}}
+    diffuse_local_knowledge(world, receiver)
+    world.tick += 7
+    diffuse_local_knowledge(world, receiver)
+    snapshot = world.compute_communication_snapshot()
+    assert int(snapshot.get("repeated_duplicate_share_suppressed_count", 0)) >= 1

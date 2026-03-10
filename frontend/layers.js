@@ -1,349 +1,353 @@
 const Layers = {
-  overlays: {
-    roads: true,
+  toggles: {
+    terrain: true,
+    food: true,
+    wood: true,
+    stone: true,
     farms: true,
-    villages: true,
-    heat: true,
+    structures: true,
+    storage_buildings: true,
+    buildings: true,
+    roads: true,
+    village_territory: true,
+    village_centers: true,
+    agents: true,
+    village_labels: true,
+    hover_coords: false,
   },
 
-  tileColor(t) {
-    if (t === "G") return "#6fcf6a";
-    if (t === "F") return "#2f8f45";
-    if (t === "M") return "#999999";
-    if (t === "W") return "#4da6ff";
+  terrainColor(code) {
+    if (code === "G") return "#6fcf6a";
+    if (code === "F") return "#2f8f45";
+    if (code === "M") return "#8d9196";
+    if (code === "W") return "#4da6ff";
+    if (code === "H") return "#b3986a";
     return "#ffffff";
   },
 
   farmColor(state) {
     if (state === "prepared") return "#b38b5a";
-    if (state === "planted") return "#2f6f2f";
+    if (state === "planted") return "#4f7f35";
     if (state === "growing") return "#4caf50";
-    if (state === "ripe") return "#d4b000";
-    return "#b38b5a";
+    if (state === "ripe") return "#e3be2b";
+    if (state === "dead") return "#5d3c32";
+    return "#9b815f";
   },
 
-  strategyColor(strategy) {
-    const s = (strategy || "").toLowerCase();
-    if (s.includes("food") || s.includes("hunt") || s.includes("eat")) return "lime";
-    if (s.includes("wood") || s.includes("tree") || s.includes("legn")) return "#6b4f2a";
-    if (s.includes("stone") || s.includes("rock") || s.includes("pietr")) return "#bbbbbb";
-    if (s.includes("expand") || s.includes("build") || s.includes("house") || s.includes("village")) return "gold";
-    if (s.includes("explore") || s.includes("esplora")) return "violet";
-    return "gold";
+  buildingFill(building) {
+    const t = String(building.type || "").toLowerCase();
+    const c = String(building.category || "").toLowerCase();
+    if (t === "storage") return "#6f5b4d";
+    if (t === "house") return "#8d6b3f";
+    if (t === "mine") return "#5d6f83";
+    if (t === "lumberyard") return "#4f6846";
+    if (c === "production") return "#4f6d86";
+    if (c === "food_storage") return "#6f5b4d";
+    return "#6f7f8a";
   },
 
-  buildHouseColorMap(villages) {
-    const map = new Map();
-    for (const v of (villages || [])) {
-      for (const tile of (v.tiles || [])) {
-        map.set(`${tile.x},${tile.y}`, v.color || "#8b4513");
+  buildingStroke(building) {
+    const op = String(building.operational_state || "active").toLowerCase();
+    if (op.includes("construction") || op.includes("under")) return "#e0a14f";
+    return "#1f2b34";
+  },
+
+  draw(ctx, data, indexes, camera, canvas, options) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (this.toggles.terrain) this.drawTerrain(ctx, data, camera, canvas);
+    if (this.toggles.village_territory) this.drawVillageTerritories(ctx, data, camera, canvas, options);
+    if (this.toggles.roads) this.drawRoads(ctx, data, camera, canvas);
+    this.drawResources(ctx, data, camera, canvas);
+    if (this.toggles.farms) this.drawFarms(ctx, data, camera, canvas);
+    this.drawLegacy(ctx, data, indexes, camera, canvas);
+    if (this.toggles.buildings) this.drawBuildings(ctx, data, camera, canvas, options);
+    if (this.toggles.village_centers) this.drawVillageCenters(ctx, data, camera, canvas, options);
+    if (this.toggles.agents) this.drawAgents(ctx, data, camera, canvas, options);
+    if (this.toggles.village_labels) this.drawVillageLabels(ctx, data, camera, canvas);
+    this.drawSelection(ctx, camera, options);
+    if (this.toggles.hover_coords) this.drawHoverCoord(ctx, camera, options);
+  },
+
+  drawTerrain(ctx, data, camera, canvas) {
+    const s = camera.cellSize;
+    const vw = camera.getViewWidth(canvas);
+    const vh = camera.getViewHeight(canvas);
+    const width = Number(data.width) || 0;
+    const height = Number(data.height) || 0;
+    const tiles = Array.isArray(data.tiles) ? data.tiles : [];
+
+    for (let sy = 0; sy < vh; sy += 1) {
+      for (let sx = 0; sx < vw; sx += 1) {
+        const wx = camera.x + sx;
+        const wy = camera.y + sy;
+        if (wx < 0 || wy < 0 || wx >= width || wy >= height) continue;
+        const row = Array.isArray(tiles[wy]) ? tiles[wy] : [];
+        const code = row[wx];
+        ctx.fillStyle = this.terrainColor(code);
+        ctx.fillRect(sx * s, sy * s, s, s);
       }
     }
-    return map;
   },
 
-  terrain(ctx, data, camera, canvas) {
+  drawRoads(ctx, data, camera, canvas) {
     const s = camera.cellSize;
-    const viewW = camera.getViewW(canvas);
-    const viewH = camera.getViewH(canvas);
-
-    for (let y = 0; y < viewH; y++) {
-      for (let x = 0; x < viewW; x++) {
-        const wx = x + camera.x;
-        const wy = y + camera.y;
-
-        if (wx < 0 || wy < 0 || wx >= data.width || wy >= data.height) continue;
-
-        ctx.fillStyle = this.tileColor(data.tiles[wy][wx]);
-        ctx.fillRect(x * s, y * s, s, s);
-      }
-    }
-  },
-
-  roads(ctx, data, camera, canvas) {
-    if (!this.overlays.roads) return;
-
-    const s = camera.cellSize;
-
-    (data.roads || []).forEach(r => {
-      const sx = (r.x - camera.x) * s;
-      const sy = (r.y - camera.y) * s;
-
-      if (sx < -s || sy < -s || sx > canvas.width || sy > canvas.height) return;
-
-      const pad = Math.floor(s * 0.38);
+    for (const r of data.roads) {
+      const px = (r.x - camera.x) * s;
+      const py = (r.y - camera.y) * s;
+      if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+      const pad = Math.max(1, Math.floor(s * 0.25));
       ctx.fillStyle = "#c2a27a";
-      ctx.fillRect(sx + pad, sy + pad, s - pad * 2, s - pad * 2);
-    });
+      ctx.fillRect(px + pad, py + pad, s - pad * 2, s - pad * 2);
+    }
   },
 
-  resources(ctx, data, camera, canvas) {
+  drawResources(ctx, data, camera, canvas) {
     const s = camera.cellSize;
-
-    const drawCell = (x, y, color) => {
-      const sx = (x - camera.x) * s;
-      const sy = (y - camera.y) * s;
-
-      if (sx < -s || sy < -s || sx > canvas.width || sy > canvas.height) return;
-
-      const pad = Math.floor(s * 0.2);
-      ctx.fillStyle = color;
-      ctx.fillRect(sx + pad, sy + pad, s - pad * 2, s - pad * 2);
+    const drawCells = (cells, enabled, color, shape) => {
+      if (!enabled) return;
+      for (const p of cells) {
+        const px = (p.x - camera.x) * s;
+        const py = (p.y - camera.y) * s;
+        if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+        ctx.fillStyle = color;
+        if (shape === "circle") {
+          ctx.beginPath();
+          ctx.arc(px + s / 2, py + s / 2, Math.max(2, s * 0.25), 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const pad = Math.max(1, Math.floor(s * 0.2));
+          ctx.fillRect(px + pad, py + pad, s - pad * 2, s - pad * 2);
+        }
+      }
     };
 
-    (data.food || []).forEach(f => drawCell(f.x, f.y, "#00aa00"));
-    (data.wood || []).forEach(w => drawCell(w.x, w.y, "#0b3d1e"));
-    (data.stone || []).forEach(st => drawCell(st.x, st.y, "#d3d3d3"));
+    drawCells(data.food, this.toggles.food, "#19b231", "circle");
+    drawCells(data.wood, this.toggles.wood, "#1f4c2b", "square");
+    drawCells(data.stone, this.toggles.stone, "#d0d4da", "square");
   },
 
-  buildings(ctx, data, camera, canvas) {
+  drawFarms(ctx, data, camera, canvas) {
     const s = camera.cellSize;
-    const houseColorMap = this.buildHouseColorMap(data.villages);
-
-    (data.structures || []).forEach(h => {
-      const sx = (h.x - camera.x) * s;
-      const sy = (h.y - camera.y) * s;
-
-      if (sx < -s || sy < -s || sx > canvas.width || sy > canvas.height) return;
-
-      const color = houseColorMap.get(`${h.x},${h.y}`) || "#8b4513";
-      ctx.fillStyle = color;
-      ctx.fillRect(sx, sy, s, s);
-      ctx.strokeStyle = "#1a1a1a";
-      ctx.strokeRect(sx, sy, s, s);
-    });
-
-    (data.storage_buildings || []).forEach(sb => {
-      const sx = (sb.x - camera.x) * s;
-      const sy = (sb.y - camera.y) * s;
-
-      if (sx < -s || sy < -s || sx > canvas.width || sy > canvas.height) return;
-
-      const pad = Math.floor(s * 0.18);
-      ctx.fillStyle = "#5b3a29";
-      ctx.fillRect(sx + pad, sy + pad, s - pad * 2, s - pad * 2);
-      ctx.strokeStyle = "#f5deb3";
-      ctx.strokeRect(sx + pad, sy + pad, s - pad * 2, s - pad * 2);
-    });
-  },
-
-  farms(ctx, data, camera, canvas) {
-    if (!this.overlays.farms) return;
-
-    const s = camera.cellSize;
-
-    (data.farms || []).forEach(f => {
-      const sx = (f.x - camera.x) * s;
-      const sy = (f.y - camera.y) * s;
-
-      if (sx < -s || sy < -s || sx > canvas.width || sy > canvas.height) return;
-
-      const pad = Math.floor(s * 0.12);
-      ctx.fillStyle = this.farmColor(f.state);
-      ctx.fillRect(sx + pad, sy + pad, s - pad * 2, s - pad * 2);
-      ctx.strokeStyle = "#222";
-      ctx.strokeRect(sx + pad, sy + pad, s - pad * 2, s - pad * 2);
-    });
-  },
-
-  villages(ctx, data, camera, canvas) {
-    if (!this.overlays.villages) return;
-
-    const s = camera.cellSize;
-
-    if (this.overlays.heat) {
-      (data.villages || []).forEach(v => {
-        const sx = (v.center.x - camera.x) * s + s / 2;
-        const sy = (v.center.y - camera.y) * s + s / 2;
-
-        if (sx < -s || sy < -s || sx > canvas.width + s || sy > canvas.height + s) return;
-
-        const radius = Math.max(8, (v.population || 0) * 0.8);
-        const alpha = Math.min(0.25, 0.05 + (v.population || 0) * 0.008);
-
-        ctx.beginPath();
-        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 80, 0, ${alpha})`;
-        ctx.fill();
-      });
-    }
-
-    (data.villages || []).forEach(v => {
-      const storagePos = v.storage_pos;
-      if (storagePos) {
-        const sx = (storagePos.x - camera.x) * s;
-        const sy = (storagePos.y - camera.y) * s;
-
-        if (!(sx < -s || sy < -s || sx > canvas.width || sy > canvas.height)) {
-          const pad = Math.floor(s * 0.28);
-          ctx.fillStyle = "#5b3a29";
-          ctx.fillRect(sx + pad, sy + pad, s - pad * 2, s - pad * 2);
-          ctx.strokeStyle = "#f5deb3";
-          ctx.strokeRect(sx + pad, sy + pad, s - pad * 2, s - pad * 2);
-        }
-      }
-
-      const farmZone = v.farm_zone_center;
-      if (farmZone) {
-        const sx = (farmZone.x - camera.x) * s + s / 2;
-        const sy = (farmZone.y - camera.y) * s + s / 2;
-
-        if (!(sx < -s || sy < -s || sx > canvas.width + s || sy > canvas.height + s)) {
-          ctx.beginPath();
-          ctx.arc(sx, sy, Math.max(2, s * 0.08), 0, Math.PI * 2);
-          ctx.fillStyle = "#c7a94a";
-          ctx.fill();
-        }
-      }
-
-      const cx = (v.center.x - camera.x) * s + s / 2;
-      const cy = (v.center.y - camera.y) * s + s / 2;
-
-      if (cx < -s || cy < -s || cx > canvas.width + s || cy > canvas.height + s) return;
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(4, s * 0.15), 0, Math.PI * 2);
-      ctx.fillStyle = this.strategyColor(v.strategy);
-      ctx.fill();
-      ctx.strokeStyle = "#222";
-      ctx.stroke();
-    });
-  },
-
-  agents(ctx, data, camera, canvas) {
-    const s = camera.cellSize;
-
-    (data.agents || []).forEach(a => {
-      const sx = (a.x - camera.x) * s;
-      const sy = (a.y - camera.y) * s;
-
-      if (sx < -s || sy < -s || sx > canvas.width || sy > canvas.height) return;
-
-      const isPlayer = a.is_player && a.player_id === State.playerId;
-      ctx.fillStyle = isPlayer ? "red" : "blue";
-      ctx.fillRect(sx, sy, s, s);
-
-      if (a.role === "leader") {
-        ctx.beginPath();
-        ctx.arc(sx + s / 2, sy + s / 2, Math.max(4, s * 0.18), 0, Math.PI * 2);
-        ctx.fillStyle = "orange";
-        ctx.fill();
-      }
-
-      ctx.strokeStyle = "black";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(sx, sy, s, s);
+    for (const f of data.farms) {
+      const px = (f.x - camera.x) * s;
+      const py = (f.y - camera.y) * s;
+      if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+      const pad = Math.max(1, Math.floor(s * 0.1));
+      ctx.fillStyle = this.farmColor(String(f.state || "prepared"));
+      ctx.fillRect(px + pad, py + pad, s - pad * 2, s - pad * 2);
+      ctx.strokeStyle = "#2d2419";
       ctx.lineWidth = 1;
-    });
+      ctx.strokeRect(px + pad, py + pad, s - pad * 2, s - pad * 2);
+    }
   },
 
-  minimap(mctx, minimap, data, camera, worldCanvas) {
-    const w = minimap.width;
-    const h = minimap.height;
-    const sx = w / data.width;
-    const sy = h / data.height;
+  drawLegacy(ctx, data, indexes, camera, canvas) {
+    const s = camera.cellSize;
+    const canonicalByTile = indexes.buildingsByTile;
 
-    const step = Math.max(2, Math.floor(data.width / 120));
-    mctx.clearRect(0, 0, w, h);
-
-    for (let y = 0; y < data.height; y += step) {
-      for (let x = 0; x < data.width; x += step) {
-        mctx.fillStyle = this.tileColor(data.tiles[y][x]);
-        mctx.fillRect(x * sx, y * sy, step * sx, step * sy);
+    if (this.toggles.structures) {
+      for (const p of data.structures) {
+        const key = `${p.x},${p.y}`;
+        if (canonicalByTile.has(key)) continue;
+        const px = (p.x - camera.x) * s;
+        const py = (p.y - camera.y) * s;
+        if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+        ctx.strokeStyle = "#5f3f2f";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 1, py + 1, s - 2, s - 2);
       }
     }
 
-    if (this.overlays.villages) {
-      (data.villages || []).forEach(v => {
-        const cx = v.center.x * sx;
-        const cy = v.center.y * sy;
-        const influenceRadius = Math.max(10, (v.houses || 1) * 1.3);
+    if (this.toggles.storage_buildings) {
+      for (const p of data.storage_buildings) {
+        const key = `${p.x},${p.y}`;
+        if (canonicalByTile.has(key)) continue;
+        const px = (p.x - camera.x) * s;
+        const py = (p.y - camera.y) * s;
+        if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+        const pad = Math.max(1, Math.floor(s * 0.22));
+        ctx.fillStyle = "rgba(111, 91, 77, 0.7)";
+        ctx.fillRect(px + pad, py + pad, s - pad * 2, s - pad * 2);
+        ctx.strokeStyle = "#f6ddb8";
+        ctx.strokeRect(px + pad, py + pad, s - pad * 2, s - pad * 2);
+      }
+    }
+  },
 
-        mctx.beginPath();
-        mctx.arc(cx, cy, influenceRadius, 0, Math.PI * 2);
-        mctx.fillStyle = "rgba(255, 215, 0, 0.22)";
-        mctx.fill();
-      });
+  drawBuildings(ctx, data, camera, canvas, options) {
+    const s = camera.cellSize;
+    for (const b of data.buildings) {
+      const footprint = Array.isArray(b.footprint) && b.footprint.length > 0
+        ? b.footprint
+        : [{ x: b.x, y: b.y }];
 
-      if (this.overlays.heat) {
-        (data.villages || []).forEach(v => {
-          const cx = v.center.x * sx;
-          const cy = v.center.y * sy;
-          const pop = v.population || 0;
-          const heatRadius = Math.max(6, pop * 0.7);
-          const alpha = Math.min(0.40, 0.08 + pop * 0.015);
+      for (const tile of footprint) {
+        const px = (tile.x - camera.x) * s;
+        const py = (tile.y - camera.y) * s;
+        if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+        ctx.fillStyle = this.buildingFill(b);
+        ctx.fillRect(px, py, s, s);
 
-          mctx.beginPath();
-          mctx.arc(cx, cy, heatRadius, 0, Math.PI * 2);
-          mctx.fillStyle = `rgba(255, 80, 0, ${alpha})`;
-          mctx.fill();
-        });
+        ctx.strokeStyle = this.buildingStroke(b);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 0.5, py + 0.5, s - 1, s - 1);
+
+        if (String(b.type || "") === "storage" && b.storage && typeof b.storage === "object") {
+          ctx.fillStyle = "#f3e7c6";
+          ctx.fillRect(px + Math.max(1, Math.floor(s * 0.34)), py + Math.max(1, Math.floor(s * 0.34)), Math.max(2, Math.floor(s * 0.3)), Math.max(2, Math.floor(s * 0.3)));
+        }
+
+        if (b.construction_complete_ratio != null) {
+          const ratio = Math.max(0, Math.min(1, Number(b.construction_complete_ratio) || 0));
+          const barH = Math.max(2, Math.floor(s * 0.12));
+          ctx.fillStyle = "rgba(0,0,0,0.5)";
+          ctx.fillRect(px, py + s - barH, s, barH);
+          ctx.fillStyle = "#8be28b";
+          ctx.fillRect(px, py + s - barH, Math.floor(s * ratio), barH);
+        }
       }
     }
 
-    if (this.overlays.roads) {
-      (data.roads || []).forEach(r => {
-        mctx.fillStyle = "#c2a27a";
-        mctx.fillRect(r.x * sx, r.y * sy, Math.max(1.5, sx), Math.max(1.5, sy));
-      });
+    if (options.selectedVillageUid) {
+      for (const b of data.buildings) {
+        if (String(b.village_uid || "") !== String(options.selectedVillageUid)) continue;
+        const footprint = Array.isArray(b.footprint) && b.footprint.length > 0
+          ? b.footprint
+          : [{ x: b.x, y: b.y }];
+        for (const tile of footprint) {
+          const px = (tile.x - camera.x) * s;
+          const py = (tile.y - camera.y) * s;
+          if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+          ctx.strokeStyle = "#ffdf7a";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px + 1, py + 1, s - 2, s - 2);
+        }
+      }
+      ctx.lineWidth = 1;
     }
+  },
 
-    const houseColorMap = this.buildHouseColorMap(data.villages);
-
-    (data.structures || []).forEach(house => {
-      const color = houseColorMap.get(`${house.x},${house.y}`) || "#5a2d0c";
-      mctx.fillStyle = color;
-      mctx.fillRect(house.x * sx, house.y * sy, Math.max(2, sx), Math.max(2, sy));
-    });
-
-    (data.storage_buildings || []).forEach(sb => {
-      mctx.fillStyle = "#5b3a29";
-      mctx.fillRect(sb.x * sx, sb.y * sy, Math.max(2, sx), Math.max(2, sy));
-    });
-
-    if (this.overlays.farms) {
-      (data.farms || []).forEach(f => {
-        mctx.fillStyle = this.farmColor(f.state);
-        mctx.fillRect(f.x * sx, f.y * sy, Math.max(2, sx), Math.max(2, sy));
-      });
+  drawVillageTerritories(ctx, data, camera, canvas, options) {
+    const s = camera.cellSize;
+    for (const v of data.villages) {
+      const color = String(v.color || "#ffd46a");
+      const tiles = Array.isArray(v.tiles) ? v.tiles : [];
+      const isSelected = String(v.village_uid || "") === String(options.selectedVillageUid || "");
+      for (const t of tiles) {
+        const px = (t.x - camera.x) * s;
+        const py = (t.y - camera.y) * s;
+        if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+        ctx.fillStyle = isSelected ? this.alphaColor(color, 0.26) : this.alphaColor(color, 0.12);
+        ctx.fillRect(px, py, s, s);
+      }
     }
+  },
 
-    if (this.overlays.villages) {
-      (data.villages || []).forEach(v => {
-        const cx = v.center.x * sx;
-        const cy = v.center.y * sy;
-
-        mctx.beginPath();
-        mctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
-        mctx.fillStyle = this.strategyColor(v.strategy);
-        mctx.fill();
-        mctx.strokeStyle = "#222";
-        mctx.lineWidth = 1;
-        mctx.stroke();
-      });
-    }
-
-    (data.agents || []).forEach(a => {
-      const ax = a.x * sx;
-      const ay = a.y * sy;
-
-      if (a.role === "leader") {
-        mctx.beginPath();
-        mctx.arc(ax, ay, 4, 0, Math.PI * 2);
-        mctx.fillStyle = "orange";
-        mctx.fill();
-        return;
+  drawVillageCenters(ctx, data, camera, canvas, options) {
+    const s = camera.cellSize;
+    for (const v of data.villages) {
+      if (v.farm_zone_center && Number.isFinite(v.farm_zone_center.x) && Number.isFinite(v.farm_zone_center.y)) {
+        const fzx = (v.farm_zone_center.x - camera.x) * s + (s / 2);
+        const fzy = (v.farm_zone_center.y - camera.y) * s + (s / 2);
+        if (!(fzx < -s || fzy < -s || fzx > canvas.width + s || fzy > canvas.height + s)) {
+          ctx.fillStyle = "#f0cf6e";
+          ctx.beginPath();
+          ctx.arc(fzx, fzy, Math.max(2, Math.floor(s * 0.18)), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#2b2620";
+          ctx.stroke();
+        }
       }
 
-      mctx.fillStyle = a.is_player ? "red" : "blue";
-      mctx.fillRect(ax, ay, Math.max(1.5, sx * 0.8), Math.max(1.5, sy * 0.8));
-    });
+      if (!v.center || !Number.isFinite(v.center.x) || !Number.isFinite(v.center.y)) continue;
+      const cx = (v.center.x - camera.x) * s + (s / 2);
+      const cy = (v.center.y - camera.y) * s + (s / 2);
+      if (cx < -s || cy < -s || cx > canvas.width + s || cy > canvas.height + s) continue;
 
-    const viewW = camera.getViewW(worldCanvas);
-    const viewH = camera.getViewH(worldCanvas);
+      const isSelected = String(v.village_uid || "") === String(options.selectedVillageUid || "");
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(3, Math.floor(s * 0.25)), 0, Math.PI * 2);
+      ctx.fillStyle = isSelected ? "#fff2a6" : (v.color || "#ffd46a");
+      ctx.fill();
+      ctx.strokeStyle = "#1b252c";
+      ctx.stroke();
+    }
+  },
 
-    mctx.strokeStyle = "#000";
-    mctx.lineWidth = 1;
-    mctx.strokeRect(camera.x * sx, camera.y * sy, viewW * sx, viewH * sy);
-  }
+  drawVillageLabels(ctx, data, camera, canvas) {
+    const s = camera.cellSize;
+    ctx.font = `${Math.max(10, Math.floor(s * 0.5))}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    for (const v of data.villages) {
+      if (!v.center || !Number.isFinite(v.center.x) || !Number.isFinite(v.center.y)) continue;
+      const cx = (v.center.x - camera.x) * s + (s / 2);
+      const cy = (v.center.y - camera.y) * s;
+      if (cx < -s || cy < -s || cx > canvas.width + s || cy > canvas.height + s) continue;
+      const label = (v.id != null) ? `V${v.id}` : String(v.village_uid || "village");
+      ctx.fillStyle = "#0d0f10";
+      ctx.fillText(label, cx + 1, cy - 1);
+      ctx.fillStyle = "#f0f5fa";
+      ctx.fillText(label, cx, cy - 2);
+    }
+  },
+
+  drawAgents(ctx, data, camera, canvas, options) {
+    const s = camera.cellSize;
+    for (const a of data.agents) {
+      const px = (a.x - camera.x) * s;
+      const py = (a.y - camera.y) * s;
+      if (px < -s || py < -s || px > canvas.width || py > canvas.height) continue;
+      const isPlayer = Boolean(a.is_player);
+      ctx.fillStyle = isPlayer ? "#ff6464" : "#63b7ff";
+      ctx.fillRect(px + 1, py + 1, s - 2, s - 2);
+
+      if (String(a.role || "") === "leader") {
+        ctx.fillStyle = "#ffd166";
+        ctx.beginPath();
+        ctx.arc(px + s * 0.5, py + s * 0.5, Math.max(2, s * 0.18), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (options.selectedVillage && a.village_id != null && options.selectedVillage.id != null && a.village_id === options.selectedVillage.id) {
+        ctx.strokeStyle = "#f9ee9a";
+        ctx.lineWidth = 2;
+      } else {
+        ctx.strokeStyle = "#15212a";
+        ctx.lineWidth = 1;
+      }
+      ctx.strokeRect(px + 0.5, py + 0.5, s - 1, s - 1);
+    }
+    ctx.lineWidth = 1;
+  },
+
+  drawSelection(ctx, camera, options) {
+    if (!options.selectedTile) return;
+    const s = camera.cellSize;
+    const px = (options.selectedTile.x - camera.x) * s;
+    const py = (options.selectedTile.y - camera.y) * s;
+    ctx.strokeStyle = "#ffe38d";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, s - 2, s - 2);
+    ctx.lineWidth = 1;
+  },
+
+  drawHoverCoord(ctx, camera, options) {
+    if (!options.hoverTile) return;
+    const s = camera.cellSize;
+    const px = (options.hoverTile.x - camera.x) * s;
+    const py = (options.hoverTile.y - camera.y) * s;
+    ctx.strokeStyle = "rgba(255,255,255,0.65)";
+    ctx.strokeRect(px + 0.5, py + 0.5, s - 1, s - 1);
+  },
+
+  alphaColor(hex, alpha) {
+    const fallback = `rgba(255,212,106,${alpha})`;
+    if (!/^#([0-9a-fA-F]{6})$/.test(hex)) return fallback;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  },
 };

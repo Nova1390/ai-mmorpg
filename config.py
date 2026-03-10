@@ -37,7 +37,7 @@ MAX_STONE = 90
 # -------------------------
 # SURVIVAL
 # -------------------------
-AGENT_START_HUNGER = 80
+AGENT_START_HUNGER = 85
 FOOD_EAT_GAIN = 35
 
 # -------------------------

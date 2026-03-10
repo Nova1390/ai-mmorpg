@@ -311,6 +311,13 @@ def update_road_infrastructure(world) -> None:
     for village in villages:
         if remaining_budget <= 0:
             break
+        if hasattr(world, "should_defer_road_growth_for_village"):
+            try:
+                should_defer, _ = world.should_defer_road_growth_for_village(village)
+            except Exception:
+                should_defer = False
+            if bool(should_defer):
+                continue
         added = _grow_roads_for_village(world, village, remaining_budget)
         remaining_budget -= added
 

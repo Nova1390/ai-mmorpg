@@ -1,203 +1,260 @@
-Renderer.init();
+(function main() {
+  Renderer.init();
 
-const worldCanvas = document.getElementById("world");
-const minimap = document.getElementById("minimap");
+  const canvas = document.getElementById("world");
+  const mapWrap = document.querySelector(".map-wrap");
+  const apiBaseInput = document.getElementById("apiBaseInput");
+  const applyApiBtn = document.getElementById("applyApiBtn");
+  const refreshBtn = document.getElementById("refreshBtn");
+  const reloadStaticBtn = document.getElementById("reloadStaticBtn");
+  const pollMsSelect = document.getElementById("pollMsSelect");
+  const zoomInBtn = document.getElementById("zoomInBtn");
+  const zoomOutBtn = document.getElementById("zoomOutBtn");
+  const followBtn = document.getElementById("followBtn");
+  const minimap = document.getElementById("minimap");
+  const agentFilterInput = document.getElementById("agentFilterInput");
+  const agentCapSelect = document.getElementById("agentCapSelect");
 
-const followBtn = document.getElementById("followBtn");
-const roadsBtn = document.getElementById("roadsBtn");
-const farmsBtn = document.getElementById("farmsBtn");
-const villagesBtn = document.getElementById("villagesBtn");
-const heatBtn = document.getElementById("heatBtn");
+  let isDragging = false;
+  let dragStartClientX = 0;
+  let dragStartClientY = 0;
+  let dragStartCameraX = 0;
+  let dragStartCameraY = 0;
 
-function refreshButtons() {
-  followBtn.textContent = `Follow: ${Camera.followPlayer ? "ON" : "OFF"}`;
-  roadsBtn.classList.toggle("active", Layers.overlays.roads);
-  farmsBtn.classList.toggle("active", Layers.overlays.farms);
-  villagesBtn.classList.toggle("active", Layers.overlays.villages);
-  heatBtn.classList.toggle("active", Layers.overlays.heat);
-}
+  const keys = new Set();
+  let followPlayer = false;
 
-followBtn.addEventListener("click", () => {
-  Camera.followPlayer = !Camera.followPlayer;
-  refreshButtons();
-});
-
-roadsBtn.addEventListener("click", () => {
-  Layers.overlays.roads = !Layers.overlays.roads;
-  refreshButtons();
-});
-
-farmsBtn.addEventListener("click", () => {
-  Layers.overlays.farms = !Layers.overlays.farms;
-  refreshButtons();
-});
-
-villagesBtn.addEventListener("click", () => {
-  Layers.overlays.villages = !Layers.overlays.villages;
-  refreshButtons();
-});
-
-heatBtn.addEventListener("click", () => {
-  Layers.overlays.heat = !Layers.overlays.heat;
-  refreshButtons();
-});
-
-let isDragging = false;
-let dragStartX = 0;
-let dragStartY = 0;
-let dragCameraStartX = 0;
-let dragCameraStartY = 0;
-const keys = new Set();
-
-worldCanvas.addEventListener("mousedown", (e) => {
-  if (!State.data) return;
-  isDragging = true;
-  Camera.followPlayer = false;
-  refreshButtons();
-
-  dragStartX = e.clientX;
-  dragStartY = e.clientY;
-  dragCameraStartX = Camera.x;
-  dragCameraStartY = Camera.y;
-});
-
-window.addEventListener("mouseup", () => {
-  isDragging = false;
-});
-
-window.addEventListener("mousemove", (e) => {
-  if (!isDragging || !State.data) return;
-
-  const dxPixels = e.clientX - dragStartX;
-  const dyPixels = e.clientY - dragStartY;
-
-  Camera.x = dragCameraStartX - Math.round(dxPixels / Camera.cellSize);
-  Camera.y = dragCameraStartY - Math.round(dyPixels / Camera.cellSize);
-
-  Camera.clamp(State.data, worldCanvas);
-});
-
-worldCanvas.addEventListener("wheel", (e) => {
-  if (!State.data) return;
-  e.preventDefault();
-
-  const oldCellSize = Camera.cellSize;
-
-  if (e.deltaY < 0) {
-    Camera.cellSize = Math.min(Camera.maxCellSize, Camera.cellSize + 2);
-  } else {
-    Camera.cellSize = Math.max(Camera.minCellSize, Camera.cellSize - 2);
+  function refreshFollowButton() {
+    followBtn.textContent = `Follow Player: ${followPlayer ? "ON" : "OFF"}`;
   }
 
-  if (Camera.cellSize === oldCellSize) return;
-
-  const rect = worldCanvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-
-  const worldX = Camera.x + mouseX / oldCellSize;
-  const worldY = Camera.y + mouseY / oldCellSize;
-
-  Camera.x = Math.floor(worldX - mouseX / Camera.cellSize);
-  Camera.y = Math.floor(worldY - mouseY / Camera.cellSize);
-
-  Camera.followPlayer = false;
-  refreshButtons();
-  Camera.clamp(State.data, worldCanvas);
-}, { passive: false });
-
-minimap.addEventListener("click", (e) => {
-  if (!State.data) return;
-
-  const rect = minimap.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-
-  const sx = minimap.width / State.data.width;
-  const sy = minimap.height / State.data.height;
-
-  const targetX = Math.floor(mx / sx);
-  const targetY = Math.floor(my / sy);
-
-  Camera.centerOn(targetX, targetY, worldCanvas, State.data);
-  Camera.followPlayer = false;
-  refreshButtons();
-});
-
-window.addEventListener("keydown", (e) => {
-  keys.add(e.key);
-
-  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) {
-    e.preventDefault();
+  function resizeCanvasToContainer() {
+    const w = Math.max(320, Math.floor(mapWrap.clientWidth));
+    const h = Math.max(320, Math.floor(mapWrap.clientHeight));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    if (State.data) Camera.clamp(State.data, canvas);
   }
 
-  if (e.key === "p" || e.key === "P") {
-    State.spawnPlayer();
+  function applyApiAndRestart() {
+    State.setApiBase(apiBaseInput.value || "");
+    State.staticData = null;
+    State.dynamicData = null;
+    State.indexes = null;
+    State.status.staticOk = false;
+    State.status.dynamicOk = false;
+    State.status.staticError = "";
+    State.status.dynamicError = "";
+    State.stopPolling();
+
+    bootstrap().catch((err) => {
+      console.error(err);
+    });
   }
 
-  if (e.key === "f" || e.key === "F") {
-    Camera.followPlayer = !Camera.followPlayer;
-    refreshButtons();
-  }
-});
+  async function bootstrap() {
+    resizeCanvasToContainer();
 
-window.addEventListener("keyup", (e) => {
-  keys.delete(e.key);
-});
+    try {
+      await State.loadStatic(false);
+    } catch (_) {
+      // Keep UI up even if static fetch fails.
+    }
 
-function applyKeyboardCamera() {
-  if (!State.data || Camera.followPlayer) return;
+    try {
+      await State.fetchDynamic();
+    } catch (_) {
+      // Keep UI up even if first dynamic fetch fails.
+    }
 
-  let speed = 1;
-  if (keys.has("Shift")) speed = 2;
+    State.startPolling(Number(pollMsSelect.value || 300));
 
-  if (keys.has("ArrowLeft") || keys.has("a") || keys.has("A")) Camera.x -= speed;
-  if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) Camera.x += speed;
-  if (keys.has("ArrowUp") || keys.has("w") || keys.has("W")) Camera.y -= speed;
-  if (keys.has("ArrowDown") || keys.has("s") || keys.has("S")) Camera.y += speed;
-
-  Camera.clamp(State.data, worldCanvas);
-}
-
-async function loop() {
-  await State.update();
-
-  if (State.data) {
-    if (Camera.followPlayer && State.playerData) {
-      Camera.centerOn(State.playerData.x, State.playerData.y, worldCanvas, State.data);
-    } else {
-      applyKeyboardCamera();
+    const data = State.data;
+    if (data && Number.isFinite(Number(data.width)) && Number.isFinite(Number(data.height))) {
+      Camera.centerOn(Math.floor(data.width / 2), Math.floor(data.height / 2), canvas, data);
     }
   }
 
-  Renderer.draw();
-  requestAnimationFrame(loop);
-}
-document.querySelectorAll(".toggle").forEach(el => {
+  function animate() {
+    const data = State.data;
 
-  el.addEventListener("click", () => {
-
-    const layer = el.dataset.layer;
-
-    if(layer in Layers.overlays){
-
-      Layers.overlays[layer] = !Layers.overlays[layer];
-
-      if(Layers.overlays[layer]){
-        el.style.opacity = "1";
-      }else{
-        el.style.opacity = "0.35";
+    if (data) {
+      if (followPlayer) {
+        const player = (data.agents || []).find((a) => a && a.is_player);
+        if (player && Number.isFinite(player.x) && Number.isFinite(player.y)) {
+          Camera.centerOn(player.x, player.y, canvas, data);
+        }
+      } else {
+        const speed = keys.has("Shift") ? 2 : 1;
+        if (keys.has("ArrowLeft") || keys.has("a") || keys.has("A")) Camera.x -= speed;
+        if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) Camera.x += speed;
+        if (keys.has("ArrowUp") || keys.has("w") || keys.has("W")) Camera.y -= speed;
+        if (keys.has("ArrowDown") || keys.has("s") || keys.has("S")) Camera.y += speed;
       }
-
+      Camera.clamp(data, canvas);
     }
 
+    Renderer.draw();
+    requestAnimationFrame(animate);
+  }
+
+  Renderer.onSelectVillage = (uid) => {
+    const data = State.data;
+    if (!data) return;
+    const village = (State.indexes && State.indexes.villagesByUid.get(uid)) || null;
+    if (village && village.center) {
+      Camera.centerOn(village.center.x, village.center.y, canvas, data);
+    }
+  };
+
+  canvas.addEventListener("mousedown", (event) => {
+    if (!State.data) return;
+    followPlayer = false;
+    refreshFollowButton();
+    isDragging = true;
+    dragStartClientX = event.clientX;
+    dragStartClientY = event.clientY;
+    dragStartCameraX = Camera.x;
+    dragStartCameraY = Camera.y;
   });
 
-});
-async function start() {
-  await State.init();
-  refreshButtons();
-  loop();
-}
+  window.addEventListener("mouseup", () => {
+    isDragging = false;
+  });
 
-start();
+  window.addEventListener("mousemove", (event) => {
+    const data = State.data;
+    if (data) {
+      const tile = Renderer.worldToTile(event.clientX, event.clientY);
+      if (Renderer.isTileInside(tile, data)) {
+        Renderer.setHoverTile(tile);
+      } else {
+        Renderer.setHoverTile(null);
+      }
+    }
+
+    if (!isDragging || !data) return;
+    const dxPixels = event.clientX - dragStartClientX;
+    const dyPixels = event.clientY - dragStartClientY;
+    Camera.x = dragStartCameraX - Math.round(dxPixels / Camera.cellSize);
+    Camera.y = dragStartCameraY - Math.round(dyPixels / Camera.cellSize);
+    Camera.clamp(data, canvas);
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    Renderer.setHoverTile(null);
+  });
+
+  canvas.addEventListener("click", (event) => {
+    const data = State.data;
+    if (!data) return;
+    followPlayer = false;
+    refreshFollowButton();
+    const tile = Renderer.worldToTile(event.clientX, event.clientY);
+    if (!Renderer.isTileInside(tile, data)) return;
+    Renderer.setSelectedTile(tile);
+    Renderer.selectVillageByTile(tile, data);
+  });
+
+  canvas.addEventListener("wheel", (event) => {
+    const data = State.data;
+    if (!data) return;
+    event.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const px = event.clientX - rect.left;
+    const py = event.clientY - rect.top;
+    Camera.zoomBy(event.deltaY < 0 ? 2 : -2, px, py, canvas, data);
+  }, { passive: false });
+
+  zoomInBtn.addEventListener("click", () => {
+    const data = State.data;
+    if (!data) return;
+    Camera.zoomBy(2, canvas.width / 2, canvas.height / 2, canvas, data);
+  });
+
+  zoomOutBtn.addEventListener("click", () => {
+    const data = State.data;
+    if (!data) return;
+    Camera.zoomBy(-2, canvas.width / 2, canvas.height / 2, canvas, data);
+  });
+
+  window.addEventListener("keydown", (event) => {
+    keys.add(event.key);
+    if (event.key === "f" || event.key === "F") {
+      followPlayer = !followPlayer;
+      refreshFollowButton();
+    }
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(event.key)) {
+      event.preventDefault();
+    }
+  });
+
+  window.addEventListener("keyup", (event) => {
+    keys.delete(event.key);
+  });
+
+  applyApiBtn.addEventListener("click", () => {
+    applyApiAndRestart();
+  });
+
+  followBtn.addEventListener("click", () => {
+    followPlayer = !followPlayer;
+    refreshFollowButton();
+  });
+
+  refreshBtn.addEventListener("click", async () => {
+    try {
+      await State.fetchDynamic();
+    } catch (_) {
+      // Status panel shows error.
+    }
+  });
+
+  reloadStaticBtn.addEventListener("click", async () => {
+    try {
+      await State.loadStatic(true);
+      await State.fetchDynamic();
+      if (State.data) Camera.clamp(State.data, canvas);
+    } catch (_) {
+      // Status panel shows error.
+    }
+  });
+
+  pollMsSelect.addEventListener("change", () => {
+    State.startPolling(Number(pollMsSelect.value || 300));
+  });
+
+  minimap.addEventListener("click", (event) => {
+    const data = State.data;
+    if (!data) return;
+    const rect = minimap.getBoundingClientRect();
+    const mx = (event.clientX - rect.left) * (minimap.width / Math.max(rect.width, 1));
+    const my = (event.clientY - rect.top) * (minimap.height / Math.max(rect.height, 1));
+    const scaleX = minimap.width / Math.max(1, Number(data.width) || 1);
+    const scaleY = minimap.height / Math.max(1, Number(data.height) || 1);
+    const wx = Math.floor(mx / Math.max(scaleX, 0.0001));
+    const wy = Math.floor(my / Math.max(scaleY, 0.0001));
+    Camera.centerOn(wx, wy, canvas, data);
+    followPlayer = false;
+    refreshFollowButton();
+  });
+
+  agentFilterInput.addEventListener("input", () => {
+    Renderer._lastDataKey = "";
+  });
+
+  agentCapSelect.addEventListener("change", () => {
+    Renderer._lastDataKey = "";
+  });
+
+  window.addEventListener("resize", resizeCanvasToContainer);
+
+  apiBaseInput.value = State.initApiBase();
+  refreshFollowButton();
+  bootstrap().catch((err) => {
+    console.error(err);
+  });
+  animate();
+})();

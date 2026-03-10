@@ -1,4 +1,9 @@
-# Python cache
+analysis_outputs/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+x# Python cache
 __pycache__/
 *.pyc
 *.pyo
@@ -26,3 +31,8 @@ node_modules/
 dist/
 build/
 
+analysis_outputs/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/

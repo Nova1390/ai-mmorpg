@@ -1,186 +1,302 @@
-# State Contract: Python Simulation Core <-> Godot Observer
+# State Contract: Python Simulation -> Observer API
 
 ## Scope
-Questo documento definisce il contratto dati observer tra Python Simulation Core e renderer esterni.
+This document defines the observer-facing, read-only state contract produced by the Python simulation backend.
 
-Regola fondamentale:
-- Python Simulation Core = **source of truth**
-- Godot Observer = **read-only observer**
+Source of truth:
+- Python simulation implementation (`state_serializer.py`, `world.py`, `systems/*`)
 
-Il renderer non deve prendere decisioni di simulazione, ma solo visualizzare e analizzare lo stato ricevuto.
+Observer rule:
+- `/state` and `/state/static` are read-only snapshots.
+- Clients must not treat local state as simulation authority.
 
-Distinzione architetturale:
-- **Buildings**: entità locali/siti fisici (house, storage, mine, lumberyard, farm_plot).
-- **Infrastructure**: reti/sistemi abilitanti (transport, logistics, water, energy, communication, environment).
+## Endpoints
+- `GET /state/static`: static map payload (terrain + map dimensions)
+- `GET /state`: dynamic runtime payload (entities, resources, counters, stats)
 
-## Endpoint separation
-- `GET /state/static`: payload mappa/statica (authoritative source dei campi immutabili)
-- `GET /state`: payload runtime dinamico (authoritative source dello stato simulazione evolutivo)
-- Response type: `application/json`
-- Frequenza attuale simulazione: tick ogni ~`0.2s` (circa 5 TPS)
+## Coordinate Type
+All map positions use:
 
-## Coordinate format
-- Sistema a griglia con coordinate intere.
-- Ogni punto usa `{ "x": int, "y": int }`.
-- Origine: in alto a sinistra.
-- Limiti validi:
-  - `0 <= x < width`
-  - `0 <= y < height`
+```json
+{ "x": 12, "y": 7 }
+```
 
-## GET /state/static
-- Method: `GET`
-- Path: `/state/static`
-- Campi:
-  - `schema_version` (string): versione contratto
-  - `static_state_version` (int): versione snapshot statico
-  - `width` (int): larghezza mappa
-  - `height` (int): altezza mappa
-  - `tiles` (`string[][]`): matrice tile statica (`G`, `F`, `M`, `W`)
-  - `world_seed` (optional): incluso solo se disponibile nel core
+Semantics:
+- Integer grid coordinates
+- Origin at top-left
+- Bounds: `0 <= x < width`, `0 <= y < height`
 
-## GET /state
-- Method: `GET`
-- Path: `/state`
-- Campi top-level dinamici:
-  - `schema_version`
-  - `state_version`
-  - `tick`
-  - `food`, `wood`, `stone`
-  - `farms`, `farms_count`
-  - `structures`, `roads`, `storage_buildings`, `buildings`
-  - `villages`
-  - `civ_stats`
-  - `agents`
-  - `population`, `players`, `npcs`, `avg_hunger`
-  - `food_count`, `wood_count`, `stone_count`
-  - `houses_count`, `villages_count`, `leaders_count`
-  - `llm_interactions`
-  - `infrastructure_systems_available` (array string, debug compatto)
-- Nota: `/state` **non** contiene più `width`, `height`, `tiles`.
+## `GET /state/static`
+Current payload (exact serializer output):
 
-## GET /state/events
-- Method: `GET`
-- Path: `/state/events`
-- Query params:
-  - `since_tick` (int, default `-1`): restituisce eventi con `tick > since_tick`.
-- Campi top-level:
-  - `schema_version` (string)
-  - `events` (array)
-  - `oldest_retained_tick` (int|null)
-  - `newest_retained_tick` (int|null)
-  - `retained_event_count` (int)
+- `schema_version` (`string`)
+- `static_state_version` (`integer`)
+- `width` (`integer`)
+- `height` (`integer`)
+- `tiles` (`string[][]`)
+- `world_seed` (`integer | null`, optional key; included only when `world.world_seed` attribute exists)
 
-Struttura evento:
-- `event_id` (string): id univoco e monotonicamente crescente.
-- `tick` (int): tick simulativo in cui l'evento viene emesso.
-- `event_type` (string): tipo semantico evento.
-- `payload` (object): dati evento JSON-safe, variabili per tipo.
+Notes:
+- `tiles` is the authoritative terrain grid for observers.
 
-Semantica ordering e retention:
-- Gli eventi sono emessi e restituiti in ordine cronologico deterministico (append order).
-- Il buffer eventi e` bounded in-memory e mantiene solo una finestra recente.
-- Se `since_tick` e` piu` vecchio della finestra trattenuta, la risposta contiene solo gli eventi ancora disponibili (nessun errore, nessun backfill artificiale).
+## Terrain Tile Codes
+- `G` = grass
+- `F` = forest
+- `M` = mountain
+- `W` = water
+- `H` = hill
 
-## Resource fields
-- `food`: array di coordinate risorsa cibo selvatico.
-- `wood`: array di coordinate risorsa legno.
-- `stone`: array di coordinate risorsa pietra.
-- `food_count`, `wood_count`, `stone_count`: conteggi globali.
+## `GET /state`
+Top-level fields (current exact keys):
 
-## Farms
-- `farms`: array plot agricoli.
-- Campi per farm plot:
-  - `x`, `y` (int)
-  - `state` (string): `prepared | planted | growing | ripe` (oggi usati)
-  - `growth` (int): progresso crescita
-  - `village_id` (int|null): villaggio associato
-- `farms_count`: numero totale plot.
+- `schema_version` (`string`)
+- `state_version` (`integer`) increments on every `/state` serialization
+- `tick` (`integer`)
+- `civ_stats` (`object`)
 
-## Built environment
-- `structures`: coordinate case.
-- `roads`: coordinate strade emerse da utilizzo.
-- `storage_buildings`: coordinate edifici storage.
-- `buildings`: array ricco di entita` edificio tipizzate con footprint.
-  - campi principali: `building_id`, `type`, `category`, `tier`, `x`, `y`, `footprint`, `village_id`, `village_uid`, `connected_to_road`
-  - campi operativi produzione (debug): `operational_state`, `linked_resource_type`, `linked_resource_tiles_count`
-  - categorie attive: `residential`, `food_storage`, `production`, `governance`, `infrastructure`, `security`, `knowledge`, `health`, `culture`, `commerce`
-  - tier civiltà supportati: `0..5` (struttura dati pronta; enforcement gameplay non ancora attivo)
-- `houses_count`: totale strutture.
+Version semantics:
+- `schema_version` = contract/schema shape version
+- `state_version` = runtime snapshot version
 
-## Infrastructure systems
-- Catalogo infrastrutture separato da `BUILDING_CATALOG` nel core Python (`INFRASTRUCTURE_CATALOG`).
-- Sistemi supportati:
-  - `transport`
-  - `logistics`
-  - `water`
-  - `energy`
-  - `communication`
-  - `environment`
-- Tipi `transport` attualmente vicini al runtime:
-  - `path`, `road` (attivi semanticamente)
-  - `bridge` (placeholder)
-- `logistics` attuale: base strutturale con `storage_link` e `haul_route` come semantica di rete.
-- Altri sistemi (`water`, `energy`, `communication`, `environment`) sono placeholder strutturali per evoluzioni future.
+### Resource Nodes (terrain resources)
+- `food` (`Coord[]`)
+- `wood` (`Coord[]`)
+- `stone` (`Coord[]`)
 
-## Agents
-- `agents`: array entità vive.
-- Campi per agente:
-  - `agent_id` (string, stabile)
-  - `x`, `y` (int)
-  - `is_player` (bool)
-  - `player_id` (string|null)
-  - `role` (string) es. `npc`, `player`, `leader`, `farmer`, `builder`, `hauler`, `forager`
-  - `village_id` (int|null)
-  - `task` (string) task runtime attuale
+### Farms
+- `farms` (`FarmPlot[]`)
+- `farms_count` (`integer`)
 
-Metriche aggregate:
-- `population`, `players`, `npcs`, `avg_hunger`, `leaders_count`, `llm_interactions`
+`FarmPlot` fields:
+- `x` (`integer`)
+- `y` (`integer`)
+- `state` (`string`)
+- `growth` (`integer`)
+- `village_id` (`integer | null`)
 
-## Villages
-- `villages`: array villaggi rilevati dal core.
-- Campi principali:
-  - `village_uid` (string, stabile)
-  - `id` (int)
-  - `center` (`{x,y}`)
-  - `tiles` (array coordinate tile del cluster)
-  - `houses`, `population` (int)
-  - `leader_id` (int|null)
-  - `strategy`, `priority`, `phase` (string, se presente)
-  - `tier` (int, placeholder sviluppo insediamento; default corrente `1`)
-  - `relation`, `target_village_id`, `migration_target_id`
-  - `power` (number)
-  - `color` (string)
-  - `storage` (`food`, `wood`, `stone`)
-  - `storage_pos`, `farm_zone_center` (`{x,y}`)
-  - `needs` (object)
-  - `metrics` (object)
-  - `priority_history` (array)
-  - `leader_profile` (object|null)
+### Built Environment
+- `structures` (`Coord[]`) legacy house tiles
+- `roads` (`Coord[]`)
+- `storage_buildings` (`Coord[]`) legacy storage tiles
+- `buildings` (`Building[]`) canonical typed building objects
 
-## Civilization stats
-`civ_stats` aggrega stato macro-civiltà:
-- `largest_village_id`, `largest_village_houses`
-- `strongest_village_id`, `strongest_village_power`
-- `expanding_village_id`
-- `warring_villages`, `migrating_villages`
+`Building` fields (always present):
+- `building_id` (`string`)
+- `type` (`string`)
+- `category` (`string`)
+- `tier` (`integer`)
+- `x` (`integer`)
+- `y` (`integer`)
+- `footprint` (`Coord[]`)
+- `village_id` (`integer | null`)
+- `village_uid` (`string | null`)
+- `connected_to_road` (`boolean`)
+- `operational_state` (`string`)
+- `linked_resource_type` (`string | null`)
+- `linked_resource_tiles_count` (`integer`)
+- `service` (`object | null`)
+- `storage` (`ResourceBucket | null`)
+- `storage_capacity` (`integer | null`)
+- `construction_request` (`object | null`)
+- `construction_buffer` (`ResourceBucket | null`)
+- `construction_progress` (`integer | null`)
+- `construction_required_work` (`integer | null`)
+- `construction_complete_ratio` (`number | null`)
 
-## Contract stability notes
-- `schema_version` = versione del contratto.
-- `static_state_version` = versione del payload statico.
-- `state_version` = versione snapshot dinamico (orientata a emissione snapshot).
-- `/state` resta lo snapshot autoritativo dello stato corrente; `/state/events` e` uno stream complementare utile per debug/analytics/timeline tooling.
-- Gli observer devono:
-  - caricare `/state/static` una volta all'avvio
-  - fare polling di `/state` per aggiornamenti runtime
-  - usare `/state/events` in parallelo per eventi semantici, tollerando una history limitata dalla retention
-  - non inferire autorità simulativa dallo stato locale renderer
-  - usare `agent_id` e `village_uid` come identità stabili
+Observer note:
+- `type` and `category` are implementation-defined strings.
+- Clients should not assume a closed enum unless that enum is separately versioned.
 
-## Event types correnti
-- `agent_born`: emesso quando un agente viene aggiunto al mondo; payload con identita` agente e contesto base (`is_player`, `player_id`, `village_uid`).
-- `agent_died`: emesso quando un agente passa a `alive=False`; payload con identita` agente e motivo.
-- `village_created`: emesso quando il clustering rileva un nuovo villaggio non riconciliato con uno precedente; payload con `village_uid`, id numerico, centro e numero case iniziali.
-- `house_built`: emesso quando viene costruita una casa; payload con agente costruttore, coordinate e `village_uid`.
-- `farm_created`: emesso quando viene creato un plot agricolo; payload con agente, coordinate e `village_uid`.
-- `resource_harvested`: emesso su raccolta risorse (wild/farm/farm_haul/autopickup); payload con agente, tipo risorsa, quantita`, sorgente e coordinate.
-- `role_changed`: emesso quando cambia il ruolo agente tramite `world.set_agent_role`; payload con agente, ruolo precedente/successivo, reason e `village_uid`.
+`Building.service` when non-null:
+- `transport` (`number`)
+- `logistics` (`number`)
+- `efficiency_multiplier` (`number`)
+
+Nullability behavior:
+- `storage` and `storage_capacity` are non-null only for `type == "storage"` in canonical building records.
+- `construction_*` fields are non-null only when the building record contains construction state.
+- In legacy fallback serialization (`world.buildings` empty), `service`, `storage`, and construction fields are emitted as `null`.
+
+### Villages
+- `villages` (`Village[]`)
+
+Stable normalized fields provided by serializer:
+- `village_uid` (`string`) always populated by serializer (falls back to `legacy-{id}` if missing)
+- `tiles` (`Coord[]`) normalized + sorted
+- `storage` (`ResourceBucket`)
+- `storage_pos` (`Coord | null`)
+- `farm_zone_center` (`Coord | null`)
+- `tier` (`integer`)
+- `needs` (`object`)
+- `priority` (`string`)
+- `metrics` (`object`)
+
+Implementation passthrough fields:
+- Village objects are emitted as `{**v, ...normalized_fields}`.
+- Additional village keys from simulation internals are passed through when present (for example: `id`, `center`, `houses`, `population`, `leader_id`, `strategy`, `color`, `relation`, `target_village_id`, `migration_target_id`, `power`, `priority_history`, `leader_profile`, `proto_culture`, `culture_summary`, `phase`).
+
+Important implementation detail:
+- Passthrough keys are implementation-driven and may vary by runtime state.
+
+### Agents
+- `agents` (`Agent[]`)
+
+`Agent` fields (alive agents only):
+- `agent_id` (`string`)
+- `x` (`integer`)
+- `y` (`integer`)
+- `is_player` (`boolean`)
+- `player_id` (`string | null`)
+- `role` (`string`)
+- `village_id` (`integer | null`)
+- `task` (`string`)
+- `inventory` (`ResourceBucket`)
+- `max_inventory` (`integer`)
+
+### Aggregate Counters
+- `population` (`integer`)
+- `players` (`integer`)
+- `npcs` (`integer`)
+- `avg_hunger` (`number`, rounded to 2 decimals)
+- `food_count` (`integer`)
+- `wood_count` (`integer`)
+- `stone_count` (`integer`)
+- `houses_count` (`integer`)
+- `villages_count` (`integer`)
+- `leaders_count` (`integer`)
+- `llm_interactions` (`integer`)
+
+### Infrastructure Snapshot Fields
+- `infrastructure_systems_available` (`string[]`)
+- `transport_network_counts` (`{ [network_type: string]: integer }`)
+
+Transitional note:
+- These two fields are infrastructure observability outputs derived from `world.infrastructure_state`.
+- They are observer/debug-facing summaries, not a full infrastructure graph contract.
+
+### Civilization Stats (`civ_stats`)
+- `largest_village_id` (`integer | null`)
+- `largest_village_houses` (`integer`)
+- `strongest_village_id` (`integer | null`)
+- `strongest_village_power` (`number`)
+- `expanding_village_id` (`integer | null`)
+- `warring_villages` (`integer`)
+- `migrating_villages` (`integer`)
+
+## Type Aliases
+- `Coord = { x: integer, y: integer }`
+- `ResourceBucket = { food: integer, wood: integer, stone: integer }`
+
+## Realistic Example (`GET /state`)
+
+```json
+{
+  "schema_version": "1.1.0",
+  "state_version": 1,
+  "tick": 42,
+  "food": [{ "x": 3, "y": 4 }, { "x": 5, "y": 6 }],
+  "wood": [{ "x": 8, "y": 2 }],
+  "stone": [{ "x": 9, "y": 9 }],
+  "farms": [
+    { "x": 12, "y": 10, "state": "growing", "growth": 2, "village_id": 1 }
+  ],
+  "farms_count": 1,
+  "structures": [{ "x": 10, "y": 10 }],
+  "roads": [{ "x": 10, "y": 9 }, { "x": 10, "y": 10 }, { "x": 10, "y": 11 }],
+  "storage_buildings": [{ "x": 11, "y": 10 }],
+  "buildings": [
+    {
+      "building_id": "b-000001",
+      "type": "house",
+      "category": "residential",
+      "tier": 1,
+      "x": 10,
+      "y": 10,
+      "footprint": [{ "x": 10, "y": 10 }],
+      "village_id": 1,
+      "village_uid": "v-000001",
+      "connected_to_road": true,
+      "operational_state": "active",
+      "linked_resource_type": null,
+      "linked_resource_tiles_count": 0,
+      "service": { "transport": 1.0, "logistics": 1.0, "efficiency_multiplier": 1.5 },
+      "storage": null,
+      "storage_capacity": null,
+      "construction_request": null,
+      "construction_buffer": null,
+      "construction_progress": null,
+      "construction_required_work": null,
+      "construction_complete_ratio": null
+    }
+  ],
+  "villages": [
+    {
+      "id": 1,
+      "village_uid": "v-000001",
+      "center": { "x": 10, "y": 10 },
+      "houses": 1,
+      "population": 1,
+      "tiles": [{ "x": 10, "y": 10 }],
+      "leader_id": null,
+      "strategy": "gather food",
+      "color": "#8b4513",
+      "relation": "peace",
+      "target_village_id": null,
+      "migration_target_id": null,
+      "power": 0,
+      "storage": { "food": 6, "wood": 3, "stone": 1 },
+      "storage_pos": { "x": 11, "y": 10 },
+      "farm_zone_center": { "x": 12, "y": 10 },
+      "priority_history": [],
+      "leader_profile": null,
+      "tier": 1,
+      "proto_culture": null,
+      "culture_summary": null,
+      "needs": { "need_storage": false },
+      "priority": "stabilize",
+      "metrics": { "active_farms": 1, "storage_exists": true }
+    }
+  ],
+  "civ_stats": {
+    "largest_village_id": 1,
+    "largest_village_houses": 1,
+    "strongest_village_id": 1,
+    "strongest_village_power": 0,
+    "expanding_village_id": null,
+    "warring_villages": 0,
+    "migrating_villages": 0
+  },
+  "agents": [
+    {
+      "agent_id": "a-000001",
+      "x": 10,
+      "y": 10,
+      "is_player": false,
+      "player_id": null,
+      "role": "builder",
+      "village_id": 1,
+      "task": "build_storage",
+      "inventory": { "food": 1, "wood": 0, "stone": 0 },
+      "max_inventory": 6
+    }
+  ],
+  "population": 1,
+  "players": 0,
+  "npcs": 1,
+  "avg_hunger": 80.0,
+  "food_count": 2,
+  "wood_count": 1,
+  "stone_count": 1,
+  "houses_count": 1,
+  "villages_count": 1,
+  "leaders_count": 0,
+  "llm_interactions": 0,
+  "infrastructure_systems_available": ["communication", "energy", "environment", "logistics", "transport", "water"],
+  "transport_network_counts": { "logistics_corridor": 1, "road": 2 }
+}
+```
+
+## Stability Rules for Observers
+- Treat field names and nullability above as authoritative for current backend behavior.
+- Ignore unknown future fields safely.
+- Do not infer simulation authority from client-side state.

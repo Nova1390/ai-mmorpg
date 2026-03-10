@@ -317,6 +317,14 @@ def update_village_ai(world: "World") -> None:
         storage_pos = village.get("storage_pos")
         if storage_pos:
             storage_exists = (storage_pos["x"], storage_pos["y"]) in getattr(world, "storage_buildings", set())
+        camp_count = 0
+        if hasattr(world, "compute_progression_snapshot"):
+            try:
+                ps = world.compute_progression_snapshot()
+                camps_by_village = ps.get("active_camps_by_village", {}) if isinstance(ps, dict) else {}
+                camp_count = int((camps_by_village or {}).get(str(village.get("village_uid", "")), 0))
+            except Exception:
+                camp_count = 0
 
         housing_capacity = houses * 4
         food_stock = storage.get("food", 0)
@@ -339,7 +347,14 @@ def update_village_ai(world: "World") -> None:
             need_storage = True
         min_farms_target = max(3, pop // 3)
         need_farms = active_farms < min_farms_target
-        need_roads = active_farms >= 3 and len(world.roads) < active_farms
+        road_maturity_ready = bool(
+            pop >= 5
+            and houses >= 2
+            and (storage_exists or camp_count > 0)
+            and food_stock >= max(3, pop // 2)
+            and not food_buffer_critical
+        )
+        need_roads = bool(road_maturity_ready and active_farms >= 3 and len(world.roads) < active_farms)
         need_materials = wood_stock < 6 or stone_stock < 4
         hunger_critical = avg_hunger < 45
         secure_food_deescalate = (
@@ -368,6 +383,14 @@ def update_village_ai(world: "World") -> None:
 
         village_phase = _detect_village_phase(houses, active_farms, storage_exists, food_stock, pop)
         village["phase"] = village_phase
+        settlement_stage = "survival"
+        if pop >= 4 and camp_count > 0:
+            settlement_stage = "camp"
+        if houses >= 2:
+            settlement_stage = "village"
+        if houses >= 6 and storage_exists and not food_buffer_low:
+            settlement_stage = "mature_village"
+        village["settlement_stage"] = settlement_stage
         production_metrics = village.get("production_metrics", {})
         total_food_gathered = int(production_metrics.get("total_food_gathered", 0))
         total_wood_gathered = int(production_metrics.get("total_wood_gathered", 0))
@@ -430,6 +453,9 @@ def update_village_ai(world: "World") -> None:
             "specialist_allocation_pressure": specialist_allocation_pressure,
             "last_specialist_rebalance_tick": last_specialist_rebalance_tick,
             "specialist_rebalance_due": specialist_rebalance_due,
+            "camp_count": int(camp_count),
+            "road_maturity_ready": bool(road_maturity_ready),
+            "settlement_stage": settlement_stage,
             "food_price_index": float(((market_state.get("food") or {}).get("local_price_index", 1.0))),
             "wood_price_index": float(((market_state.get("wood") or {}).get("local_price_index", 1.0))),
             "stone_price_index": float(((market_state.get("stone") or {}).get("local_price_index", 1.0))),

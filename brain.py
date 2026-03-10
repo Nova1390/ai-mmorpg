@@ -15,6 +15,7 @@ from agent import (
     ensure_agent_proto_traits,
     find_recent_resource_memory,
     maybe_generate_innovation_proposal,
+    get_known_camp_spot,
     get_known_resource_spot,
     get_known_useful_building_target,
     get_recent_memory_events,
@@ -312,6 +313,36 @@ def apply_village_priority(village: dict, priority: str, tick: int, source: str)
 class FoodBrain:
     def __init__(self, vision_radius: int = 8):
         self.vision_radius = vision_radius
+        self.target_stickiness_ticks = 4
+        self.target_switch_improvement_margin = 2
+
+    def _gap_role_for_task(self, agent) -> Optional[str]:
+        role = str(getattr(agent, "role", "npc")).lower()
+        task = str(getattr(agent, "task", "idle")).lower()
+        if role in {"farmer", "forager", "hauler", "builder", "miner", "woodcutter"}:
+            return role
+        task_map = {
+            "farm_cycle": "farmer",
+            "gather_food_wild": "forager",
+            "food_logistics": "hauler",
+            "village_logistics": "hauler",
+            "build_storage": "builder",
+            "build_house": "builder",
+            "gather_materials": "builder",
+            "mine_cycle": "miner",
+            "lumber_cycle": "woodcutter",
+        }
+        return task_map.get(task)
+
+    def _record_gap_stage(self, world, agent, stage: str) -> None:
+        role = self._gap_role_for_task(agent)
+        if role and hasattr(world, "record_assignment_pipeline_stage"):
+            world.record_assignment_pipeline_stage(agent, role, stage)
+
+    def _record_gap_block(self, world, agent, reason: str) -> None:
+        role = self._gap_role_for_task(agent)
+        if role and hasattr(world, "record_assignment_pipeline_block_reason"):
+            world.record_assignment_pipeline_block_reason(agent, role, reason)
 
     def _new_intention(
         self,
@@ -468,6 +499,14 @@ class FoodBrain:
         if task == "gather_food_wild":
             target = self._attention_resource_target(agent, "food")
             return self._new_intention(world, "gather_food", target=target, resource_type="food")
+
+        if role == "farmer" or task == "farm_cycle":
+            farm_target = self.find_farm_target(agent, world, prefer_ripe=True)
+            if farm_target is not None:
+                return self._new_intention(world, "gather_food", target=farm_target, resource_type="food")
+            farm_build = self.find_farm_build_target(agent, world)
+            if farm_build is not None:
+                return self._new_intention(world, "build_structure", target=farm_build)
 
         resources = ("food", "wood", "stone")
         if preferred_resource in {"food", "wood", "stone"}:
@@ -722,7 +761,7 @@ class FoodBrain:
 
     def _evaluate_intention(self, world, agent) -> Optional[Tuple[str, ...]]:
         task = str(getattr(agent, "task", "idle")).lower()
-        if task in {"bootstrap_gather", "bootstrap_build_house", "manage_village", "player_controlled"}:
+        if task in {"bootstrap_gather", "bootstrap_build_house", "camp_supply_food", "manage_village", "player_controlled", "rest"}:
             return None
 
         hunger = float(getattr(agent, "hunger", 100.0))
@@ -802,25 +841,262 @@ class FoodBrain:
 
             return self.wander(agent, world)
 
+        if task == "camp_supply_food":
+            anchor = getattr(agent, "proto_task_anchor", {})
+            source_pos = tuple(anchor.get("source_pos", ())) if isinstance(anchor, dict) else ()
+            drop_pos = tuple(anchor.get("drop_pos", ())) if isinstance(anchor, dict) else ()
+            if int(agent.inventory.get("food", 0)) > 0 and hasattr(world, "nearest_active_camp_for_agent"):
+                if len(drop_pos) == 2:
+                    target = (int(drop_pos[0]), int(drop_pos[1]))
+                else:
+                    camp = world.nearest_active_camp_for_agent(agent, max_distance=18)
+                    if isinstance(camp, dict):
+                        target = (int(camp.get("x", agent.x)), int(camp.get("y", agent.y)))
+                    else:
+                        target = None
+                if target is not None:
+                    if abs(int(agent.x) - target[0]) + abs(int(agent.y) - target[1]) > 1:
+                        return self.move_towards(agent, world, target)
+                    return ("wait",)
+            if len(source_pos) == 2:
+                target = (int(source_pos[0]), int(source_pos[1]))
+                return self.move_towards(agent, world, target)
+            target = self.find_nearest(agent, world.food, "food", self.vision_radius + 6)
+            if target is not None:
+                return self.move_towards(agent, world, target)
+            return self.wander(agent, world)
+
         # -----------------------------
         # 2) task-guided logic
         # -----------------------------
-        if task == "farm_cycle":
-            village = world.get_village_by_id(getattr(agent, "village_id", None))
-            wallet = village.get("storage", {}) if village else agent.inventory
+        def _nearest_construction_site_target(building_type: str) -> Optional[Tuple[int, int]]:
+            village_id = getattr(agent, "village_id", None)
+            candidates = []
+            for building in getattr(world, "buildings", {}).values():
+                if not isinstance(building, dict):
+                    continue
+                if str(building.get("type", "")) != str(building_type):
+                    continue
+                if str(building.get("operational_state", "")) != "under_construction":
+                    continue
+                if village_id is not None and building.get("village_id") != village_id:
+                    continue
+                bx = int(building.get("x", 0))
+                by = int(building.get("y", 0))
+                dist = abs(agent.x - bx) + abs(agent.y - by)
+                candidates.append((dist, str(building.get("building_id", "")), bx, by))
+            if not candidates:
+                return None
+            candidates.sort(key=lambda item: (item[0], item[1]))
+            _, _, tx, ty = candidates[0]
+            return (tx, ty)
 
-            if wallet.get("wood", 0) < 1:
-                target = self.find_nearest(agent, world.wood, "wood", max(world.width, world.height))
+        def _nearest_under_construction_site_with_needs() -> Optional[Tuple[int, int]]:
+            village_id = getattr(agent, "village_id", None)
+            candidates = []
+            for building in getattr(world, "buildings", {}).values():
+                if not isinstance(building, dict):
+                    continue
+                if str(building.get("operational_state", "")) != "under_construction":
+                    continue
+                if village_id is not None and building.get("village_id") != village_id:
+                    continue
+                req = building.get("construction_request", {})
+                if not isinstance(req, dict):
+                    continue
+                outstanding = 0
+                for resource in ("wood", "stone", "food"):
+                    needed = max(0, int(req.get(f"{resource}_needed", 0)))
+                    reserved = max(0, int(req.get(f"{resource}_reserved", 0)))
+                    buf = max(0, int((building.get("construction_buffer", {}) or {}).get(resource, 0)))
+                    outstanding += max(0, needed - reserved - buf)
+                if outstanding <= 0:
+                    continue
+                bx = int(building.get("x", 0))
+                by = int(building.get("y", 0))
+                dist = abs(agent.x - bx) + abs(agent.y - by)
+                waiting_tick = int(building.get("builder_waiting_tick", -10_000))
+                recent_wait = 0 if int(getattr(world, "tick", 0)) - waiting_tick <= 24 else 1
+                candidates.append((recent_wait, dist, str(building.get("building_id", "")), bx, by))
+            if not candidates:
+                return None
+            candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+            _, _, _, tx, ty = candidates[0]
+            return (tx, ty)
+
+        def _village_by_uid(vuid: str) -> Optional[Dict[str, Any]]:
+            uid = str(vuid or "")
+            if not uid:
+                return None
+            for village in getattr(world, "villages", []):
+                if not isinstance(village, dict):
+                    continue
+                if str(village.get("village_uid", "")) == uid:
+                    return village
+            return None
+
+        def _social_gravity_return_target() -> Optional[Tuple[Coord, str, str]]:
+            if int(getattr(agent, "hunger", 100)) < 22:
+                return None
+            happiness = max(0.0, min(100.0, float(getattr(agent, "happiness", 50.0))))
+            status = str(getattr(agent, "village_affiliation_status", "unaffiliated"))
+            if status not in {"resident", "attached", "transient"}:
+                return None
+            target_village = None
+            home_uid = str(getattr(agent, "home_village_uid", "") or "")
+            primary_uid = str(getattr(agent, "primary_village_uid", "") or "")
+            home_target: Optional[Coord] = None
+            home_building_id = getattr(agent, "home_building_id", None)
+            if status == "resident" and home_building_id is not None:
+                home = getattr(world, "buildings", {}).get(str(home_building_id))
+                if isinstance(home, dict) and str(home.get("type", "")) == "house":
+                    home_target = (int(home.get("x", agent.x)), int(home.get("y", agent.y)))
+            if status == "resident" and home_uid:
+                target_village = _village_by_uid(home_uid)
+            if target_village is None and primary_uid:
+                target_village = _village_by_uid(primary_uid)
+            if target_village is None:
+                target_village = world.get_village_by_id(getattr(agent, "village_id", None))
+            if not isinstance(target_village, dict):
+                return None
+            center = target_village.get("center", {})
+            if not isinstance(center, dict):
+                return None
+            target = home_target or (int(center.get("x", agent.x)), int(center.get("y", agent.y)))
+            dist = abs(int(agent.x) - target[0]) + abs(int(agent.y) - target[1])
+            keep_radius = 12
+            if status == "resident":
+                keep_radius = 6 if home_target is not None else 7
+            elif status == "attached":
+                keep_radius = 9
+            elif status == "transient":
+                keep_radius = 12
+            uid = str(target_village.get("village_uid", "") or "")
+            if dist > keep_radius:
+                event_key = "home_return_events" if status == "resident" and home_target is not None else "return_to_village_events"
+                return (target, event_key, uid)
+            linger_bias = 0.2 + ((happiness - 50.0) / 250.0)
+            if status in {"resident", "attached"} and dist > 3 and random.random() < max(0.1, min(0.45, linger_bias)):
+                event_key = "home_return_events" if status == "resident" and home_target is not None else "stay_near_village_bias_events"
+                return (target, event_key, uid)
+            return None
+
+        def _camp_return_target(*, for_rest: bool = False) -> Optional[Tuple[Coord, str, str]]:
+            if int(getattr(agent, "hunger", 100)) < (20 if for_rest else 22):
+                return None
+            happiness = max(0.0, min(100.0, float(getattr(agent, "happiness", 50.0))))
+            camp: Optional[Dict[str, Any]] = None
+            target: Optional[Coord] = None
+            camp_id = ""
+            camp_uid = ""
+            if hasattr(world, "nearest_active_camp_for_agent"):
+                local_camp = world.nearest_active_camp_for_agent(agent, max_distance=18 if for_rest else 16)
+                if isinstance(local_camp, dict):
+                    camp = local_camp
+                    target = (int(camp.get("x", agent.x)), int(camp.get("y", agent.y)))
+                    camp_id = str(camp.get("camp_id", ""))
+                    camp_uid = str(camp.get("village_uid", "") or "")
+            if target is None:
+                known = get_known_camp_spot(agent, min_confidence=0.4, max_age_ticks=220, world=world)
+                if known is None:
+                    return None
+                target = (int(known[0]), int(known[1]))
+            dist = abs(int(agent.x) - target[0]) + abs(int(agent.y) - target[1])
+            if dist <= (1 if for_rest else 3):
+                return None
+            food_bias = 0.0
+            if hasattr(world, "camp_has_food_for_agent") and bool(world.camp_has_food_for_agent(agent, max_distance=4)):
+                food_bias = 0.06
+            keep_camp_orbit = 0.28 + ((happiness - 50.0) / 225.0) + food_bias
+            if not for_rest and dist <= 7 and random.random() >= max(0.12, min(0.5, keep_camp_orbit)):
+                return None
+            return (target, camp_id, camp_uid)
+
+        if task == "rest":
+            region_uid = str(world._resolve_agent_work_village_uid(agent) or "") if hasattr(world, "_resolve_agent_work_village_uid") else ""
+            if int(getattr(agent, "hunger", 100)) < 20:
+                if hasattr(world, "record_camp_not_chosen_reason"):
+                    world.record_camp_not_chosen_reason("hunger_override", region=region_uid or None)
+                target = self.find_nearest(agent, world.food, "food", self.vision_radius + 3)
                 if target is not None:
                     return self.move_towards(agent, world, target)
+            role_key = str(getattr(agent, "role", "other") or "other")
+            uid = str(world._resolve_agent_work_village_uid(agent) or "") if hasattr(world, "_resolve_agent_work_village_uid") else ""
+            home_id = getattr(agent, "home_building_id", None)
+            if home_id is not None:
+                home = getattr(world, "buildings", {}).get(str(home_id))
+                if isinstance(home, dict) and str(home.get("type", "")) == "house":
+                    if hasattr(world, "record_recovery_stage"):
+                        world.record_recovery_stage(agent, "home_target_available", village_uid=uid, role=role_key)
+                    hx = int(home.get("x", agent.x))
+                    hy = int(home.get("y", agent.y))
+                    if abs(int(agent.x) - hx) + abs(int(agent.y) - hy) > 1:
+                        if hasattr(world, "record_camp_targeting"):
+                            world.record_camp_targeting("rest_target_home", region=uid or None)
+                        if hasattr(world, "record_recovery_stage"):
+                            world.record_recovery_stage(agent, "home_target_selected", village_uid=uid, role=role_key)
+                        return self.move_towards(agent, world, (hx, hy))
+                    if hasattr(world, "record_camp_targeting"):
+                        world.record_camp_targeting("rest_target_home", region=uid or None)
+                elif hasattr(world, "record_recovery_failure_reason"):
+                    world.record_recovery_failure_reason(agent, "no_valid_home_target", village_uid=uid, role=role_key)
+            elif hasattr(world, "record_recovery_failure_reason"):
+                world.record_recovery_failure_reason(agent, "no_home", village_uid=uid, role=role_key)
+            camp_target = _camp_return_target(for_rest=True)
+            if camp_target is not None:
+                target, camp_id, camp_uid = camp_target
+                if hasattr(world, "record_camp_targeting"):
+                    world.record_camp_targeting("rest_target_camp", region=camp_uid or uid or None)
+                if hasattr(world, "record_camp_event"):
+                    world.record_camp_event(
+                        "camp_return_events",
+                        camp_id=camp_id or None,
+                        village_uid=camp_uid or None,
+                    )
+                return self.move_towards(agent, world, target)
+            elif hasattr(world, "record_camp_not_chosen_reason"):
+                has_inactive_in_range = False
+                for camp in (getattr(world, "camps", {}) or {}).values():
+                    if not isinstance(camp, dict):
+                        continue
+                    cx = int(camp.get("x", agent.x))
+                    cy = int(camp.get("y", agent.y))
+                    dist = abs(int(agent.x) - cx) + abs(int(agent.y) - cy)
+                    if dist <= 16 and not bool(camp.get("active", False)):
+                        has_inactive_in_range = True
+                        break
+                world.record_camp_not_chosen_reason(
+                    "camp_not_active" if has_inactive_in_range else "no_camp_in_range",
+                    region=uid or None,
+                )
+            social_target = _social_gravity_return_target()
+            if social_target is not None:
+                target, event_key, uid = social_target
+                if hasattr(world, "record_camp_not_chosen_reason"):
+                    world.record_camp_not_chosen_reason("task_override", region=uid or None)
+                if hasattr(world, "record_social_gravity_event"):
+                    world.record_social_gravity_event(event_key, village_uid=uid or None)
+                return self.move_towards(agent, world, target)
+            if hasattr(world, "record_camp_targeting"):
+                world.record_camp_targeting("rest_target_idle", region=uid or None)
+            return ("wait",)
 
+        if task == "farm_cycle":
+            village = world.get_village_by_id(getattr(agent, "village_id", None))
             farm_target = self.find_farm_target(agent, world, prefer_ripe=True)
             if farm_target is not None:
                 return self.move_towards(agent, world, farm_target)
 
+            # Bootstrap-only material pass: gather prep wood when no usable farm target exists.
+            if int(agent.inventory.get("wood", 0)) < 1:
+                target = self.find_nearest(agent, world.wood, "wood", max(world.width, world.height))
+                if target is not None:
+                    return self.move_towards(agent, world, target)
+
             build_pos = self.find_farm_build_target(agent, world)
             if build_pos is not None:
                 return self.move_towards(agent, world, build_pos)
+            self._record_gap_block(world, agent, "no_farm_target")
 
         if task == "mine_cycle":
             assigned_id = getattr(agent, "assigned_building_id", None)
@@ -833,6 +1109,7 @@ class FoodBrain:
             target = self.find_nearest(agent, world.stone, "stone", self.vision_radius + 5)
             if target is not None:
                 return self.move_towards(agent, world, target)
+            self._record_gap_block(world, agent, "no_resource_target")
 
         if task == "lumber_cycle":
             assigned_id = getattr(agent, "assigned_building_id", None)
@@ -845,11 +1122,15 @@ class FoodBrain:
             target = self.find_nearest(agent, world.wood, "wood", self.vision_radius + 5)
             if target is not None:
                 return self.move_towards(agent, world, target)
+            self._record_gap_block(world, agent, "no_resource_target")
 
         if task == "build_storage":
             salient_storage = self._attention_building_target(agent, world, {"storage"})
             if salient_storage is not None:
                 return self.move_towards(agent, world, salient_storage)
+            site_target = _nearest_construction_site_target("storage")
+            if site_target is not None:
+                return self.move_towards(agent, world, site_target)
             collaborator = self._attention_social_target(agent, same_village_only=True)
             if collaborator is not None and random.random() < 0.2:
                 return self.move_towards(agent, world, collaborator)
@@ -882,6 +1163,9 @@ class FoodBrain:
             salient_house = self._attention_building_target(agent, world, {"house", "storage"})
             if salient_house is not None:
                 return self.move_towards(agent, world, salient_house)
+            site_target = _nearest_construction_site_target("house")
+            if site_target is not None:
+                return self.move_towards(agent, world, site_target)
             collaborator = self._attention_social_target(agent, same_village_only=True)
             if collaborator is not None and random.random() < 0.2:
                 return self.move_towards(agent, world, collaborator)
@@ -913,6 +1197,7 @@ class FoodBrain:
                     target = self.find_nearest(agent, world.stone, "stone", self.vision_radius + 4)
                     if target is not None:
                         return self.move_towards(agent, world, target)
+            self._record_gap_block(world, agent, "no_target_candidate")
 
         if task == "prototype_attempt":
             target = None
@@ -952,11 +1237,29 @@ class FoodBrain:
                 return self.move_towards(agent, world, village_home)
 
         if task == "gather_food_wild":
+            anchor = getattr(agent, "proto_task_anchor", {})
+            source_pos = tuple(anchor.get("source_pos", ())) if isinstance(anchor, dict) else ()
+            if len(source_pos) == 2 and tuple(source_pos) in getattr(world, "food", set()):
+                return self.move_towards(agent, world, (int(source_pos[0]), int(source_pos[1])))
             target = self.find_nearest(agent, world.food, "food", self.vision_radius + 3)
             if target is not None:
                 return self.move_towards(agent, world, target)
+            social_target = _social_gravity_return_target()
+            if social_target is not None:
+                target, event_key, uid = social_target
+                if hasattr(world, "record_social_gravity_event"):
+                    world.record_social_gravity_event(event_key, village_uid=uid or None)
+                return self.move_towards(agent, world, target)
+            self._record_gap_block(world, agent, "no_resource_target")
 
         if task == "food_logistics":
+            site_target = _nearest_under_construction_site_with_needs()
+            if site_target is not None and (
+                int(agent.inventory.get("wood", 0)) > 0
+                or int(agent.inventory.get("stone", 0)) > 0
+                or int(agent.inventory.get("food", 0)) > 0
+            ):
+                return self.move_towards(agent, world, site_target)
             if agent.inventory.get("food", 0) > 0:
                 village = world.get_village_by_id(getattr(agent, "village_id", None))
                 if village:
@@ -971,8 +1274,22 @@ class FoodBrain:
             village_home = self._get_known_village_center(agent, world)
             if village_home is not None:
                 return self.move_towards(agent, world, village_home)
+            self._record_gap_block(world, agent, "no_target_candidate")
 
         if task == "village_logistics":
+            site_target = _nearest_under_construction_site_with_needs()
+            if site_target is not None:
+                if (
+                    int(agent.inventory.get("wood", 0)) > 0
+                    or int(agent.inventory.get("stone", 0)) > 0
+                    or int(agent.inventory.get("food", 0)) > 0
+                ):
+                    return self.move_towards(agent, world, site_target)
+                village = world.get_village_by_id(getattr(agent, "village_id", None))
+                if village:
+                    sp = village.get("storage_pos")
+                    if sp:
+                        return self.move_towards(agent, world, (sp["x"], sp["y"]))
             salient_logistics = self._attention_building_target(agent, world, {"storage", "house"})
             if salient_logistics is not None and random.random() < 0.25:
                 return self.move_towards(agent, world, salient_logistics)
@@ -1045,6 +1362,7 @@ class FoodBrain:
             village_home = self._get_known_village_center(agent, world)
             if village_home is not None and random.random() < 0.5:
                 return self.move_towards(agent, world, village_home)
+            self._record_gap_block(world, agent, "no_target_candidate")
 
         if task == "manage_village":
             village_home = self._get_known_village_center(agent, world)
@@ -1103,8 +1421,28 @@ class FoodBrain:
             if target is not None:
                 return self.move_towards(agent, world, target)
 
+        social_target = _social_gravity_return_target()
+        if social_target is not None:
+            target, event_key, uid = social_target
+            if hasattr(world, "record_social_gravity_event"):
+                world.record_social_gravity_event(event_key, village_uid=uid or None)
+            return self.move_towards(agent, world, target)
+
+        camp_target = _camp_return_target(for_rest=False)
+        if camp_target is not None:
+            target, camp_id, camp_uid = camp_target
+            if hasattr(world, "record_camp_event"):
+                world.record_camp_event(
+                    "camp_return_events",
+                    camp_id=camp_id or None,
+                    village_uid=camp_uid or None,
+                )
+            return self.move_towards(agent, world, target)
+
         village_home = self._get_known_village_center(agent, world)
-        if village_home is not None and random.random() < 0.35:
+        happiness = max(0.0, min(100.0, float(getattr(agent, "happiness", 50.0))))
+        village_return_bias = 0.35 + ((happiness - 50.0) / 250.0)
+        if village_home is not None and random.random() < max(0.18, min(0.5, village_return_bias)):
             return self.move_towards(agent, world, village_home)
 
         return self.wander(agent, world)
@@ -1136,10 +1474,26 @@ class FoodBrain:
                 if c:
                     return (c["x"], c["y"])
 
+        preferred_uid = str(getattr(agent, "home_village_uid", "") or getattr(agent, "primary_village_uid", "") or "")
+        if preferred_uid:
+            for village in getattr(world, "villages", []):
+                if not isinstance(village, dict):
+                    continue
+                if str(village.get("village_uid", "")) != preferred_uid:
+                    continue
+                c = village.get("center")
+                if isinstance(c, dict):
+                    return (int(c.get("x", agent.x)), int(c.get("y", agent.y)))
+
         mem = agent.memory.get("villages", set())
         if mem:
             ax, ay = agent.x, agent.y
             return min(mem, key=lambda p: abs(p[0] - ax) + abs(p[1] - ay))
+
+        if hasattr(world, "nearest_active_camp_for_agent"):
+            camp = world.nearest_active_camp_for_agent(agent, max_distance=12)
+            if isinstance(camp, dict):
+                return (int(camp.get("x", agent.x)), int(camp.get("y", agent.y)))
 
         return None
 
@@ -1264,6 +1618,7 @@ class FoodBrain:
         resource_set: Set[Coord],
         memory_key: str,
         radius: int,
+        world: Optional[Any] = None,
     ) -> Optional[Coord]:
         ax = agent.x
         ay = agent.y
@@ -1272,7 +1627,7 @@ class FoodBrain:
         best_d = 999999
 
         # Practical knowledge bias: use compact learned spots before pure search.
-        known_spot = get_known_resource_spot(agent, memory_key, min_confidence=0.35)
+        known_spot = get_known_resource_spot(agent, memory_key, min_confidence=0.35, world=world)
         if known_spot is not None:
             kx, ky = known_spot
             d = abs(kx - ax) + abs(ky - ay)
@@ -1558,32 +1913,71 @@ class FoodBrain:
 
     def move_towards(self, agent, world, target: Coord) -> Tuple[str, ...]:
         start = (agent.x, agent.y)
+        target = self._apply_target_stickiness(agent, world, target)
+        self._record_gap_stage(world, agent, "target_found_count")
 
         if start == target:
             return ("wait",)
 
-        path = astar(world, start, target)
+        path = self._get_cached_path(agent, start, target)
+        if path is None:
+            if hasattr(world, "record_movement_path_recompute"):
+                world.record_movement_path_recompute(agent, target)
+            path = astar(world, start, target)
+            self._store_cached_path(agent, target, path)
 
         if path is not None and len(path) >= 2:
             next_x, next_y = path[1]
             dx = next_x - agent.x
             dy = next_y - agent.y
 
-            if world.is_walkable(next_x, next_y) and not world.is_occupied(next_x, next_y):
+            immediate_backtrack = self._is_immediate_backtrack(agent, (next_x, next_y))
+            if world.is_walkable(next_x, next_y) and not world.is_occupied(next_x, next_y) and not immediate_backtrack:
+                self._advance_cached_path(agent, start, target, path)
+                self._record_gap_stage(world, agent, "movement_started_count")
                 return ("move", dx, dy)
-            detour = self.local_detour_step(agent, world, target)
+            detour = self.local_detour_step(
+                agent,
+                world,
+                target,
+                avoid_pos=getattr(agent, "movement_prev_tile", None),
+                allow_backtrack=self._allow_backtrack_override(agent, world, target),
+            )
             if detour is not None:
+                self._clear_cached_path(agent)
+                self._record_gap_stage(world, agent, "movement_started_count")
                 return detour
 
-        return self.greedy_step(agent, world, target)
+        fallback = self.greedy_step(agent, world, target)
+        if isinstance(fallback, tuple) and len(fallback) >= 1 and str(fallback[0]) == "move":
+            self._clear_cached_path(agent)
+            self._record_gap_stage(world, agent, "movement_started_count")
+            return fallback
+        self._clear_cached_path(agent)
+        self._record_gap_block(world, agent, "no_path")
+        return fallback
 
     def greedy_step(self, agent, world, target: Coord) -> Tuple[str, ...]:
-        detour = self.local_detour_step(agent, world, target)
+        detour = self.local_detour_step(
+            agent,
+            world,
+            target,
+            avoid_pos=getattr(agent, "movement_prev_tile", None),
+            allow_backtrack=self._allow_backtrack_override(agent, world, target),
+        )
         if detour is not None:
             return detour
         return self.wander(agent, world)
 
-    def local_detour_step(self, agent, world, target: Coord) -> Optional[Tuple[str, ...]]:
+    def local_detour_step(
+        self,
+        agent,
+        world,
+        target: Coord,
+        *,
+        avoid_pos: Optional[Coord] = None,
+        allow_backtrack: bool = False,
+    ) -> Optional[Tuple[str, ...]]:
         tx, ty = target
         ax, ay = agent.x, agent.y
         current_d = abs(tx - ax) + abs(ty - ay)
@@ -1596,10 +1990,18 @@ class FoodBrain:
             nx, ny = ax + dx, ay + dy
             if not world.is_walkable(nx, ny) or world.is_occupied(nx, ny):
                 continue
+            if (
+                avoid_pos is not None
+                and not allow_backtrack
+                and (int(nx), int(ny)) == (int(avoid_pos[0]), int(avoid_pos[1]))
+            ):
+                continue
             nd = abs(tx - nx) + abs(ty - ny)
             ranked.append((nd, dx, dy))
 
         if not ranked:
+            if avoid_pos is not None and not allow_backtrack:
+                return self.local_detour_step(agent, world, target, avoid_pos=None, allow_backtrack=True)
             return None
 
         ranked.sort(key=lambda t: t[0])
@@ -1608,6 +2010,9 @@ class FoodBrain:
         for nd, dx, dy in ranked:
             if nd < current_d:
                 return ("move", dx, dy)
+
+        if current_d <= 2 and not allow_backtrack:
+            return ("wait",)
 
         nd, dx, dy = ranked[0]
         if nd <= current_d + 1:
@@ -1618,16 +2023,110 @@ class FoodBrain:
     def wander(self, agent, world) -> Tuple[str, ...]:
         dirs = [(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)]
         random.shuffle(dirs)
+        avoid_pos = getattr(agent, "movement_prev_tile", None)
 
         for dx, dy in dirs:
             if dx == 0 and dy == 0:
                 return ("wait",)
 
             nx, ny = agent.x + dx, agent.y + dy
+            if (
+                avoid_pos is not None
+                and (int(nx), int(ny)) == (int(avoid_pos[0]), int(avoid_pos[1]))
+                and not self._is_urgent_movement_context(agent, world)
+            ):
+                continue
             if world.is_walkable(nx, ny) and not world.is_occupied(nx, ny):
                 return ("move", dx, dy)
 
         return ("wait",)
+
+    def _is_urgent_movement_context(self, agent, world) -> bool:
+        hunger = float(getattr(agent, "hunger", 100.0))
+        if hunger <= 15.0:
+            return True
+        if str(getattr(agent, "task", "")) == "survive":
+            return True
+        intention = getattr(agent, "current_intention", {})
+        if isinstance(intention, dict):
+            itype = str(intention.get("type", ""))
+            if itype in {"survive", "gather_food"} and hunger <= 25.0:
+                return True
+        return False
+
+    def _apply_target_stickiness(self, agent, world, incoming_target: Coord) -> Coord:
+        target = (int(incoming_target[0]), int(incoming_target[1]))
+        start = (int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0)))
+        current_tick = int(getattr(world, "tick", 0))
+        committed = getattr(agent, "movement_commit_target", None)
+        commit_until = int(getattr(agent, "movement_commit_until_tick", -1))
+        if (
+            isinstance(committed, tuple)
+            and len(committed) == 2
+            and commit_until >= current_tick
+            and not self._is_urgent_movement_context(agent, world)
+        ):
+            committed_target = (int(committed[0]), int(committed[1]))
+            if committed_target != target and bool(world.is_walkable(committed_target[0], committed_target[1])):
+                d_current = abs(start[0] - committed_target[0]) + abs(start[1] - committed_target[1])
+                d_incoming = abs(start[0] - target[0]) + abs(start[1] - target[1])
+                marginal_switch = d_incoming >= (d_current - int(self.target_switch_improvement_margin))
+                near_committed = d_current <= 3
+                if marginal_switch or near_committed:
+                    target = committed_target
+        agent.movement_commit_target = target
+        agent.movement_commit_until_tick = current_tick + int(self.target_stickiness_ticks)
+        return target
+
+    def _get_cached_path(self, agent, start: Coord, target: Coord) -> Optional[list[Coord]]:
+        cached_target = getattr(agent, "movement_cached_target", None)
+        cached_path = getattr(agent, "movement_cached_path", None)
+        if (
+            isinstance(cached_target, tuple)
+            and len(cached_target) == 2
+            and (int(cached_target[0]), int(cached_target[1])) == (int(target[0]), int(target[1]))
+            and isinstance(cached_path, list)
+            and len(cached_path) >= 2
+            and tuple(cached_path[0]) == (int(start[0]), int(start[1]))
+        ):
+            return [(int(p[0]), int(p[1])) for p in cached_path]
+        return None
+
+    def _store_cached_path(self, agent, target: Coord, path: Optional[list[Coord]]) -> None:
+        if not isinstance(path, list) or len(path) < 2:
+            self._clear_cached_path(agent)
+            return
+        agent.movement_cached_target = (int(target[0]), int(target[1]))
+        agent.movement_cached_path = [(int(p[0]), int(p[1])) for p in path]
+        agent.movement_cached_path_tick = int(getattr(agent, "movement_cached_path_tick", -1)) + 1
+
+    def _advance_cached_path(self, agent, start: Coord, target: Coord, path: list[Coord]) -> None:
+        if not isinstance(path, list) or len(path) < 2 or tuple(path[0]) != (int(start[0]), int(start[1])):
+            self._clear_cached_path(agent)
+            return
+        trimmed = [(int(p[0]), int(p[1])) for p in path[1:]]
+        if len(trimmed) < 2:
+            self._clear_cached_path(agent)
+            return
+        agent.movement_cached_target = (int(target[0]), int(target[1]))
+        agent.movement_cached_path = trimmed
+
+    def _clear_cached_path(self, agent) -> None:
+        agent.movement_cached_target = None
+        agent.movement_cached_path = []
+
+    def _is_immediate_backtrack(self, agent, next_pos: Coord) -> bool:
+        prev = getattr(agent, "movement_prev_tile", None)
+        if not isinstance(prev, tuple) or len(prev) != 2:
+            return False
+        return (int(prev[0]), int(prev[1])) == (int(next_pos[0]), int(next_pos[1]))
+
+    def _allow_backtrack_override(self, agent, world, target: Coord) -> bool:
+        if self._is_urgent_movement_context(agent, world):
+            return True
+        start = (int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0)))
+        d = abs(int(target[0]) - start[0]) + abs(int(target[1]) - start[1])
+        return d > 4
 
 
 class LLMBrain:

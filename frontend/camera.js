@@ -1,34 +1,45 @@
 const Camera = {
   x: 0,
   y: 0,
-  cellSize: 24,
-  minCellSize: 10,
-  maxCellSize: 48,
-  followPlayer: true,
+  cellSize: 18,
+  minCellSize: 6,
+  maxCellSize: 40,
 
-  getViewW(canvas) {
-    return Math.floor(canvas.width / this.cellSize);
+  getViewWidth(canvas) {
+    return Math.max(1, Math.floor(canvas.width / this.cellSize));
   },
 
-  getViewH(canvas) {
-    return Math.floor(canvas.height / this.cellSize);
+  getViewHeight(canvas) {
+    return Math.max(1, Math.floor(canvas.height / this.cellSize));
   },
 
   clamp(data, canvas) {
-    const viewW = this.getViewW(canvas);
-    const viewH = this.getViewH(canvas);
-
-    this.x = Math.max(0, Math.min(this.x, Math.max(0, data.width - viewW)));
-    this.y = Math.max(0, Math.min(this.y, Math.max(0, data.height - viewH)));
+    if (!data) return;
+    const vw = this.getViewWidth(canvas);
+    const vh = this.getViewHeight(canvas);
+    this.x = Math.max(0, Math.min(this.x, Math.max(0, (data.width || 0) - vw)));
+    this.y = Math.max(0, Math.min(this.y, Math.max(0, (data.height || 0) - vh)));
   },
 
   centerOn(wx, wy, canvas, data) {
-    const viewW = this.getViewW(canvas);
-    const viewH = this.getViewH(canvas);
-
-    this.x = Math.floor(wx - viewW / 2);
-    this.y = Math.floor(wy - viewH / 2);
-
+    const vw = this.getViewWidth(canvas);
+    const vh = this.getViewHeight(canvas);
+    this.x = Math.floor(wx - vw / 2);
+    this.y = Math.floor(wy - vh / 2);
     this.clamp(data, canvas);
-  }
+  },
+
+  zoomBy(delta, focusPxX, focusPxY, canvas, data) {
+    const oldSize = this.cellSize;
+    const next = Math.max(this.minCellSize, Math.min(this.maxCellSize, this.cellSize + delta));
+    if (next === oldSize) return;
+
+    const worldX = this.x + (focusPxX / oldSize);
+    const worldY = this.y + (focusPxY / oldSize);
+
+    this.cellSize = next;
+    this.x = Math.floor(worldX - (focusPxX / next));
+    this.y = Math.floor(worldY - (focusPxY / next));
+    this.clamp(data, canvas);
+  },
 };

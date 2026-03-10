@@ -135,10 +135,16 @@ def try_build_farm(world, agent) -> bool:
 
 
 def work_farm(world, agent) -> bool:
+    if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_task_completion_attempt"):
+        world.record_task_completion_attempt(agent, "farm_work")
     pos = (agent.x, agent.y)
     plot = world.farm_plots.get(pos)
 
     if not plot:
+        if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_task_completion_preconditions_failed"):
+            world.record_task_completion_preconditions_failed(agent, "farm_work", "no_farm_available")
+        if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_workforce_block_reason"):
+            world.record_workforce_block_reason(agent, "farmer", "no_target_found")
         return False
 
     state = plot.get("state", "prepared")
@@ -148,15 +154,26 @@ def work_farm(world, agent) -> bool:
     if state == "prepared":
         plot["state"] = "planted"
         plot["growth"] = 0
+        if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_task_completion_preconditions_met"):
+            world.record_task_completion_preconditions_met(agent, "farm_work")
+            world.record_task_completion_productive(agent, "farm_work")
+        if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_workforce_productive_action"):
+            world.record_workforce_productive_action(agent, "farmer", "farm_work")
         return True
 
     if state == "ripe":
+        if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_task_completion_attempt"):
+            world.record_task_completion_attempt(agent, "farm_harvest")
         harvest_amount = HARVEST_YIELD
         bonus_chance = HARVEST_BONUS_CHANCE + _storage_farm_bonus_chance(world, village, pos)
         if random.random() < bonus_chance:
             harvest_amount += 1
         space = max(0, getattr(agent, "inventory_space", lambda: 0)())
         if space <= 0:
+            if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_task_completion_preconditions_failed"):
+                world.record_task_completion_preconditions_failed(agent, "farm_harvest", "inventory_full")
+            if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_workforce_block_reason"):
+                world.record_workforce_block_reason(agent, "farmer", "no_storage_available")
             return False
         gathered = min(harvest_amount, space)
         agent.inventory["food"] = agent.inventory.get("food", 0) + gathered
@@ -178,8 +195,17 @@ def work_farm(world, agent) -> bool:
                 "village_uid": world.resolve_village_uid(getattr(agent, "village_id", None)),
             },
         )
+        if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_task_completion_preconditions_met"):
+            world.record_task_completion_preconditions_met(agent, "farm_harvest")
+            world.record_task_completion_productive(agent, "farm_harvest")
+        if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_workforce_productive_action"):
+            world.record_workforce_productive_action(agent, "farmer", "farm_harvest")
         return True
 
+    if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_task_completion_preconditions_failed"):
+        world.record_task_completion_preconditions_failed(agent, "farm_work", "farm_not_ready")
+    if str(getattr(agent, "role", "")) == "farmer" and hasattr(world, "record_workforce_block_reason"):
+        world.record_workforce_block_reason(agent, "farmer", "waiting_on_delivery")
     return False
 
 
@@ -189,12 +215,22 @@ def haul_harvest(world, agent) -> bool:
     hauler raccoglie dal campo maturo nel proprio inventario
     invece di depositare direttamente nello storage villaggio.
     """
+    if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_attempt"):
+        world.record_task_completion_attempt(agent, "farm_haul_harvest")
     pos = (agent.x, agent.y)
     plot = world.farm_plots.get(pos)
     if not plot:
+        if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_preconditions_failed"):
+            world.record_task_completion_preconditions_failed(agent, "farm_haul_harvest", "no_farm_available")
+        if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
+            world.record_workforce_block_reason(agent, "hauler", "no_target_found")
         return False
 
     if plot.get("state") != "ripe":
+        if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_preconditions_failed"):
+            world.record_task_completion_preconditions_failed(agent, "farm_haul_harvest", "farm_not_ready")
+        if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
+            world.record_workforce_block_reason(agent, "hauler", "waiting_on_delivery")
         return False
 
     village = world.get_village_by_id(getattr(agent, "village_id", None))
@@ -204,6 +240,10 @@ def haul_harvest(world, agent) -> bool:
         harvest_amount += 1
     space = max(0, getattr(agent, "inventory_space", lambda: 0)())
     if space <= 0:
+        if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_preconditions_failed"):
+            world.record_task_completion_preconditions_failed(agent, "farm_haul_harvest", "inventory_empty")
+        if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
+            world.record_workforce_block_reason(agent, "hauler", "no_storage_available")
         return False
     gathered = min(harvest_amount, space)
     agent.inventory["food"] = agent.inventory.get("food", 0) + gathered
@@ -224,6 +264,11 @@ def haul_harvest(world, agent) -> bool:
             "village_uid": world.resolve_village_uid(getattr(agent, "village_id", None)),
         },
     )
+    if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_preconditions_met"):
+        world.record_task_completion_preconditions_met(agent, "farm_haul_harvest")
+        world.record_task_completion_productive(agent, "farm_haul_harvest")
+    if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_productive_action"):
+        world.record_workforce_productive_action(agent, "hauler", "farm_haul_harvest")
     return True
 
 
@@ -296,4 +341,51 @@ def _has_primary_zone_slot(world, village, village_id, center: Coord) -> bool:
                 continue
             if _is_valid_primary_slot(world, village, village_id, x, y):
                 return True
+    return False
+
+
+def is_farmer_task_viable(world, agent) -> bool:
+    village_id = getattr(agent, "village_id", None)
+    village = world.get_village_by_id(village_id)
+    if village is None:
+        return False
+
+    # Village-relevant existing farms are the strongest validity signal.
+    for _, plot in getattr(world, "farm_plots", {}).items():
+        if not isinstance(plot, dict):
+            continue
+        if plot.get("village_id") != village_id:
+            continue
+        state = str(plot.get("state", "prepared"))
+        if state in {"prepared", "ripe", "planted", "growing"}:
+            return True
+
+    # If no farm exists yet, allow farmer task only when a first-slot build is plausible.
+    center = _primary_farm_center(world, village)
+    if center is None:
+        return False
+    if not bool(_has_primary_zone_slot(world, village, village_id, center)):
+        return False
+
+    village_storage = village.get("storage", {}) if isinstance(village.get("storage"), dict) else {}
+    available_wood = int(agent.inventory.get("wood", 0)) + int(village_storage.get("wood", 0))
+    if available_wood >= PREPARE_WOOD_COST:
+        return True
+
+    needs = village.get("needs", {}) if isinstance(village.get("needs"), dict) else {}
+    food_pressure = bool(needs.get("food_urgent") or needs.get("food_low") or needs.get("food_buffer_low"))
+    if not food_pressure:
+        return False
+
+    # Under sustained food pressure, first-farm bootstrap is viable if there is
+    # reachable local wood supply to collect for plot preparation.
+    ax = int(getattr(agent, "x", 0))
+    ay = int(getattr(agent, "y", 0))
+    search_radius = 12
+    for wx, wy in getattr(world, "wood", set()):
+        if abs(int(wx) - ax) + abs(int(wy) - ay) > search_radius:
+            continue
+        if not world.is_walkable(int(wx), int(wy)):
+            continue
+        return True
     return False

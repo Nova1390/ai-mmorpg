@@ -43,6 +43,88 @@ MAX_NEW_VILLAGE_SEEDS = 2
 MIN_HOUSES_FOR_VILLAGE = 3
 MIN_HOUSES_FOR_LEADER = 3
 INITIAL_FOUNDER_QUOTA = 8
+PROTO_COMMUNITY_RADIUS = 4
+PROTO_COMMUNITY_MIN_AGENTS = 2
+PROTO_COMMUNITY_FORMATION_STREAK = 3
+PROTO_COMMUNITY_STALE_TICKS = 120
+CAMP_ACTIVE_STALE_TICKS = 240
+CAMP_FORMATION_HUNGER_MIN = 18.0
+CAMP_REST_RADIUS = 2
+CAMP_ANCHOR_RADIUS = 10
+CAMP_DEACTIVATION_ABSENCE_TICKS = 36
+CAMP_LINKED_COMMUNITY_ABSENCE_BONUS_TICKS = 72
+CAMP_SUPPORT_EVAL_RADIUS = 14
+CAMP_SUPPORT_RECENT_USE_TICKS = 28
+CAMP_SUPPORT_GRACE_ABSENCE_BONUS_TICKS = 18
+CAMP_FOOD_CACHE_CAPACITY = 8
+CAMP_FOOD_DECAY_INTERVAL_TICKS = 50
+LOCAL_FOOD_PRESSURE_RADIUS = 10
+LOCAL_FOOD_PRESSURE_NEEDY_HUNGER = 50.0
+FOOD_PATCH_MIN_COUNT = 3
+FOOD_PATCH_MAX_COUNT = 6
+FOOD_PATCH_MIN_RADIUS = 5
+FOOD_PATCH_MAX_RADIUS = 8
+FOOD_PATCH_REGEN_MULTIPLIER = 1.35
+FOOD_PATCH_DENSITY_MULTIPLIER = 1.25
+FOOD_PATCH_EXTRA_INITIAL_FOOD_RATIO = 0.2
+PROTO_SPECIALIZATION_KEYS = ("none", "food_gatherer", "food_hauler", "builder")
+PROTO_SPECIALIZATION_PERSISTENCE_TICKS = {
+    "food_gatherer": 18,
+    "food_hauler": 18,
+    "builder": 16,
+}
+PROTO_COMMUNITY_FUNNEL_STAGES = (
+    "co_presence_detected",
+    "co_presence_cluster_valid",
+    "proto_streak_incremented",
+    "proto_viability_check_passed",
+    "proto_community_formed",
+)
+PROTO_COMMUNITY_FUNNEL_FAILURE_REASONS = {
+    "cluster_too_small",
+    "cluster_not_persistent",
+    "agents_starving",
+    "area_not_viable",
+    "agents_moving_apart",
+    "blocked_by_existing_structure",
+    "other_guard",
+}
+CAMP_LIFECYCLE_STAGES = (
+    "camp_created",
+    "camp_became_active",
+    "camp_used_for_rest",
+    "camp_used_for_return",
+    "camp_population_present",
+    "camp_deactivated",
+)
+CAMP_LIFECYCLE_DEACTIVATION_REASONS = {
+    "camp_stale_timeout",
+    "no_agents_nearby",
+    "agents_migrated",
+    "no_viable_support",
+    "area_no_longer_viable",
+    "replaced_by_village_anchor",
+    "replaced_by_house_anchor",
+    "other_guard",
+}
+CAMP_LIFECYCLE_RETENTION_REASONS = {
+    "recent_use",
+    "nearby_agents",
+    "food_cache",
+    "anchored_loop_support",
+}
+CAMP_TARGETING_STAGES = (
+    "rest_target_home",
+    "rest_target_camp",
+    "rest_target_idle",
+)
+CAMP_TARGETING_REASONS = {
+    "no_camp_in_range",
+    "camp_not_active",
+    "hunger_override",
+    "task_override",
+    "other_guard",
+}
 
 
 def _default_world_production_metrics() -> Dict[str, int]:
@@ -55,6 +137,622 @@ def _default_world_production_metrics() -> Dict[str, int]:
         "direct_stone_gathered": 0,
         "wood_from_lumberyards": 0,
         "stone_from_mines": 0,
+    }
+
+
+WORKFORCE_REALIZATION_ROLES = ("farmer", "forager", "hauler", "builder", "miner", "woodcutter")
+WORKFORCE_AFFILIATION_CLASSES = ("resident", "attached", "transient", "unaffiliated")
+WORKFORCE_BLOCK_REASONS = {
+    "no_valid_task",
+    "no_target_found",
+    "no_materials_available",
+    "no_storage_available",
+    "no_construction_site",
+    "waiting_on_delivery",
+    "survival_override",
+    "role_hold_block",
+    "task_conflict",
+    "no_affiliated_village_context",
+}
+WORKFORCE_REALIZATION_PRODUCTIVE_WINDOW_TICKS = 80
+WORKFORCE_REALIZATION_IDLE_GRACE_TICKS = 20
+MOVEMENT_DIAGNOSTIC_ROLES = ("farmer", "forager", "hauler", "builder", "miner", "woodcutter")
+MOVEMENT_DIAGNOSTIC_CONTEXTS = ("off_network", "path", "road", "logistics_corridor", "bridge", "tunnel")
+RECOVERY_DIAGNOSTIC_ROLES = ("farmer", "forager", "hauler", "builder", "miner", "woodcutter", "npc", "other")
+RECOVERY_FUNNEL_STAGES = (
+    "recovery_context_seen",
+    "high_sleep_need_seen",
+    "high_fatigue_seen",
+    "rest_candidate_seen",
+    "rest_task_selected",
+    "home_target_available",
+    "home_target_selected",
+    "idle_recovery_applied",
+    "home_recovery_applied",
+    "recovery_success_tick",
+)
+RECOVERY_FAILURE_REASONS = {
+    "rest_not_needed",
+    "rest_not_selected",
+    "survival_override",
+    "work_task_retained",
+    "no_home",
+    "not_resident",
+    "no_valid_home_target",
+    "task_replaced",
+    "recovery_only_idle",
+    "recovery_home_success",
+    "recovery_idle_success",
+    "unknown_failure",
+}
+DELIVERY_DIAGNOSTIC_STAGES = (
+    "delivery_target_created_count",
+    "delivery_target_visible_count",
+    "delivery_target_reserved_count",
+    "resource_source_found_count",
+    "resource_pickup_attempt_count",
+    "resource_pickup_success_count",
+    "hauler_departed_with_resource_count",
+    "site_arrival_count",
+    "delivery_attempt_count",
+    "delivery_success_count",
+    "delivery_abandoned_count",
+)
+DELIVERY_DIAGNOSTIC_FAILURE_REASONS = {
+    "no_delivery_target",
+    "no_source_storage",
+    "no_resource_available",
+    "reservation_lost",
+    "site_invalidated",
+    "site_not_in_range",
+    "inventory_empty",
+    "task_replaced",
+    "path_failed",
+    "hauler_reassigned",
+    "construction_completed_before_delivery",
+    "unknown_failure",
+}
+HOUSING_CONSTRUCTION_STAGES = (
+    "house_plan_requested",
+    "house_site_created",
+    "house_site_visible_to_workers",
+    "house_material_requirement_detected",
+    "house_delivery_target_created",
+    "house_delivery_reserved",
+    "house_delivery_attempt",
+    "house_delivery_success",
+    "house_construction_progress_tick",
+    "house_construction_completed",
+    "house_building_activated",
+)
+HOUSING_CONSTRUCTION_FAILURE_REASONS = {
+    "no_build_location",
+    "terrain_invalid",
+    "village_not_viable",
+    "no_delivery_target",
+    "no_resource_available",
+    "no_source_storage",
+    "hauler_reassigned",
+    "path_failed",
+    "no_builder_assigned",
+    "builder_reassigned",
+    "builder_starving",
+    "materials_missing",
+    "site_invalidated",
+    "activation_state_mismatch",
+    "construction_completed_not_activated",
+}
+HOUSING_WORKER_PARTICIPATION_KEYS = (
+    "builder_assigned_to_house",
+    "builder_arrived_at_house",
+    "builder_progress_events",
+    "hauler_assigned_house_delivery",
+    "hauler_pickup_house_material",
+    "hauler_arrived_house",
+    "hauler_delivery_success",
+)
+HOUSING_SITING_REJECTION_REASONS = {
+    "overlap_with_structure",
+    "blocked_by_road",
+    "non_walkable",
+    "terrain_invalid",
+    "too_dense",
+    "too_far_from_anchor",
+    "village_cap_block",
+    "reserved_space_block",
+    "invalid_house_footprint",
+    "other_guard",
+}
+HOUSING_SITING_SEARCH_STAGES = (
+    "house_candidate_scan_started",
+    "house_candidate_evaluated",
+    "house_candidate_passed_all_checks",
+    "house_site_created",
+)
+HOUSING_PATH_COHERENCE_KEYS = (
+    "house_created_via_bootstrap",
+    "house_created_via_construction_site",
+    "house_completed_via_construction_progress",
+    "house_activated_via_completion_hook",
+    "house_activated_via_direct_path",
+    "house_path_unknown",
+)
+ASSIGNMENT_GAP_STAGES = (
+    "assigned_role_count",
+    "task_selected_count",
+    "target_found_count",
+    "movement_started_count",
+    "action_attempted_count",
+    "productive_action_count",
+    "abandoned_or_overridden_count",
+)
+ASSIGNMENT_GAP_BLOCK_REASONS = {
+    "no_task_candidate",
+    "no_target_candidate",
+    "target_too_far",
+    "no_path",
+    "no_materials",
+    "no_storage",
+    "no_construction_site",
+    "no_farm_target",
+    "no_resource_target",
+    "waiting_on_delivery",
+    "survival_override",
+    "role_reassigned",
+    "task_replaced",
+    "affiliation_context_missing",
+}
+TASK_COMPLETION_KEYS = (
+    "farm_work",
+    "farm_harvest",
+    "build_house",
+    "build_storage",
+    "construction_progress",
+    "construction_delivery",
+    "deposit_to_storage",
+    "internal_transfer",
+    "farm_haul_harvest",
+)
+TASK_COMPLETION_STAGES = (
+    "task_attempt_count",
+    "preconditions_met_count",
+    "preconditions_failed_count",
+    "productive_completion_count",
+    "interrupted_or_replaced_count",
+)
+TASK_COMPLETION_FAILURE_REASONS = {
+    "no_farm_available",
+    "farm_not_ready",
+    "farm_not_owned_or_not_village_relevant",
+    "too_far_from_farm",
+    "inventory_full",
+    "no_path",
+    "task_replaced",
+    "survival_override",
+    "no_construction_site",
+    "site_not_in_range",
+    "no_materials_in_inventory",
+    "no_materials_in_buffer",
+    "waiting_on_delivery",
+    "invalid_site_state",
+    "construction_already_complete",
+    "no_delivery_target",
+    "no_source_storage",
+    "no_target_storage",
+    "no_resource_available",
+    "no_reserved_delivery",
+    "target_not_in_range",
+    "inventory_empty",
+}
+
+
+def _empty_workforce_affiliation_counts() -> Dict[str, int]:
+    return {k: 0 for k in WORKFORCE_AFFILIATION_CLASSES}
+
+
+def _empty_workforce_realization_role_metrics() -> Dict[str, Any]:
+    return {
+        "target_count": 0,
+        "assigned_count": 0,
+        "active_task_count": 0,
+        "productive_action_count": 0,
+        "blocked_or_idle_count": 0,
+        "productive_actions": {},
+        "block_reasons": {},
+    }
+
+
+def _empty_assignment_gap_role_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in ASSIGNMENT_GAP_STAGES}
+    payload["block_reasons"] = {}
+    return payload
+
+
+def _empty_task_completion_task_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in TASK_COMPLETION_STAGES}
+    payload["failure_reasons"] = {}
+    return payload
+
+
+def _empty_movement_metrics() -> Dict[str, Any]:
+    return {
+        "movement_ticks_total": 0,
+        "no_progress_ticks": 0,
+        "oscillation_events": 0,
+        "backtrack_steps": 0,
+        "same_area_retarget_count": 0,
+        "target_changes_count": 0,
+        "path_recompute_count": 0,
+        "near_target_indecision_count": 0,
+        "net_displacement": 0,
+        "gross_displacement": 0,
+        "tile_occupancy_samples": 0,
+        "tile_occupancy_peak": 0,
+        "multi_agent_tile_events": 0,
+        "blocked_by_agent_count": 0,
+        "attempted_move_into_occupied_tile": 0,
+        "head_on_collision_events": 0,
+        "corridor_congestion_events": 0,
+        "near_target_blocked_by_agent": 0,
+        "road_tile_agent_samples": 0,
+        "road_tile_multi_agent_events": 0,
+        "road_congestion_events": 0,
+        "movement_efficiency_ratio": 0.0,
+    }
+
+
+def _default_movement_diagnostic_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_movement_metrics(),
+        "by_role": {},
+        "by_task": {},
+        "by_transport_context": {},
+        "by_village": {},
+        "agent_track": {},
+        "tile_hotspots": {},
+    }
+
+
+def _empty_delivery_diagnostic_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in DELIVERY_DIAGNOSTIC_STAGES}
+    payload["delivery_failure_reasons"] = {}
+    return payload
+
+
+def _default_delivery_diagnostic_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_delivery_diagnostic_metrics(),
+        "by_role": {},
+        "by_village": {},
+    }
+
+
+def _empty_housing_construction_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in HOUSING_CONSTRUCTION_STAGES}
+    payload["failure_reasons"] = {}
+    payload["worker_participation"] = {k: 0 for k in HOUSING_WORKER_PARTICIPATION_KEYS}
+    payload["houses_under_construction_count"] = 0
+    payload["houses_completed_count"] = 0
+    payload["houses_active_count"] = 0
+    payload["average_house_construction_time"] = 0.0
+    payload["max_house_construction_time"] = 0
+    return payload
+
+
+def _default_housing_construction_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_housing_construction_metrics(),
+        "by_village": {},
+        "_house_start_tick_by_id": {},
+        "_house_completed_ids": set(),
+        "_durations_global": [],
+        "_durations_by_village": {},
+    }
+
+
+def _empty_housing_siting_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in HOUSING_SITING_SEARCH_STAGES}
+    payload["rejection_reasons"] = {}
+    return payload
+
+
+def _default_housing_siting_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_housing_siting_metrics(),
+        "by_village": {},
+    }
+
+
+def _empty_housing_path_coherence_metrics() -> Dict[str, Any]:
+    return {k: 0 for k in HOUSING_PATH_COHERENCE_KEYS}
+
+
+def _default_housing_path_coherence_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_housing_path_coherence_metrics(),
+        "by_village": {},
+    }
+
+
+def _default_builder_self_supply_stats() -> Dict[str, Any]:
+    return {
+        "attempt_count": 0,
+        "success_count": 0,
+        "failure_reasons": {},
+        "distance_total": 0,
+        "distance_samples": 0,
+    }
+
+
+BUILDER_SELF_SUPPLY_GATE_STAGES = (
+    "self_supply_attempt_seen",
+    "valid_under_construction_site_seen",
+    "site_material_need_seen",
+    "candidate_storage_found",
+    "candidate_storage_has_resource",
+    "source_within_site_radius",
+    "source_accessible_from_builder",
+    "inventory_capacity_available",
+    "self_supply_pickup_attempt",
+    "self_supply_pickup_success",
+)
+BUILDER_SELF_SUPPLY_GATE_REASONS = {
+    "no_valid_site",
+    "site_not_material_needy",
+    "no_candidate_storage",
+    "candidate_storage_missing_resource",
+    "source_out_of_site_radius",
+    "source_not_accessible_from_builder",
+    "inventory_full",
+    "pickup_failed",
+    "unknown_failure",
+    "self_supply_succeeded",
+}
+
+
+def _empty_builder_self_supply_gate_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in BUILDER_SELF_SUPPLY_GATE_STAGES}
+    payload["failure_reasons"] = {}
+    payload["success_count"] = 0
+    return payload
+
+
+def _default_builder_self_supply_gate_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_builder_self_supply_gate_metrics(),
+        "by_village": {},
+    }
+
+
+def _default_social_gravity_event_stats() -> Dict[str, Any]:
+    return {
+        "return_to_village_events": 0,
+        "stay_near_village_bias_events": 0,
+        "home_return_events": 0,
+        "by_village": {},
+    }
+
+
+def _default_progression_stats() -> Dict[str, Any]:
+    return {
+        "proto_community_formed_count": 0,
+        "camp_created_count": 0,
+        "camp_return_events": 0,
+        "camp_rest_events": 0,
+        "early_road_suppressed_count": 0,
+        "road_priority_deferred_reasons": {},
+        "by_village": {},
+    }
+
+
+def _default_camp_food_stats() -> Dict[str, int]:
+    return {
+        "camp_food_deposits": 0,
+        "camp_food_consumptions": 0,
+        "camp_food_decay": 0,
+        "camp_food_deposit_attempts": 0,
+        "camp_food_deposit_blocked_low_hunger": 0,
+        "camp_food_deposit_blocked_self_reserve": 0,
+        "camp_food_consume_attempts": 0,
+        "camp_food_consume_misses": 0,
+        "food_consumed_from_inventory": 0,
+        "food_consumed_from_camp": 0,
+        "food_consumed_from_storage": 0,
+        "food_consumed_from_wild_direct": 0,
+        "camp_food_pressure_ticks": 0,
+        "local_food_pressure_events": 0,
+        "pressure_backed_loop_selected_count": 0,
+        "pressure_backed_food_deliveries": 0,
+        "unmet_food_pressure_count": 0,
+        "loop_completed_count": 0,
+        "loop_abandoned_count": 0,
+        "loop_abandoned_due_to_no_source": 0,
+        "loop_abandoned_due_to_saturated_cache": 0,
+        "loop_abandoned_due_to_no_drop_target": 0,
+        "near_complete_loop_opportunities": 0,
+        "near_complete_loop_completed": 0,
+        "near_complete_loop_abandoned": 0,
+        "completion_bias_applied_count": 0,
+        "delivery_commitment_retained_ticks": 0,
+        "loop_retarget_success_count": 0,
+        "loop_retarget_failure_count": 0,
+    }
+
+
+def _default_communication_stats() -> Dict[str, int]:
+    return {
+        "communication_events": 0,
+        "food_knowledge_shared_count": 0,
+        "camp_knowledge_shared_count": 0,
+        "shared_food_knowledge_used_count": 0,
+        "shared_camp_knowledge_used_count": 0,
+        "stale_knowledge_expired_count": 0,
+        "invalidated_shared_knowledge_count": 0,
+        "social_knowledge_accept_count": 0,
+        "social_knowledge_reject_count": 0,
+        "social_knowledge_reject_stale": 0,
+        "social_knowledge_reject_too_far": 0,
+        "social_knowledge_reject_lower_than_direct": 0,
+        "social_knowledge_reject_survival_priority": 0,
+        "direct_overrides_social_count": 0,
+        "social_food_knowledge_adopted_count": 0,
+        "social_camp_knowledge_adopted_count": 0,
+        "repeated_duplicate_share_suppressed_count": 0,
+        "camp_knowledge_share_suppressed_count": 0,
+    }
+
+
+def _empty_proto_funnel_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in PROTO_COMMUNITY_FUNNEL_STAGES}
+    payload["failure_reasons"] = {}
+    return payload
+
+
+def _default_proto_funnel_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_proto_funnel_metrics(),
+        "by_region": {},
+    }
+
+
+def _empty_camp_lifecycle_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in CAMP_LIFECYCLE_STAGES}
+    payload["deactivation_reasons"] = {}
+    payload["retention_reasons"] = {}
+    payload["deactivation_with_food_cache_count"] = 0
+    payload["deactivation_with_recent_use_count"] = 0
+    payload["deactivation_with_anchor_support_count"] = 0
+    payload["deactivation_with_nearby_agents_count"] = 0
+    return payload
+
+
+def _default_camp_lifecycle_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_camp_lifecycle_metrics(),
+        "by_region": {},
+    }
+
+
+def _empty_camp_targeting_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in CAMP_TARGETING_STAGES}
+    payload["camp_not_chosen_reasons"] = {}
+    return payload
+
+
+def _default_camp_targeting_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_camp_targeting_metrics(),
+        "by_region": {},
+    }
+
+
+def _default_residence_stabilization_stats() -> Dict[str, Any]:
+    return {
+        "resident_conversion_attempt_count": 0,
+        "resident_conversion_count": 0,
+        "resident_persistence_count": 0,
+        "resident_release_count": 0,
+        "resident_release_reasons": {},
+        "by_village": {},
+    }
+
+
+RESIDENT_CONVERSION_GATE_STAGES = (
+    "conversion_context_seen",
+    "strong_affiliation_seen",
+    "candidate_house_search_started",
+    "candidate_house_found",
+    "candidate_house_active",
+    "candidate_house_empty",
+    "within_claim_radius",
+    "conversion_eligibility_passed",
+    "resident_conversion_granted",
+)
+RESIDENT_CONVERSION_GATE_FAILURE_REASONS = {
+    "affiliation_not_strong_enough",
+    "no_candidate_house",
+    "house_inactive",
+    "house_not_empty",
+    "outside_claim_radius",
+    "village_mismatch",
+    "survival_override",
+    "house_already_reserved",
+    "eligibility_failed_other_guard",
+    "conversion_succeeded",
+}
+
+
+def _empty_resident_conversion_gate_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in RESIDENT_CONVERSION_GATE_STAGES}
+    payload["failure_reasons"] = {}
+    payload["conversion_success_count"] = 0
+    return payload
+
+
+def _default_resident_conversion_gate_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_resident_conversion_gate_metrics(),
+        "by_village": {},
+    }
+
+
+def _empty_recovery_diagnostic_metrics() -> Dict[str, Any]:
+    payload = {k: 0 for k in RECOVERY_FUNNEL_STAGES}
+    payload["failure_reasons"] = {}
+    payload["agents_with_valid_home"] = 0
+    payload["high_pressure_with_valid_home"] = 0
+    payload["home_recovery_possible_not_chosen"] = 0
+    return payload
+
+
+def _default_recovery_diagnostic_stats() -> Dict[str, Any]:
+    return {
+        "global": _empty_recovery_diagnostic_metrics(),
+        "by_role": {},
+        "by_village": {},
+    }
+
+
+def _default_workforce_realization_stats() -> Dict[str, Any]:
+    return {
+        "productive_actions_by_role": {role: 0 for role in WORKFORCE_REALIZATION_ROLES},
+        "productive_actions_by_role_actions": {role: {} for role in WORKFORCE_REALIZATION_ROLES},
+        "productive_actions_by_role_by_village": {},
+        "productive_actions_by_role_actions_by_village": {},
+        "block_reasons_by_role": {role: {} for role in WORKFORCE_REALIZATION_ROLES},
+        "block_reasons_by_role_by_village": {},
+        "productive_actions_by_affiliation": {
+            role: _empty_workforce_affiliation_counts()
+            for role in WORKFORCE_REALIZATION_ROLES
+        },
+        "productive_actions_by_affiliation_by_village": {},
+        "assignment_gap_stage_counts_by_role": {
+            role: {stage: 0 for stage in ASSIGNMENT_GAP_STAGES}
+            for role in WORKFORCE_REALIZATION_ROLES
+        },
+        "assignment_gap_stage_counts_by_role_by_village": {},
+        "assignment_gap_stage_counts_by_affiliation": {
+            status: {stage: 0 for stage in ASSIGNMENT_GAP_STAGES}
+            for status in WORKFORCE_AFFILIATION_CLASSES
+        },
+        "assignment_gap_stage_counts_by_affiliation_by_village": {},
+        "assignment_gap_block_reasons_by_role": {role: {} for role in WORKFORCE_REALIZATION_ROLES},
+        "assignment_gap_block_reasons_by_role_by_village": {},
+        "task_completion_stage_counts_by_task": {
+            task: {stage: 0 for stage in TASK_COMPLETION_STAGES}
+            for task in TASK_COMPLETION_KEYS
+        },
+        "task_completion_stage_counts_by_task_by_village": {},
+        "task_completion_failure_reasons_by_task": {task: {} for task in TASK_COMPLETION_KEYS},
+        "task_completion_failure_reasons_by_task_by_village": {},
+        "task_completion_stage_counts_by_affiliation": {
+            status: {
+                "preconditions_failed_count": 0,
+                "productive_completion_count": 0,
+            }
+            for status in WORKFORCE_AFFILIATION_CLASSES
+        },
+        "task_completion_stage_counts_by_affiliation_by_village": {},
     }
 
 
@@ -123,6 +821,8 @@ class World:
         if seed is not None:
             random.seed(int(seed))
         self.world_seed = int(seed) if seed is not None else None
+        eco_seed = int(seed) + 104729 if seed is not None else 104729
+        self._eco_rng = random.Random(eco_seed)
         self.width = int(width if width is not None else WIDTH)
         self.height = int(height if height is not None else HEIGHT)
 
@@ -228,6 +928,42 @@ class World:
         self.proto_asset_proposals: List[Dict] = []
         self.proto_asset_prototypes: List[Dict] = []
         self.production_metrics: Dict[str, int] = _default_world_production_metrics()
+        self.specialization_diagnostics: Dict[str, Any] = {}
+        if hasattr(building_system, "get_or_init_specialization_diagnostics"):
+            self.specialization_diagnostics = building_system.get_or_init_specialization_diagnostics(self)
+        self.workforce_realization_stats: Dict[str, Any] = _default_workforce_realization_stats()
+        self.movement_diagnostic_stats: Dict[str, Any] = _default_movement_diagnostic_stats()
+        self.delivery_diagnostic_stats: Dict[str, Any] = _default_delivery_diagnostic_stats()
+        self.housing_construction_stats: Dict[str, Any] = _default_housing_construction_stats()
+        self.housing_siting_stats: Dict[str, Any] = _default_housing_siting_stats()
+        self.housing_path_coherence_stats: Dict[str, Any] = _default_housing_path_coherence_stats()
+        self.builder_self_supply_stats: Dict[str, Any] = _default_builder_self_supply_stats()
+        self.builder_self_supply_gate_stats: Dict[str, Any] = _default_builder_self_supply_gate_stats()
+        self.social_gravity_event_stats: Dict[str, Any] = _default_social_gravity_event_stats()
+        self.residence_stabilization_stats: Dict[str, Any] = _default_residence_stabilization_stats()
+        self.resident_conversion_gate_stats: Dict[str, Any] = _default_resident_conversion_gate_stats()
+        self.recovery_diagnostic_stats: Dict[str, Any] = _default_recovery_diagnostic_stats()
+        self.proto_communities: Dict[str, Dict[str, Any]] = {}
+        self._proto_community_counter: int = 0
+        self.camps: Dict[str, Dict[str, Any]] = {}
+        self._camp_counter: int = 0
+        self.progression_stats: Dict[str, Any] = _default_progression_stats()
+        self.camp_food_stats: Dict[str, int] = _default_camp_food_stats()
+        self.communication_stats: Dict[str, int] = _default_communication_stats()
+        self.proto_specialization_switches: int = 0
+        self.proto_specialization_assigned_tick_count: int = 0
+        self.proto_specialization_retained_ticks: int = 0
+        self.proto_specialization_cleared_count: int = 0
+        self.proto_specialization_cleared_reasons: Dict[str, int] = {}
+        self.proto_specialization_anchor_assignments: int = 0
+        self.proto_specialization_anchor_retained_ticks: int = 0
+        self.proto_specialization_anchor_invalidations: int = 0
+        self.proto_specialization_anchor_invalidation_reasons: Dict[str, int] = {}
+        self.proto_community_funnel_stats: Dict[str, Any] = _default_proto_funnel_stats()
+        self.camp_lifecycle_stats: Dict[str, Any] = _default_camp_lifecycle_stats()
+        self.camp_targeting_stats: Dict[str, Any] = _default_camp_targeting_stats()
+        self.food_rich_patches: List[Dict[str, Any]] = []
+        self.food_patch_food_spawned: int = 0
 
         self.MAX_STRUCTURES = MAX_STRUCTURES
         self.MAX_HOUSES_PER_VILLAGE = MAX_HOUSES_PER_VILLAGE
@@ -242,6 +978,7 @@ class World:
         self.MAX_WOOD = MAX_WOOD
         self.MAX_STONE = MAX_STONE
 
+        self._generate_food_rich_patches()
         self._spawn_initial_food(NUM_FOOD)
         self._spawn_initial_wood(NUM_WOOD)
         self._spawn_initial_stone(NUM_STONE)
@@ -1262,6 +1999,3534 @@ class World:
             if specialized > 0:
                 metrics["stone_from_mines"] += specialized
 
+    def _resolve_agent_work_village_uid(self, agent: Agent) -> str:
+        village_uid = self.resolve_village_uid(getattr(agent, "village_id", None))
+        if village_uid:
+            return str(village_uid)
+        home_uid = str(getattr(agent, "home_village_uid", "") or "")
+        if home_uid:
+            return home_uid
+        primary_uid = str(getattr(agent, "primary_village_uid", "") or "")
+        return primary_uid
+
+    def _workforce_affiliation_for_village(self, agent: Agent, village_uid: str) -> str:
+        uid = str(village_uid or "")
+        status = str(getattr(agent, "village_affiliation_status", "unaffiliated"))
+        home_uid = str(getattr(agent, "home_village_uid", "") or "")
+        primary_uid = str(getattr(agent, "primary_village_uid", "") or "")
+        if status == "resident" and home_uid == uid:
+            return "resident"
+        if status == "attached" and primary_uid == uid:
+            return "attached"
+        if status == "transient" and primary_uid == uid:
+            return "transient"
+        return "unaffiliated"
+
+    def record_workforce_productive_action(
+        self,
+        agent: Agent,
+        role: str,
+        action: str,
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        role_key = str(role)
+        if role_key not in WORKFORCE_REALIZATION_ROLES:
+            return
+        stats = self.workforce_realization_stats
+        if not isinstance(stats, dict):
+            stats = _default_workforce_realization_stats()
+            self.workforce_realization_stats = stats
+
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+        action_key = str(action or "unknown")
+
+        by_role = stats.setdefault("productive_actions_by_role", {})
+        by_role[role_key] = int(by_role.get(role_key, 0)) + 1
+
+        by_role_actions = stats.setdefault("productive_actions_by_role_actions", {})
+        role_actions = by_role_actions.setdefault(role_key, {})
+        role_actions[action_key] = int(role_actions.get(action_key, 0)) + 1
+
+        if uid:
+            by_village = stats.setdefault("productive_actions_by_role_by_village", {})
+            ventry = by_village.setdefault(uid, {r: 0 for r in WORKFORCE_REALIZATION_ROLES})
+            ventry[role_key] = int(ventry.get(role_key, 0)) + 1
+
+            by_village_actions = stats.setdefault("productive_actions_by_role_actions_by_village", {})
+            vactions = by_village_actions.setdefault(uid, {})
+            vrole_actions = vactions.setdefault(role_key, {})
+            vrole_actions[action_key] = int(vrole_actions.get(action_key, 0)) + 1
+
+        affiliation = self._workforce_affiliation_for_village(agent, uid) if uid else "unaffiliated"
+        by_aff = stats.setdefault("productive_actions_by_affiliation", {})
+        role_aff = by_aff.setdefault(role_key, _empty_workforce_affiliation_counts())
+        role_aff[affiliation] = int(role_aff.get(affiliation, 0)) + 1
+
+        if uid:
+            by_aff_village = stats.setdefault("productive_actions_by_affiliation_by_village", {})
+            vaff = by_aff_village.setdefault(
+                uid,
+                {r: _empty_workforce_affiliation_counts() for r in WORKFORCE_REALIZATION_ROLES},
+            )
+            role_vaff = vaff.setdefault(role_key, _empty_workforce_affiliation_counts())
+            role_vaff[affiliation] = int(role_vaff.get(affiliation, 0)) + 1
+
+        last_prod = getattr(agent, "workforce_last_productive_tick_by_role", None)
+        if not isinstance(last_prod, dict):
+            last_prod = {}
+            agent.workforce_last_productive_tick_by_role = last_prod
+        last_prod[role_key] = int(self.tick)
+        self.record_assignment_pipeline_stage(agent, role_key, "productive_action_count", village_uid=uid)
+
+    def record_workforce_block_reason(
+        self,
+        agent: Agent,
+        role: str,
+        reason: str,
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        role_key = str(role)
+        if role_key not in WORKFORCE_REALIZATION_ROLES:
+            return
+        reason_key = str(reason)
+        if reason_key not in WORKFORCE_BLOCK_REASONS:
+            reason_key = "no_valid_task"
+
+        stats = self.workforce_realization_stats
+        if not isinstance(stats, dict):
+            stats = _default_workforce_realization_stats()
+            self.workforce_realization_stats = stats
+
+        by_role = stats.setdefault("block_reasons_by_role", {})
+        role_reasons = by_role.setdefault(role_key, {})
+        role_reasons[reason_key] = int(role_reasons.get(reason_key, 0)) + 1
+
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+        if uid:
+            by_village = stats.setdefault("block_reasons_by_role_by_village", {})
+            ventry = by_village.setdefault(uid, {})
+            vrole_reasons = ventry.setdefault(role_key, {})
+            vrole_reasons[reason_key] = int(vrole_reasons.get(reason_key, 0)) + 1
+
+        last_block = getattr(agent, "workforce_last_block_tick_by_role", None)
+        if not isinstance(last_block, dict):
+            last_block = {}
+            agent.workforce_last_block_tick_by_role = last_block
+        last_block[role_key] = int(self.tick)
+        assignment_reason_map = {
+            "no_valid_task": "no_task_candidate",
+            "no_target_found": "no_target_candidate",
+            "no_materials_available": "no_materials",
+            "no_storage_available": "no_storage",
+            "no_construction_site": "no_construction_site",
+            "waiting_on_delivery": "waiting_on_delivery",
+            "survival_override": "survival_override",
+            "role_hold_block": "task_replaced",
+            "task_conflict": "task_replaced",
+            "no_affiliated_village_context": "affiliation_context_missing",
+        }
+        mapped = assignment_reason_map.get(reason_key, "no_task_candidate")
+        self.record_assignment_pipeline_block_reason(agent, role_key, mapped, village_uid=uid)
+
+    def record_assignment_pipeline_stage(
+        self,
+        agent: Agent,
+        role: str,
+        stage: str,
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        role_key = str(role)
+        stage_key = str(stage)
+        if role_key not in WORKFORCE_REALIZATION_ROLES or stage_key not in ASSIGNMENT_GAP_STAGES:
+            return
+        stats = self.workforce_realization_stats
+        if not isinstance(stats, dict):
+            stats = _default_workforce_realization_stats()
+            self.workforce_realization_stats = stats
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+        by_role = stats.setdefault("assignment_gap_stage_counts_by_role", {})
+        role_counts = by_role.setdefault(role_key, {s: 0 for s in ASSIGNMENT_GAP_STAGES})
+        role_counts[stage_key] = int(role_counts.get(stage_key, 0)) + 1
+
+        affiliation = self._workforce_affiliation_for_village(agent, uid) if uid else "unaffiliated"
+        by_aff = stats.setdefault("assignment_gap_stage_counts_by_affiliation", {})
+        aff_counts = by_aff.setdefault(affiliation, {s: 0 for s in ASSIGNMENT_GAP_STAGES})
+        aff_counts[stage_key] = int(aff_counts.get(stage_key, 0)) + 1
+
+        if uid:
+            by_village = stats.setdefault("assignment_gap_stage_counts_by_role_by_village", {})
+            ventry = by_village.setdefault(uid, {})
+            vrole = ventry.setdefault(role_key, {s: 0 for s in ASSIGNMENT_GAP_STAGES})
+            vrole[stage_key] = int(vrole.get(stage_key, 0)) + 1
+
+            by_aff_village = stats.setdefault("assignment_gap_stage_counts_by_affiliation_by_village", {})
+            vaff = by_aff_village.setdefault(
+                uid,
+                {status: {s: 0 for s in ASSIGNMENT_GAP_STAGES} for status in WORKFORCE_AFFILIATION_CLASSES},
+            )
+            status_counts = vaff.setdefault(affiliation, {s: 0 for s in ASSIGNMENT_GAP_STAGES})
+            status_counts[stage_key] = int(status_counts.get(stage_key, 0)) + 1
+
+    def record_assignment_pipeline_block_reason(
+        self,
+        agent: Agent,
+        role: str,
+        reason: str,
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        role_key = str(role)
+        reason_key = str(reason)
+        if role_key not in WORKFORCE_REALIZATION_ROLES:
+            return
+        if reason_key not in ASSIGNMENT_GAP_BLOCK_REASONS:
+            reason_key = "no_task_candidate"
+        stats = self.workforce_realization_stats
+        if not isinstance(stats, dict):
+            stats = _default_workforce_realization_stats()
+            self.workforce_realization_stats = stats
+        by_role = stats.setdefault("assignment_gap_block_reasons_by_role", {})
+        role_reasons = by_role.setdefault(role_key, {})
+        role_reasons[reason_key] = int(role_reasons.get(reason_key, 0)) + 1
+
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+        if uid:
+            by_village = stats.setdefault("assignment_gap_block_reasons_by_role_by_village", {})
+            ventry = by_village.setdefault(uid, {})
+            vrole = ventry.setdefault(role_key, {})
+            vrole[reason_key] = int(vrole.get(reason_key, 0)) + 1
+
+        self.record_assignment_pipeline_stage(agent, role_key, "abandoned_or_overridden_count", village_uid=uid)
+
+    def record_task_completion_stage(
+        self,
+        agent: Agent,
+        task_key: str,
+        stage: str,
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        task = str(task_key)
+        stage_key = str(stage)
+        if task not in TASK_COMPLETION_KEYS or stage_key not in TASK_COMPLETION_STAGES:
+            return
+        stats = self.workforce_realization_stats
+        if not isinstance(stats, dict):
+            stats = _default_workforce_realization_stats()
+            self.workforce_realization_stats = stats
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+
+        by_task = stats.setdefault("task_completion_stage_counts_by_task", {})
+        task_counts = by_task.setdefault(task, {s: 0 for s in TASK_COMPLETION_STAGES})
+        task_counts[stage_key] = int(task_counts.get(stage_key, 0)) + 1
+
+        affiliation = self._workforce_affiliation_for_village(agent, uid) if uid else "unaffiliated"
+        if stage_key in {"preconditions_failed_count", "productive_completion_count"}:
+            by_aff = stats.setdefault("task_completion_stage_counts_by_affiliation", {})
+            aff_counts = by_aff.setdefault(
+                affiliation,
+                {"preconditions_failed_count": 0, "productive_completion_count": 0},
+            )
+            aff_counts[stage_key] = int(aff_counts.get(stage_key, 0)) + 1
+
+        if uid:
+            by_village = stats.setdefault("task_completion_stage_counts_by_task_by_village", {})
+            ventry = by_village.setdefault(uid, {})
+            vtask = ventry.setdefault(task, {s: 0 for s in TASK_COMPLETION_STAGES})
+            vtask[stage_key] = int(vtask.get(stage_key, 0)) + 1
+            if stage_key in {"preconditions_failed_count", "productive_completion_count"}:
+                by_aff_village = stats.setdefault("task_completion_stage_counts_by_affiliation_by_village", {})
+                vaff = by_aff_village.setdefault(
+                    uid,
+                    {
+                        status: {
+                            "preconditions_failed_count": 0,
+                            "productive_completion_count": 0,
+                        }
+                        for status in WORKFORCE_AFFILIATION_CLASSES
+                    },
+                )
+                va = vaff.setdefault(
+                    affiliation,
+                    {"preconditions_failed_count": 0, "productive_completion_count": 0},
+                )
+                va[stage_key] = int(va.get(stage_key, 0)) + 1
+
+    def record_task_completion_failure_reason(
+        self,
+        agent: Agent,
+        task_key: str,
+        reason: str,
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        task = str(task_key)
+        reason_key = str(reason)
+        if task not in TASK_COMPLETION_KEYS:
+            return
+        if reason_key not in TASK_COMPLETION_FAILURE_REASONS:
+            reason_key = "invalid_site_state"
+        stats = self.workforce_realization_stats
+        if not isinstance(stats, dict):
+            stats = _default_workforce_realization_stats()
+            self.workforce_realization_stats = stats
+        by_task = stats.setdefault("task_completion_failure_reasons_by_task", {})
+        task_reasons = by_task.setdefault(task, {})
+        task_reasons[reason_key] = int(task_reasons.get(reason_key, 0)) + 1
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+        if uid:
+            by_village = stats.setdefault("task_completion_failure_reasons_by_task_by_village", {})
+            ventry = by_village.setdefault(uid, {})
+            vtask = ventry.setdefault(task, {})
+            vtask[reason_key] = int(vtask.get(reason_key, 0)) + 1
+
+    def record_task_completion_attempt(self, agent: Agent, task_key: str) -> None:
+        self.record_task_completion_stage(agent, task_key, "task_attempt_count")
+
+    def record_task_completion_preconditions_met(self, agent: Agent, task_key: str) -> None:
+        self.record_task_completion_stage(agent, task_key, "preconditions_met_count")
+
+    def record_task_completion_preconditions_failed(self, agent: Agent, task_key: str, reason: str) -> None:
+        self.record_task_completion_stage(agent, task_key, "preconditions_failed_count")
+        self.record_task_completion_failure_reason(agent, task_key, reason)
+
+    def record_task_completion_productive(self, agent: Agent, task_key: str) -> None:
+        self.record_task_completion_stage(agent, task_key, "productive_completion_count")
+
+    def record_task_completion_interrupted(self, agent: Agent, task_key: str, reason: str) -> None:
+        self.record_task_completion_stage(agent, task_key, "interrupted_or_replaced_count")
+        self.record_task_completion_failure_reason(agent, task_key, reason)
+
+    def _movement_bucket(self, stats: Dict[str, Any], key: str, label: str) -> Dict[str, Any]:
+        bucket_map = stats.setdefault(key, {})
+        bucket = bucket_map.get(label)
+        if not isinstance(bucket, dict):
+            bucket = _empty_movement_metrics()
+            bucket_map[label] = bucket
+        return bucket
+
+    def _resolve_movement_transport_context(self, pos: Tuple[int, int]) -> str:
+        transport = self.get_transport_type(int(pos[0]), int(pos[1]))
+        if transport is None:
+            return "off_network"
+        t = str(transport)
+        return t if t in MOVEMENT_DIAGNOSTIC_CONTEXTS else "off_network"
+
+    def _movement_track_for_agent(self, stats: Dict[str, Any], agent_id: str, current_pos: Tuple[int, int]) -> Dict[str, Any]:
+        tracks = stats.setdefault("agent_track", {})
+        track = tracks.get(agent_id)
+        if not isinstance(track, dict):
+            track = {
+                "origin": (int(current_pos[0]), int(current_pos[1])),
+                "last_pos": (int(current_pos[0]), int(current_pos[1])),
+                "prev_pos": None,
+                "last_target": None,
+                "last_target_tick": -10**9,
+                "oscillation_events": 0,
+            }
+            tracks[agent_id] = track
+        return track
+
+    def _movement_increment(self, bucket: Dict[str, Any], key: str, amount: int = 1) -> None:
+        bucket[key] = int(bucket.get(key, 0)) + int(amount)
+
+    def _record_movement_tile_hotspot(
+        self,
+        stats: Dict[str, Any],
+        pos: Tuple[int, int],
+        *,
+        peak_occupancy: int = 0,
+        congestion_events: int = 0,
+    ) -> None:
+        hotspots = stats.setdefault("tile_hotspots", {})
+        key = f"{int(pos[0])},{int(pos[1])}"
+        entry = hotspots.get(key)
+        if not isinstance(entry, dict):
+            entry = {"tile_position": {"x": int(pos[0]), "y": int(pos[1])}, "congestion_events": 0, "peak_occupancy": 0}
+            hotspots[key] = entry
+        if int(congestion_events) > 0:
+            entry["congestion_events"] = int(entry.get("congestion_events", 0)) + int(congestion_events)
+        if int(peak_occupancy) > int(entry.get("peak_occupancy", 0)):
+            entry["peak_occupancy"] = int(peak_occupancy)
+
+    def _agent_at_tile(self, x: int, y: int, *, exclude_agent_id: Optional[str] = None) -> Optional[Agent]:
+        ex = str(exclude_agent_id or "")
+        for a in self.agents:
+            if not getattr(a, "alive", False):
+                continue
+            if ex and str(getattr(a, "agent_id", "")) == ex:
+                continue
+            if int(getattr(a, "x", -10**9)) == int(x) and int(getattr(a, "y", -10**9)) == int(y):
+                return a
+        return None
+
+    def _count_agents_on_tile(self, x: int, y: int) -> int:
+        n = 0
+        for a in self.agents:
+            if not getattr(a, "alive", False):
+                continue
+            if int(getattr(a, "x", -10**9)) == int(x) and int(getattr(a, "y", -10**9)) == int(y):
+                n += 1
+        return int(n)
+
+    def _movement_iter_buckets(
+        self,
+        stats: Dict[str, Any],
+        *,
+        role: str,
+        task: str,
+        context: str,
+        village_uid: str,
+    ) -> List[Dict[str, Any]]:
+        buckets = [stats.setdefault("global", _empty_movement_metrics())]
+        buckets.append(self._movement_bucket(stats, "by_role", role))
+        buckets.append(self._movement_bucket(stats, "by_task", task))
+        buckets.append(self._movement_bucket(stats, "by_transport_context", context))
+        if village_uid:
+            village_map = stats.setdefault("by_village", {})
+            village_entry = village_map.get(village_uid)
+            if not isinstance(village_entry, dict):
+                village_entry = {
+                    "global": _empty_movement_metrics(),
+                    "by_role": {},
+                    "by_task": {},
+                    "by_transport_context": {},
+                }
+                village_map[village_uid] = village_entry
+            vb = village_entry.setdefault("global", _empty_movement_metrics())
+            buckets.append(vb)
+            buckets.append(self._movement_bucket(village_entry, "by_role", role))
+            buckets.append(self._movement_bucket(village_entry, "by_task", task))
+            buckets.append(self._movement_bucket(village_entry, "by_transport_context", context))
+        return buckets
+
+    def record_movement_congestion_snapshot(self) -> None:
+        stats = self.movement_diagnostic_stats
+        if not isinstance(stats, dict):
+            stats = _default_movement_diagnostic_stats()
+            self.movement_diagnostic_stats = stats
+
+        # Per-tick occupancy pass to capture crowding pressure independently from movement success/failure.
+        occupancy: Dict[Tuple[int, int], int] = {}
+        alive = [a for a in self.agents if getattr(a, "alive", False)]
+        for a in alive:
+            pos = (int(getattr(a, "x", 0)), int(getattr(a, "y", 0)))
+            occupancy[pos] = int(occupancy.get(pos, 0)) + 1
+            context = self._resolve_movement_transport_context(pos)
+            if context == "road":
+                gb = stats.setdefault("global", _empty_movement_metrics())
+                self._movement_increment(gb, "road_tile_agent_samples", 1)
+                self._movement_increment(self._movement_bucket(stats, "by_transport_context", context), "road_tile_agent_samples", 1)
+
+        for pos, count in occupancy.items():
+            peak = max(0, int(count))
+            context = self._resolve_movement_transport_context(pos)
+            gb = stats.setdefault("global", _empty_movement_metrics())
+            if peak > int(gb.get("tile_occupancy_peak", 0)):
+                gb["tile_occupancy_peak"] = peak
+            cb = self._movement_bucket(stats, "by_transport_context", context)
+            if peak > int(cb.get("tile_occupancy_peak", 0)):
+                cb["tile_occupancy_peak"] = peak
+            if peak >= 2:
+                self._movement_increment(gb, "tile_occupancy_samples", 1)
+                self._movement_increment(gb, "multi_agent_tile_events", 1)
+                self._movement_increment(cb, "tile_occupancy_samples", 1)
+                self._movement_increment(cb, "multi_agent_tile_events", 1)
+                if context == "road":
+                    self._movement_increment(gb, "road_tile_multi_agent_events", 1)
+                    self._movement_increment(cb, "road_tile_multi_agent_events", 1)
+                self._record_movement_tile_hotspot(stats, pos, peak_occupancy=peak, congestion_events=1)
+
+    def record_movement_blocked_by_agent(
+        self,
+        agent: Agent,
+        *,
+        from_pos: Tuple[int, int],
+        to_pos: Tuple[int, int],
+        target: Optional[Coord],
+        blocking_agent: Optional[Agent] = None,
+    ) -> None:
+        stats = self.movement_diagnostic_stats
+        if not isinstance(stats, dict):
+            stats = _default_movement_diagnostic_stats()
+            self.movement_diagnostic_stats = stats
+        role = str(getattr(agent, "role", "npc"))
+        role_key = role if role in MOVEMENT_DIAGNOSTIC_ROLES else "other"
+        task = str(getattr(agent, "task", "idle") or "idle")
+        uid = str(self._resolve_agent_work_village_uid(agent) or "")
+        context = self._resolve_movement_transport_context((int(to_pos[0]), int(to_pos[1])))
+        buckets = self._movement_iter_buckets(stats, role=role_key, task=task, context=context, village_uid=uid)
+        for bucket in buckets:
+            self._movement_increment(bucket, "blocked_by_agent_count", 1)
+            self._movement_increment(bucket, "attempted_move_into_occupied_tile", 1)
+
+        if isinstance(target, tuple) and len(target) == 2:
+            dist_to_target = abs(int(target[0]) - int(from_pos[0])) + abs(int(target[1]) - int(from_pos[1]))
+            if dist_to_target <= 2:
+                for bucket in buckets:
+                    self._movement_increment(bucket, "near_target_blocked_by_agent", 1)
+
+        # Detect likely head-on conflicts when both agents target each other local tiles.
+        head_on = False
+        blocker = blocking_agent
+        if blocker is None:
+            blocker = self._agent_at_tile(int(to_pos[0]), int(to_pos[1]), exclude_agent_id=str(getattr(agent, "agent_id", "")))
+        if blocker is not None:
+            other_targets: List[Tuple[int, int]] = []
+            for cand in (
+                getattr(blocker, "task_target", None),
+                getattr(blocker, "movement_commit_target", None),
+            ):
+                if isinstance(cand, tuple) and len(cand) == 2:
+                    other_targets.append((int(cand[0]), int(cand[1])))
+            cint = getattr(blocker, "current_intention", None)
+            if isinstance(cint, dict):
+                tdata = cint.get("target")
+                if isinstance(tdata, dict):
+                    other_targets.append((int(tdata.get("x", getattr(blocker, "x", 0))), int(tdata.get("y", getattr(blocker, "y", 0)))))
+            if (int(from_pos[0]), int(from_pos[1])) in other_targets:
+                head_on = True
+        if head_on:
+            for bucket in buckets:
+                self._movement_increment(bucket, "head_on_collision_events", 1)
+
+        # Corridor congestion: no available adjacent walkable tile not occupied by another agent.
+        walkable_neighbors = 0
+        occupied_neighbors = 0
+        fx, fy = int(from_pos[0]), int(from_pos[1])
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = fx + dx, fy + dy
+            if not self.is_walkable(nx, ny):
+                continue
+            walkable_neighbors += 1
+            occ = self._agent_at_tile(nx, ny, exclude_agent_id=str(getattr(agent, "agent_id", "")))
+            if occ is not None:
+                occupied_neighbors += 1
+        if walkable_neighbors > 0 and occupied_neighbors >= walkable_neighbors:
+            for bucket in buckets:
+                self._movement_increment(bucket, "corridor_congestion_events", 1)
+
+        from_context = self._resolve_movement_transport_context((int(from_pos[0]), int(from_pos[1])))
+        if context == "road" or from_context == "road":
+            for bucket in buckets:
+                self._movement_increment(bucket, "road_congestion_events", 1)
+
+        occupancy_count = self._count_agents_on_tile(int(to_pos[0]), int(to_pos[1]))
+        self._record_movement_tile_hotspot(
+            stats,
+            (int(to_pos[0]), int(to_pos[1])),
+            peak_occupancy=max(2, int(occupancy_count)),
+            congestion_events=1,
+        )
+
+    def record_movement_path_recompute(self, agent: Agent, target: Optional[Coord]) -> None:
+        stats = self.movement_diagnostic_stats
+        if not isinstance(stats, dict):
+            stats = _default_movement_diagnostic_stats()
+            self.movement_diagnostic_stats = stats
+        role = str(getattr(agent, "role", "npc"))
+        task = str(getattr(agent, "task", "idle") or "idle")
+        uid = str(self._resolve_agent_work_village_uid(agent) or "")
+        aid = str(getattr(agent, "agent_id", ""))
+        track = self._movement_track_for_agent(stats, aid, (int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0))))
+        context = self._resolve_movement_transport_context((int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0))))
+        buckets = self._movement_iter_buckets(
+            stats,
+            role=role if role in MOVEMENT_DIAGNOSTIC_ROLES else "other",
+            task=task,
+            context=context,
+            village_uid=uid,
+        )
+        for bucket in buckets:
+            self._movement_increment(bucket, "path_recompute_count", 1)
+        if target is None:
+            return
+        new_target = (int(target[0]), int(target[1]))
+        old_target = track.get("last_target")
+        if isinstance(old_target, tuple) and len(old_target) == 2 and old_target != new_target:
+            dist = abs(int(old_target[0]) - new_target[0]) + abs(int(old_target[1]) - new_target[1])
+            for bucket in buckets:
+                self._movement_increment(bucket, "target_changes_count", 1)
+                if dist <= 2:
+                    self._movement_increment(bucket, "same_area_retarget_count", 1)
+        elif old_target is None:
+            for bucket in buckets:
+                self._movement_increment(bucket, "target_changes_count", 1)
+        track["last_target"] = new_target
+        track["last_target_tick"] = int(self.tick)
+
+    def record_movement_tick(
+        self,
+        agent: Agent,
+        *,
+        from_pos: Tuple[int, int],
+        to_pos: Tuple[int, int],
+        target: Optional[Coord],
+        action_was_move: bool,
+    ) -> None:
+        if not bool(action_was_move):
+            return
+        stats = self.movement_diagnostic_stats
+        if not isinstance(stats, dict):
+            stats = _default_movement_diagnostic_stats()
+            self.movement_diagnostic_stats = stats
+        role = str(getattr(agent, "role", "npc"))
+        role_key = role if role in MOVEMENT_DIAGNOSTIC_ROLES else "other"
+        task = str(getattr(agent, "task", "idle") or "idle")
+        uid = str(self._resolve_agent_work_village_uid(agent) or "")
+        context = self._resolve_movement_transport_context((int(to_pos[0]), int(to_pos[1])))
+        buckets = self._movement_iter_buckets(stats, role=role_key, task=task, context=context, village_uid=uid)
+        moved = (int(from_pos[0]), int(from_pos[1])) != (int(to_pos[0]), int(to_pos[1]))
+        gross = abs(int(to_pos[0]) - int(from_pos[0])) + abs(int(to_pos[1]) - int(from_pos[1]))
+        target_before = None
+        target_after = None
+        if isinstance(target, tuple) and len(target) == 2:
+            tx, ty = int(target[0]), int(target[1])
+            target_before = abs(tx - int(from_pos[0])) + abs(ty - int(from_pos[1]))
+            target_after = abs(tx - int(to_pos[0])) + abs(ty - int(to_pos[1]))
+        progress = 0
+        no_progress = False
+        near_target_indecision = False
+        if target_before is not None and target_after is not None:
+            progress = max(0, int(target_before) - int(target_after))
+            no_progress = int(target_after) >= int(target_before)
+            near_target_indecision = int(target_before) <= 2 and no_progress
+        else:
+            no_progress = not moved
+        for bucket in buckets:
+            self._movement_increment(bucket, "movement_ticks_total", 1)
+            self._movement_increment(bucket, "gross_displacement", gross)
+            self._movement_increment(bucket, "net_displacement", int(progress))
+            if no_progress:
+                self._movement_increment(bucket, "no_progress_ticks", 1)
+            if near_target_indecision:
+                self._movement_increment(bucket, "near_target_indecision_count", 1)
+
+        aid = str(getattr(agent, "agent_id", ""))
+        track = self._movement_track_for_agent(stats, aid, from_pos)
+        prev_pos = track.get("prev_pos")
+        if moved and isinstance(prev_pos, tuple) and len(prev_pos) == 2 and (
+            int(to_pos[0]) == int(prev_pos[0]) and int(to_pos[1]) == int(prev_pos[1])
+        ):
+            for bucket in buckets:
+                self._movement_increment(bucket, "backtrack_steps", 1)
+                self._movement_increment(bucket, "oscillation_events", 1)
+            track["oscillation_events"] = int(track.get("oscillation_events", 0)) + 1
+        track["prev_pos"] = track.get("last_pos")
+        track["last_pos"] = (int(to_pos[0]), int(to_pos[1]))
+
+    def compute_movement_diagnostics_snapshot(self) -> Dict[str, Any]:
+        stats = self.movement_diagnostic_stats if isinstance(self.movement_diagnostic_stats, dict) else _default_movement_diagnostic_stats()
+
+        def _copy_bucket(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_movement_metrics()
+            for key in (
+                "movement_ticks_total",
+                "no_progress_ticks",
+                "oscillation_events",
+                "backtrack_steps",
+                "same_area_retarget_count",
+                "target_changes_count",
+                "path_recompute_count",
+                "near_target_indecision_count",
+                "net_displacement",
+                "gross_displacement",
+                "tile_occupancy_samples",
+                "tile_occupancy_peak",
+                "multi_agent_tile_events",
+                "blocked_by_agent_count",
+                "attempted_move_into_occupied_tile",
+                "head_on_collision_events",
+                "corridor_congestion_events",
+                "near_target_blocked_by_agent",
+                "road_tile_agent_samples",
+                "road_tile_multi_agent_events",
+                "road_congestion_events",
+            ):
+                out[key] = int(src.get(key, 0))
+            gross = int(out.get("gross_displacement", 0))
+            net = int(out.get("net_displacement", 0))
+            out["movement_efficiency_ratio"] = round(float(net) / float(gross), 3) if gross > 0 else 0.0
+            return out
+
+        def _copy_congestion_bucket(src: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                "tile_occupancy_samples": int(src.get("tile_occupancy_samples", 0)),
+                "tile_occupancy_peak": int(src.get("tile_occupancy_peak", 0)),
+                "multi_agent_tile_events": int(src.get("multi_agent_tile_events", 0)),
+                "blocked_by_agent_count": int(src.get("blocked_by_agent_count", 0)),
+                "attempted_move_into_occupied_tile": int(src.get("attempted_move_into_occupied_tile", 0)),
+                "head_on_collision_events": int(src.get("head_on_collision_events", 0)),
+                "corridor_congestion_events": int(src.get("corridor_congestion_events", 0)),
+                "near_target_blocked_by_agent": int(src.get("near_target_blocked_by_agent", 0)),
+                "road_tile_agent_samples": int(src.get("road_tile_agent_samples", 0)),
+                "road_tile_multi_agent_events": int(src.get("road_tile_multi_agent_events", 0)),
+                "road_congestion_events": int(src.get("road_congestion_events", 0)),
+            }
+
+        global_bucket = _copy_bucket(stats.get("global", {}))
+        by_role = {str(k): _copy_bucket(v if isinstance(v, dict) else {}) for k, v in (stats.get("by_role", {}) or {}).items()}
+        by_task = {str(k): _copy_bucket(v if isinstance(v, dict) else {}) for k, v in (stats.get("by_task", {}) or {}).items()}
+        by_context = {
+            str(k): _copy_bucket(v if isinstance(v, dict) else {})
+            for k, v in (stats.get("by_transport_context", {}) or {}).items()
+        }
+        by_village: Dict[str, Any] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            by_village[str(uid)] = {
+                "global": _copy_bucket(entry.get("global", {})),
+                "by_role": {str(k): _copy_bucket(v if isinstance(v, dict) else {}) for k, v in (entry.get("by_role", {}) or {}).items()},
+                "by_task": {str(k): _copy_bucket(v if isinstance(v, dict) else {}) for k, v in (entry.get("by_task", {}) or {}).items()},
+                "by_transport_context": {
+                    str(k): _copy_bucket(v if isinstance(v, dict) else {})
+                    for k, v in (entry.get("by_transport_context", {}) or {}).items()
+                },
+            }
+
+        top_oscillating_agents: List[Dict[str, Any]] = []
+        for aid, track in (stats.get("agent_track", {}) or {}).items():
+            if not isinstance(track, dict):
+                continue
+            count = int(track.get("oscillation_events", 0))
+            if count <= 0:
+                continue
+            top_oscillating_agents.append({"agent_id": str(aid), "oscillation_events": count})
+        top_oscillating_agents.sort(key=lambda item: (-int(item["oscillation_events"]), str(item["agent_id"])))
+
+        top_congested_tiles: List[Dict[str, Any]] = []
+        for _, entry in (stats.get("tile_hotspots", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            c = int(entry.get("congestion_events", 0))
+            p = int(entry.get("peak_occupancy", 0))
+            if c <= 0 and p <= 1:
+                continue
+            pos = entry.get("tile_position", {}) if isinstance(entry.get("tile_position"), dict) else {}
+            top_congested_tiles.append(
+                {
+                    "tile_position": {"x": int(pos.get("x", 0)), "y": int(pos.get("y", 0))},
+                    "congestion_events": c,
+                    "peak_occupancy": p,
+                }
+            )
+        top_congested_tiles.sort(
+            key=lambda item: (
+                -int(item.get("congestion_events", 0)),
+                -int(item.get("peak_occupancy", 0)),
+                int((item.get("tile_position", {}) or {}).get("x", 0)),
+                int((item.get("tile_position", {}) or {}).get("y", 0)),
+            )
+        )
+
+        return {
+            "global": global_bucket,
+            "by_role": dict(sorted(by_role.items(), key=lambda item: item[0])),
+            "by_task": dict(sorted(by_task.items(), key=lambda item: item[0])),
+            "by_transport_context": dict(sorted(by_context.items(), key=lambda item: item[0])),
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+            "movement_congestion_global": _copy_congestion_bucket(global_bucket),
+            "movement_congestion_by_role": {
+                str(k): _copy_congestion_bucket(v if isinstance(v, dict) else {})
+                for k, v in sorted(by_role.items(), key=lambda item: item[0])
+            },
+            "movement_congestion_by_task": {
+                str(k): _copy_congestion_bucket(v if isinstance(v, dict) else {})
+                for k, v in sorted(by_task.items(), key=lambda item: item[0])
+            },
+            "movement_congestion_by_transport_context": {
+                str(k): _copy_congestion_bucket(v if isinstance(v, dict) else {})
+                for k, v in sorted(by_context.items(), key=lambda item: item[0])
+            },
+            "top_congested_tiles": top_congested_tiles[:10],
+            "top_oscillating_agents": top_oscillating_agents[:5],
+        }
+
+    def record_delivery_pipeline_stage(
+        self,
+        agent: Agent,
+        stage: str,
+        *,
+        village_uid: Optional[str] = None,
+        role: Optional[str] = None,
+    ) -> None:
+        stage_key = str(stage)
+        if stage_key not in DELIVERY_DIAGNOSTIC_STAGES:
+            return
+        stats = self.delivery_diagnostic_stats
+        if not isinstance(stats, dict):
+            stats = _default_delivery_diagnostic_stats()
+            self.delivery_diagnostic_stats = stats
+
+        role_key = str(role or getattr(agent, "role", "npc") or "npc")
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+
+        global_entry = stats.setdefault("global", _empty_delivery_diagnostic_metrics())
+        global_entry[stage_key] = int(global_entry.get(stage_key, 0)) + 1
+
+        by_role = stats.setdefault("by_role", {})
+        role_entry = by_role.get(role_key)
+        if not isinstance(role_entry, dict):
+            role_entry = _empty_delivery_diagnostic_metrics()
+            by_role[role_key] = role_entry
+        role_entry[stage_key] = int(role_entry.get(stage_key, 0)) + 1
+
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            village_entry = by_village.get(uid)
+            if not isinstance(village_entry, dict):
+                village_entry = {
+                    "global": _empty_delivery_diagnostic_metrics(),
+                    "by_role": {},
+                }
+                by_village[uid] = village_entry
+            vglobal = village_entry.setdefault("global", _empty_delivery_diagnostic_metrics())
+            vglobal[stage_key] = int(vglobal.get(stage_key, 0)) + 1
+            vby_role = village_entry.setdefault("by_role", {})
+            vrole = vby_role.get(role_key)
+            if not isinstance(vrole, dict):
+                vrole = _empty_delivery_diagnostic_metrics()
+                vby_role[role_key] = vrole
+            vrole[stage_key] = int(vrole.get(stage_key, 0)) + 1
+
+    def record_delivery_pipeline_failure(
+        self,
+        agent: Agent,
+        reason: str,
+        *,
+        village_uid: Optional[str] = None,
+        role: Optional[str] = None,
+    ) -> None:
+        reason_key = str(reason)
+        if reason_key not in DELIVERY_DIAGNOSTIC_FAILURE_REASONS:
+            reason_key = "unknown_failure"
+        self.record_delivery_pipeline_stage(
+            agent,
+            "delivery_abandoned_count",
+            village_uid=village_uid,
+            role=role,
+        )
+        stats = self.delivery_diagnostic_stats
+        if not isinstance(stats, dict):
+            stats = _default_delivery_diagnostic_stats()
+            self.delivery_diagnostic_stats = stats
+        role_key = str(role or getattr(agent, "role", "npc") or "npc")
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+
+        global_entry = stats.setdefault("global", _empty_delivery_diagnostic_metrics())
+        greasons = global_entry.setdefault("delivery_failure_reasons", {})
+        greasons[reason_key] = int(greasons.get(reason_key, 0)) + 1
+
+        by_role = stats.setdefault("by_role", {})
+        role_entry = by_role.get(role_key)
+        if not isinstance(role_entry, dict):
+            role_entry = _empty_delivery_diagnostic_metrics()
+            by_role[role_key] = role_entry
+        rreasons = role_entry.setdefault("delivery_failure_reasons", {})
+        rreasons[reason_key] = int(rreasons.get(reason_key, 0)) + 1
+
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            village_entry = by_village.get(uid)
+            if not isinstance(village_entry, dict):
+                village_entry = {"global": _empty_delivery_diagnostic_metrics(), "by_role": {}}
+                by_village[uid] = village_entry
+            vglobal = village_entry.setdefault("global", _empty_delivery_diagnostic_metrics())
+            vgreasons = vglobal.setdefault("delivery_failure_reasons", {})
+            vgreasons[reason_key] = int(vgreasons.get(reason_key, 0)) + 1
+            vby_role = village_entry.setdefault("by_role", {})
+            vrole = vby_role.get(role_key)
+            if not isinstance(vrole, dict):
+                vrole = _empty_delivery_diagnostic_metrics()
+                vby_role[role_key] = vrole
+            vreasons = vrole.setdefault("delivery_failure_reasons", {})
+            vreasons[reason_key] = int(vreasons.get(reason_key, 0)) + 1
+
+    def compute_delivery_diagnostics_snapshot(self) -> Dict[str, Any]:
+        stats = self.delivery_diagnostic_stats if isinstance(self.delivery_diagnostic_stats, dict) else _default_delivery_diagnostic_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_delivery_diagnostic_metrics()
+            for stage in DELIVERY_DIAGNOSTIC_STAGES:
+                out[stage] = int(src.get(stage, 0))
+            out["delivery_failure_reasons"] = {
+                str(k): int(v) for k, v in ((src.get("delivery_failure_reasons", {}) or {}).items())
+            }
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_role = {
+            str(role): _copy(entry if isinstance(entry, dict) else {})
+            for role, entry in (stats.get("by_role", {}) or {}).items()
+        }
+        by_village: Dict[str, Any] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            by_village[str(uid)] = {
+                "global": _copy(entry.get("global", {}) if isinstance(entry.get("global", {}), dict) else {}),
+                "by_role": {
+                    str(role): _copy(rentry if isinstance(rentry, dict) else {})
+                    for role, rentry in (entry.get("by_role", {}) or {}).items()
+                },
+            }
+        return {
+            "global": global_out,
+            "by_role": dict(sorted(by_role.items(), key=lambda item: item[0])),
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def _resolve_building_village_uid(self, building: Dict[str, Any]) -> str:
+        if not isinstance(building, dict):
+            return ""
+        uid = str(building.get("village_uid", "") or "")
+        if uid:
+            return uid
+        vid = building.get("village_id")
+        if vid is not None:
+            resolved = self.resolve_village_uid(vid)
+            if resolved is not None:
+                return str(resolved)
+        return ""
+
+    def _housing_construction_entry(self, village_uid: Optional[str] = None) -> Dict[str, Any]:
+        stats = self.housing_construction_stats
+        if not isinstance(stats, dict):
+            stats = _default_housing_construction_stats()
+            self.housing_construction_stats = stats
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = _empty_housing_construction_metrics()
+                by_village[uid] = entry
+            return entry
+        entry = stats.get("global")
+        if not isinstance(entry, dict):
+            entry = _empty_housing_construction_metrics()
+            stats["global"] = entry
+        return entry
+
+    def _record_house_construction_duration(
+        self,
+        building_id: Optional[str],
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        bid = str(building_id or "")
+        if not bid:
+            return
+        stats = self.housing_construction_stats
+        if not isinstance(stats, dict):
+            stats = _default_housing_construction_stats()
+            self.housing_construction_stats = stats
+        completed_ids = stats.setdefault("_house_completed_ids", set())
+        if not isinstance(completed_ids, set):
+            completed_ids = set()
+            stats["_house_completed_ids"] = completed_ids
+        if bid in completed_ids:
+            return
+        start_map = stats.setdefault("_house_start_tick_by_id", {})
+        if not isinstance(start_map, dict):
+            start_map = {}
+            stats["_house_start_tick_by_id"] = start_map
+        started = start_map.get(bid)
+        if started is None:
+            return
+        try:
+            duration = max(0, int(self.tick) - int(started))
+        except Exception:
+            return
+        completed_ids.add(bid)
+        durations_global = stats.setdefault("_durations_global", [])
+        if not isinstance(durations_global, list):
+            durations_global = []
+            stats["_durations_global"] = durations_global
+        durations_global.append(duration)
+        uid = str(village_uid or "")
+        if uid:
+            by_v = stats.setdefault("_durations_by_village", {})
+            if not isinstance(by_v, dict):
+                by_v = {}
+                stats["_durations_by_village"] = by_v
+            lst = by_v.get(uid)
+            if not isinstance(lst, list):
+                lst = []
+                by_v[uid] = lst
+            lst.append(duration)
+
+    def record_housing_construction_stage(
+        self,
+        stage: str,
+        *,
+        village_uid: Optional[str] = None,
+        building_id: Optional[str] = None,
+    ) -> None:
+        key = str(stage).strip()
+        if key not in HOUSING_CONSTRUCTION_STAGES:
+            return
+        g = self._housing_construction_entry(None)
+        g[key] = int(g.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            v = self._housing_construction_entry(uid)
+            v[key] = int(v.get(key, 0)) + 1
+
+        stats = self.housing_construction_stats
+        if not isinstance(stats, dict):
+            stats = _default_housing_construction_stats()
+            self.housing_construction_stats = stats
+        bid = str(building_id or "")
+        if key == "house_site_created" and bid:
+            start_map = stats.setdefault("_house_start_tick_by_id", {})
+            if not isinstance(start_map, dict):
+                start_map = {}
+                stats["_house_start_tick_by_id"] = start_map
+            start_map.setdefault(bid, int(self.tick))
+        if key == "house_construction_completed":
+            self._record_house_construction_duration(bid, village_uid=uid or None)
+
+    def record_housing_construction_failure(
+        self,
+        reason: str,
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        key = str(reason).strip().lower() or "site_invalidated"
+        if key not in HOUSING_CONSTRUCTION_FAILURE_REASONS:
+            key = "site_invalidated"
+        g = self._housing_construction_entry(None)
+        greasons = g.setdefault("failure_reasons", {})
+        greasons[key] = int(greasons.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            v = self._housing_construction_entry(uid)
+            vreasons = v.setdefault("failure_reasons", {})
+            vreasons[key] = int(vreasons.get(key, 0)) + 1
+
+    def record_housing_worker_participation(
+        self,
+        event: str,
+        *,
+        village_uid: Optional[str] = None,
+    ) -> None:
+        key = str(event).strip()
+        if key not in HOUSING_WORKER_PARTICIPATION_KEYS:
+            return
+        g = self._housing_construction_entry(None)
+        gw = g.setdefault("worker_participation", {})
+        gw[key] = int(gw.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            v = self._housing_construction_entry(uid)
+            vw = v.setdefault("worker_participation", {})
+            vw[key] = int(vw.get(key, 0)) + 1
+
+    def compute_housing_construction_diagnostics_snapshot(self) -> Dict[str, Any]:
+        stats = self.housing_construction_stats if isinstance(self.housing_construction_stats, dict) else _default_housing_construction_stats()
+
+        counts_under: Dict[str, int] = {}
+        counts_active: Dict[str, int] = {}
+        for building in getattr(self, "buildings", {}).values():
+            if not isinstance(building, dict):
+                continue
+            if str(building.get("type", "")) != "house":
+                continue
+            uid = self._resolve_building_village_uid(building)
+            state = str(building.get("operational_state", ""))
+            if state == "under_construction":
+                counts_under[uid] = int(counts_under.get(uid, 0)) + 1
+            elif state == "active":
+                counts_active[uid] = int(counts_active.get(uid, 0)) + 1
+
+        durations_global = stats.get("_durations_global", [])
+        if not isinstance(durations_global, list):
+            durations_global = []
+        completed_ids = stats.get("_house_completed_ids", set())
+        if not isinstance(completed_ids, set):
+            completed_ids = set()
+
+        def _copy_entry(src: Dict[str, Any], uid: str = "") -> Dict[str, Any]:
+            out = _empty_housing_construction_metrics()
+            for stage in HOUSING_CONSTRUCTION_STAGES:
+                out[stage] = int(src.get(stage, 0))
+            out["failure_reasons"] = {
+                str(k): int(v) for k, v in ((src.get("failure_reasons", {}) or {}).items())
+            }
+            src_worker = src.get("worker_participation", {}) if isinstance(src.get("worker_participation", {}), dict) else {}
+            out["worker_participation"] = {
+                key: int(src_worker.get(key, 0)) for key in HOUSING_WORKER_PARTICIPATION_KEYS
+            }
+            out["houses_under_construction_count"] = int(counts_under.get(uid, 0)) if uid else int(sum(counts_under.values()))
+            out["houses_active_count"] = int(counts_active.get(uid, 0)) if uid else int(sum(counts_active.values()))
+            completed_from_stage = int(src.get("house_construction_completed", 0))
+            if uid:
+                by_v_durations = stats.get("_durations_by_village", {})
+                durations = by_v_durations.get(uid, []) if isinstance(by_v_durations, dict) else []
+                if not isinstance(durations, list):
+                    durations = []
+                out["houses_completed_count"] = max(len(durations), completed_from_stage)
+                out["average_house_construction_time"] = round(float(sum(durations)) / float(len(durations)), 3) if durations else 0.0
+                out["max_house_construction_time"] = max([int(d) for d in durations], default=0)
+            else:
+                out["houses_completed_count"] = max(len(completed_ids), completed_from_stage)
+                out["average_house_construction_time"] = round(float(sum(durations_global)) / float(len(durations_global)), 3) if durations_global else 0.0
+                out["max_house_construction_time"] = max([int(d) for d in durations_global], default=0)
+            return out
+
+        global_out = _copy_entry(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_village: Dict[str, Dict[str, Any]] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            suid = str(uid)
+            by_village[suid] = _copy_entry(entry, uid=suid)
+        return {
+            "global": global_out,
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def _housing_siting_entry(self, village_uid: Optional[str] = None) -> Dict[str, Any]:
+        stats = self.housing_siting_stats
+        if not isinstance(stats, dict):
+            stats = _default_housing_siting_stats()
+            self.housing_siting_stats = stats
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = _empty_housing_siting_metrics()
+                by_village[uid] = entry
+            return entry
+        entry = stats.get("global")
+        if not isinstance(entry, dict):
+            entry = _empty_housing_siting_metrics()
+            stats["global"] = entry
+        return entry
+
+    def record_housing_siting_stage(self, stage: str, *, village_uid: Optional[str] = None) -> None:
+        key = str(stage).strip()
+        if key not in HOUSING_SITING_SEARCH_STAGES:
+            return
+        g = self._housing_siting_entry(None)
+        g[key] = int(g.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            v = self._housing_siting_entry(uid)
+            v[key] = int(v.get(key, 0)) + 1
+
+    def record_housing_siting_rejection_reason(self, reason: str, *, village_uid: Optional[str] = None) -> None:
+        key = str(reason).strip().lower() or "other_guard"
+        if key not in HOUSING_SITING_REJECTION_REASONS:
+            key = "other_guard"
+        g = self._housing_siting_entry(None)
+        greasons = g.setdefault("rejection_reasons", {})
+        greasons[key] = int(greasons.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            v = self._housing_siting_entry(uid)
+            vreasons = v.setdefault("rejection_reasons", {})
+            vreasons[key] = int(vreasons.get(key, 0)) + 1
+
+    def compute_housing_siting_rejection_snapshot(self) -> Dict[str, Any]:
+        stats = self.housing_siting_stats if isinstance(self.housing_siting_stats, dict) else _default_housing_siting_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_housing_siting_metrics()
+            for stage in HOUSING_SITING_SEARCH_STAGES:
+                out[stage] = int(src.get(stage, 0))
+            out["rejection_reasons"] = {
+                str(k): int(v) for k, v in ((src.get("rejection_reasons", {}) or {}).items())
+            }
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_village: Dict[str, Dict[str, Any]] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            by_village[str(uid)] = _copy(entry)
+        return {
+            "global": global_out,
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def _housing_path_entry(self, village_uid: Optional[str] = None) -> Dict[str, Any]:
+        stats = self.housing_path_coherence_stats
+        if not isinstance(stats, dict):
+            stats = _default_housing_path_coherence_stats()
+            self.housing_path_coherence_stats = stats
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = _empty_housing_path_coherence_metrics()
+                by_village[uid] = entry
+            return entry
+        entry = stats.get("global")
+        if not isinstance(entry, dict):
+            entry = _empty_housing_path_coherence_metrics()
+            stats["global"] = entry
+        return entry
+
+    def record_housing_path_coherence(self, key: str, *, village_uid: Optional[str] = None) -> None:
+        metric = str(key).strip()
+        if metric not in HOUSING_PATH_COHERENCE_KEYS:
+            return
+        g = self._housing_path_entry(None)
+        g[metric] = int(g.get(metric, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            v = self._housing_path_entry(uid)
+            v[metric] = int(v.get(metric, 0)) + 1
+
+    def compute_housing_path_coherence_snapshot(self) -> Dict[str, Any]:
+        stats = self.housing_path_coherence_stats if isinstance(self.housing_path_coherence_stats, dict) else _default_housing_path_coherence_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_housing_path_coherence_metrics()
+            for key in HOUSING_PATH_COHERENCE_KEYS:
+                out[key] = int(src.get(key, 0))
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_village: Dict[str, Dict[str, Any]] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            by_village[str(uid)] = _copy(entry)
+
+        # Infer unknown activation path as active houses not explicitly accounted.
+        if int(global_out.get("house_path_unknown", 0)) == 0:
+            active_houses = 0
+            for building in getattr(self, "buildings", {}).values():
+                if (
+                    isinstance(building, dict)
+                    and str(building.get("type", "")) == "house"
+                    and str(building.get("operational_state", "")) == "active"
+                ):
+                    active_houses += 1
+            known = int(global_out.get("house_activated_via_completion_hook", 0)) + int(global_out.get("house_activated_via_direct_path", 0))
+            global_out["house_path_unknown"] = max(0, int(active_houses) - int(known))
+        return {
+            "global": global_out,
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def record_builder_self_supply_attempt(self) -> None:
+        stats = self.builder_self_supply_stats
+        if not isinstance(stats, dict):
+            stats = _default_builder_self_supply_stats()
+            self.builder_self_supply_stats = stats
+        stats["attempt_count"] = int(stats.get("attempt_count", 0)) + 1
+
+    def record_builder_self_supply_success(self, distance: int) -> None:
+        stats = self.builder_self_supply_stats
+        if not isinstance(stats, dict):
+            stats = _default_builder_self_supply_stats()
+            self.builder_self_supply_stats = stats
+        stats["success_count"] = int(stats.get("success_count", 0)) + 1
+        stats["distance_total"] = int(stats.get("distance_total", 0)) + max(0, int(distance))
+        stats["distance_samples"] = int(stats.get("distance_samples", 0)) + 1
+
+    def record_builder_self_supply_failure(self, reason: str) -> None:
+        stats = self.builder_self_supply_stats
+        if not isinstance(stats, dict):
+            stats = _default_builder_self_supply_stats()
+            self.builder_self_supply_stats = stats
+        key = str(reason).strip().lower() or "unknown_failure"
+        reasons = stats.setdefault("failure_reasons", {})
+        reasons[key] = int(reasons.get(key, 0)) + 1
+
+    def compute_builder_self_supply_snapshot(self) -> Dict[str, Any]:
+        stats = self.builder_self_supply_stats if isinstance(self.builder_self_supply_stats, dict) else _default_builder_self_supply_stats()
+        samples = int(stats.get("distance_samples", 0))
+        total = int(stats.get("distance_total", 0))
+        avg = round(float(total) / float(samples), 3) if samples > 0 else 0.0
+        return {
+            "builder_self_supply_attempt_count": int(stats.get("attempt_count", 0)),
+            "builder_self_supply_success_count": int(stats.get("success_count", 0)),
+            "builder_self_supply_failure_reasons": {
+                str(k): int(v) for k, v in ((stats.get("failure_reasons", {}) or {}).items())
+            },
+            "builder_self_supply_distance_avg": avg,
+        }
+
+    def _builder_self_supply_gate_entry(self, village_uid: Optional[str] = None) -> Dict[str, Any]:
+        stats = self.builder_self_supply_gate_stats
+        if not isinstance(stats, dict):
+            stats = _default_builder_self_supply_gate_stats()
+            self.builder_self_supply_gate_stats = stats
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = _empty_builder_self_supply_gate_metrics()
+                by_village[uid] = entry
+            return entry
+        entry = stats.get("global")
+        if not isinstance(entry, dict):
+            entry = _empty_builder_self_supply_gate_metrics()
+            stats["global"] = entry
+        return entry
+
+    def record_builder_self_supply_gate_stage(self, stage: str, *, village_uid: Optional[str] = None) -> None:
+        key = str(stage).strip()
+        if key not in BUILDER_SELF_SUPPLY_GATE_STAGES:
+            return
+        g = self._builder_self_supply_gate_entry(None)
+        g[key] = int(g.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            v = self._builder_self_supply_gate_entry(uid)
+            v[key] = int(v.get(key, 0)) + 1
+
+    def record_builder_self_supply_gate_failure(self, reason: str, *, village_uid: Optional[str] = None) -> None:
+        key = str(reason).strip().lower() or "unknown_failure"
+        if key not in BUILDER_SELF_SUPPLY_GATE_REASONS:
+            key = "unknown_failure"
+        g = self._builder_self_supply_gate_entry(None)
+        greasons = g.setdefault("failure_reasons", {})
+        greasons[key] = int(greasons.get(key, 0)) + 1
+        if key == "self_supply_succeeded":
+            g["success_count"] = int(g.get("success_count", 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            v = self._builder_self_supply_gate_entry(uid)
+            vreasons = v.setdefault("failure_reasons", {})
+            vreasons[key] = int(vreasons.get(key, 0)) + 1
+            if key == "self_supply_succeeded":
+                v["success_count"] = int(v.get("success_count", 0)) + 1
+
+    def compute_builder_self_supply_gate_snapshot(self) -> Dict[str, Any]:
+        stats = self.builder_self_supply_gate_stats if isinstance(self.builder_self_supply_gate_stats, dict) else _default_builder_self_supply_gate_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_builder_self_supply_gate_metrics()
+            for stage in BUILDER_SELF_SUPPLY_GATE_STAGES:
+                out[stage] = int(src.get(stage, 0))
+            out["success_count"] = int(src.get("success_count", 0))
+            out["failure_reasons"] = {
+                str(k): int(v) for k, v in ((src.get("failure_reasons", {}) or {}).items())
+            }
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_village: Dict[str, Dict[str, Any]] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            by_village[str(uid)] = _copy(entry)
+        return {
+            "global": global_out,
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def _next_proto_community_id(self) -> str:
+        self._proto_community_counter = int(getattr(self, "_proto_community_counter", 0)) + 1
+        return f"pc-{self._proto_community_counter:06d}"
+
+    def _region_key_for_pos(self, x: int, y: int) -> str:
+        best_uid = ""
+        best_dist = 10**9
+        for village in getattr(self, "villages", []):
+            if not isinstance(village, dict):
+                continue
+            center = village.get("center", {}) if isinstance(village.get("center"), dict) else {}
+            vx = int(center.get("x", x))
+            vy = int(center.get("y", y))
+            dist = abs(int(x) - vx) + abs(int(y) - vy)
+            if dist < best_dist and dist <= 18:
+                best_dist = dist
+                best_uid = str(village.get("village_uid", "") or "")
+        return best_uid or "unaffiliated_region"
+
+    def _proto_funnel_entry(self, region: Optional[str] = None) -> Dict[str, Any]:
+        stats = self.proto_community_funnel_stats
+        if not isinstance(stats, dict):
+            stats = _default_proto_funnel_stats()
+            self.proto_community_funnel_stats = stats
+        key = str(region or "")
+        if key:
+            by_region = stats.setdefault("by_region", {})
+            entry = by_region.get(key)
+            if not isinstance(entry, dict):
+                entry = _empty_proto_funnel_metrics()
+                by_region[key] = entry
+            return entry
+        global_entry = stats.get("global")
+        if not isinstance(global_entry, dict):
+            global_entry = _empty_proto_funnel_metrics()
+            stats["global"] = global_entry
+        return global_entry
+
+    def record_proto_funnel_stage(self, stage: str, *, region: Optional[str] = None) -> None:
+        key = str(stage).strip()
+        if key not in PROTO_COMMUNITY_FUNNEL_STAGES:
+            return
+        g = self._proto_funnel_entry(None)
+        g[key] = int(g.get(key, 0)) + 1
+        if region:
+            r = self._proto_funnel_entry(region)
+            r[key] = int(r.get(key, 0)) + 1
+
+    def record_proto_funnel_failure(self, reason: str, *, region: Optional[str] = None) -> None:
+        key = str(reason).strip().lower() or "other_guard"
+        if key not in PROTO_COMMUNITY_FUNNEL_FAILURE_REASONS:
+            key = "other_guard"
+        g = self._proto_funnel_entry(None)
+        greasons = g.setdefault("failure_reasons", {})
+        greasons[key] = int(greasons.get(key, 0)) + 1
+        if region:
+            r = self._proto_funnel_entry(region)
+            rreasons = r.setdefault("failure_reasons", {})
+            rreasons[key] = int(rreasons.get(key, 0)) + 1
+
+    def compute_proto_community_funnel_snapshot(self) -> Dict[str, Any]:
+        stats = self.proto_community_funnel_stats if isinstance(self.proto_community_funnel_stats, dict) else _default_proto_funnel_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_proto_funnel_metrics()
+            for s in PROTO_COMMUNITY_FUNNEL_STAGES:
+                out[s] = int(src.get(s, 0))
+            out["failure_reasons"] = {str(k): int(v) for k, v in ((src.get("failure_reasons", {}) or {}).items())}
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_region: Dict[str, Dict[str, Any]] = {}
+        for region, entry in (stats.get("by_region", {}) or {}).items():
+            if isinstance(entry, dict):
+                by_region[str(region)] = _copy(entry)
+        return {
+            "global": global_out,
+            "by_region": dict(sorted(by_region.items(), key=lambda item: item[0])),
+        }
+
+    def _camp_lifecycle_entry(self, region: Optional[str] = None) -> Dict[str, Any]:
+        stats = self.camp_lifecycle_stats
+        if not isinstance(stats, dict):
+            stats = _default_camp_lifecycle_stats()
+            self.camp_lifecycle_stats = stats
+        key = str(region or "")
+        if key:
+            by_region = stats.setdefault("by_region", {})
+            entry = by_region.get(key)
+            if not isinstance(entry, dict):
+                entry = _empty_camp_lifecycle_metrics()
+                by_region[key] = entry
+            return entry
+        global_entry = stats.get("global")
+        if not isinstance(global_entry, dict):
+            global_entry = _empty_camp_lifecycle_metrics()
+            stats["global"] = global_entry
+        return global_entry
+
+    def record_camp_lifecycle_stage(self, stage: str, *, region: Optional[str] = None) -> None:
+        key = str(stage).strip()
+        if key not in CAMP_LIFECYCLE_STAGES:
+            return
+        g = self._camp_lifecycle_entry(None)
+        g[key] = int(g.get(key, 0)) + 1
+        if region:
+            r = self._camp_lifecycle_entry(region)
+            r[key] = int(r.get(key, 0)) + 1
+
+    def record_camp_deactivation_reason(self, reason: str, *, region: Optional[str] = None) -> None:
+        key = str(reason).strip().lower() or "other_guard"
+        if key not in CAMP_LIFECYCLE_DEACTIVATION_REASONS:
+            key = "other_guard"
+        g = self._camp_lifecycle_entry(None)
+        greasons = g.setdefault("deactivation_reasons", {})
+        greasons[key] = int(greasons.get(key, 0)) + 1
+        if region:
+            r = self._camp_lifecycle_entry(region)
+            rreasons = r.setdefault("deactivation_reasons", {})
+            rreasons[key] = int(rreasons.get(key, 0)) + 1
+
+    def record_camp_retention_reason(self, reason: str, *, region: Optional[str] = None) -> None:
+        key = str(reason).strip().lower() or "recent_use"
+        if key not in CAMP_LIFECYCLE_RETENTION_REASONS:
+            key = "recent_use"
+        g = self._camp_lifecycle_entry(None)
+        greasons = g.setdefault("retention_reasons", {})
+        greasons[key] = int(greasons.get(key, 0)) + 1
+        if region:
+            r = self._camp_lifecycle_entry(region)
+            rreasons = r.setdefault("retention_reasons", {})
+            rreasons[key] = int(rreasons.get(key, 0)) + 1
+
+    def record_camp_deactivation_support_snapshot(self, *, region: Optional[str] = None, support: Optional[Dict[str, Any]] = None) -> None:
+        snap = support if isinstance(support, dict) else {}
+
+        def _apply(entry: Dict[str, Any]) -> None:
+            if bool(snap.get("has_food_buffer", False)):
+                entry["deactivation_with_food_cache_count"] = int(entry.get("deactivation_with_food_cache_count", 0)) + 1
+            if bool(snap.get("recent_use", False)):
+                entry["deactivation_with_recent_use_count"] = int(entry.get("deactivation_with_recent_use_count", 0)) + 1
+            if int(snap.get("anchor_agents", 0)) > 0:
+                entry["deactivation_with_anchor_support_count"] = int(entry.get("deactivation_with_anchor_support_count", 0)) + 1
+            if int(snap.get("nearby_agents", 0)) > 0:
+                entry["deactivation_with_nearby_agents_count"] = int(entry.get("deactivation_with_nearby_agents_count", 0)) + 1
+
+        g = self._camp_lifecycle_entry(None)
+        _apply(g)
+        if region:
+            r = self._camp_lifecycle_entry(region)
+            _apply(r)
+
+    def compute_camp_lifecycle_snapshot(self) -> Dict[str, Any]:
+        stats = self.camp_lifecycle_stats if isinstance(self.camp_lifecycle_stats, dict) else _default_camp_lifecycle_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_camp_lifecycle_metrics()
+            for s in CAMP_LIFECYCLE_STAGES:
+                out[s] = int(src.get(s, 0))
+            out["deactivation_reasons"] = {str(k): int(v) for k, v in ((src.get("deactivation_reasons", {}) or {}).items())}
+            out["retention_reasons"] = {str(k): int(v) for k, v in ((src.get("retention_reasons", {}) or {}).items())}
+            out["deactivation_with_food_cache_count"] = int(src.get("deactivation_with_food_cache_count", 0))
+            out["deactivation_with_recent_use_count"] = int(src.get("deactivation_with_recent_use_count", 0))
+            out["deactivation_with_anchor_support_count"] = int(src.get("deactivation_with_anchor_support_count", 0))
+            out["deactivation_with_nearby_agents_count"] = int(src.get("deactivation_with_nearby_agents_count", 0))
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_region: Dict[str, Dict[str, Any]] = {}
+        for region, entry in (stats.get("by_region", {}) or {}).items():
+            if isinstance(entry, dict):
+                by_region[str(region)] = _copy(entry)
+        return {
+            "global": global_out,
+            "by_region": dict(sorted(by_region.items(), key=lambda item: item[0])),
+        }
+
+    def _camp_targeting_entry(self, region: Optional[str] = None) -> Dict[str, Any]:
+        stats = self.camp_targeting_stats
+        if not isinstance(stats, dict):
+            stats = _default_camp_targeting_stats()
+            self.camp_targeting_stats = stats
+        key = str(region or "")
+        if key:
+            by_region = stats.setdefault("by_region", {})
+            entry = by_region.get(key)
+            if not isinstance(entry, dict):
+                entry = _empty_camp_targeting_metrics()
+                by_region[key] = entry
+            return entry
+        global_entry = stats.get("global")
+        if not isinstance(global_entry, dict):
+            global_entry = _empty_camp_targeting_metrics()
+            stats["global"] = global_entry
+        return global_entry
+
+    def record_camp_targeting(self, stage: str, *, region: Optional[str] = None) -> None:
+        key = str(stage).strip()
+        if key not in CAMP_TARGETING_STAGES:
+            return
+        g = self._camp_targeting_entry(None)
+        g[key] = int(g.get(key, 0)) + 1
+        if region:
+            r = self._camp_targeting_entry(region)
+            r[key] = int(r.get(key, 0)) + 1
+
+    def record_camp_not_chosen_reason(self, reason: str, *, region: Optional[str] = None) -> None:
+        key = str(reason).strip().lower() or "other_guard"
+        if key not in CAMP_TARGETING_REASONS:
+            key = "other_guard"
+        g = self._camp_targeting_entry(None)
+        reasons = g.setdefault("camp_not_chosen_reasons", {})
+        reasons[key] = int(reasons.get(key, 0)) + 1
+        if region:
+            r = self._camp_targeting_entry(region)
+            rreasons = r.setdefault("camp_not_chosen_reasons", {})
+            rreasons[key] = int(rreasons.get(key, 0)) + 1
+
+    def compute_camp_targeting_snapshot(self) -> Dict[str, Any]:
+        stats = self.camp_targeting_stats if isinstance(self.camp_targeting_stats, dict) else _default_camp_targeting_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_camp_targeting_metrics()
+            for s in CAMP_TARGETING_STAGES:
+                out[s] = int(src.get(s, 0))
+            out["camp_not_chosen_reasons"] = {
+                str(k): int(v) for k, v in ((src.get("camp_not_chosen_reasons", {}) or {}).items())
+            }
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_region: Dict[str, Dict[str, Any]] = {}
+        for region, entry in (stats.get("by_region", {}) or {}).items():
+            if isinstance(entry, dict):
+                by_region[str(region)] = _copy(entry)
+        return {
+            "global": global_out,
+            "by_region": dict(sorted(by_region.items(), key=lambda item: item[0])),
+        }
+
+    def _next_camp_id(self) -> str:
+        self._camp_counter = int(getattr(self, "_camp_counter", 0)) + 1
+        return f"camp-{self._camp_counter:06d}"
+
+    def _camp_viable_walkable_pos(self, x: int, y: int) -> Optional[Coord]:
+        origin = (int(x), int(y))
+        for radius in range(0, 3):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    if abs(dx) + abs(dy) != radius:
+                        continue
+                    nx, ny = origin[0] + dx, origin[1] + dy
+                    if not (0 <= nx < self.width and 0 <= ny < self.height):
+                        continue
+                    if not self.is_walkable(nx, ny):
+                        continue
+                    if self.is_tile_blocked_by_building(nx, ny):
+                        continue
+                    return (nx, ny)
+        return None
+
+    def _agents_components_for_proto(self) -> List[List[Agent]]:
+        alive = sorted(
+            [a for a in self.agents if getattr(a, "alive", False)],
+            key=lambda a: str(getattr(a, "agent_id", "")),
+        )
+        components: List[List[Agent]] = []
+        visited: Set[str] = set()
+        for agent in alive:
+            aid = str(getattr(agent, "agent_id", ""))
+            if aid in visited:
+                continue
+            stack = [agent]
+            cluster: List[Agent] = []
+            while stack:
+                cur = stack.pop()
+                cid = str(getattr(cur, "agent_id", ""))
+                if cid in visited:
+                    continue
+                visited.add(cid)
+                cluster.append(cur)
+                for other in alive:
+                    oid = str(getattr(other, "agent_id", ""))
+                    if oid in visited:
+                        continue
+                    if abs(int(cur.x) - int(other.x)) + abs(int(cur.y) - int(other.y)) <= PROTO_COMMUNITY_RADIUS:
+                        stack.append(other)
+            components.append(sorted(cluster, key=lambda a: str(getattr(a, "agent_id", ""))))
+        components.sort(
+            key=lambda c: (
+                -len(c),
+                round(sum(int(a.x) for a in c) / float(max(1, len(c)))),
+                round(sum(int(a.y) for a in c) / float(max(1, len(c)))),
+            )
+        )
+        return components
+
+    def _agents_clustered_for_proto(self) -> List[List[Agent]]:
+        components = self._agents_components_for_proto()
+        clusters: List[List[Agent]] = [c for c in components if len(c) >= PROTO_COMMUNITY_MIN_AGENTS]
+        return clusters
+
+    def _cluster_center(self, cluster: List[Agent]) -> Coord:
+        cx = int(round(sum(int(a.x) for a in cluster) / float(max(1, len(cluster)))))
+        cy = int(round(sum(int(a.y) for a in cluster) / float(max(1, len(cluster)))))
+        return (cx, cy)
+
+    def _cluster_true_survival_crisis(self, cluster: List[Agent]) -> bool:
+        if not cluster:
+            return True
+        avg_hunger = sum(float(getattr(a, "hunger", 0.0)) for a in cluster) / float(max(1, len(cluster)))
+        min_hunger = min(float(getattr(a, "hunger", 0.0)) for a in cluster)
+        return bool(avg_hunger < 12.0 or min_hunger < 8.0)
+
+    def _resolve_camp_village_uid(self, x: int, y: int) -> str:
+        best_uid = ""
+        best_dist = 10**9
+        for village in getattr(self, "villages", []):
+            if not isinstance(village, dict):
+                continue
+            center = village.get("center", {}) if isinstance(village.get("center"), dict) else {}
+            vx = int(center.get("x", x))
+            vy = int(center.get("y", y))
+            d = abs(int(x) - vx) + abs(int(y) - vy)
+            if d < best_dist and d <= CAMP_ANCHOR_RADIUS:
+                best_dist = d
+                best_uid = str(village.get("village_uid", "") or "")
+        return best_uid
+
+    def _camp_support_snapshot(self, camp: Dict[str, Any], *, current_tick: int) -> Dict[str, Any]:
+        if not isinstance(camp, dict):
+            return {
+                "nearby_agents": 0,
+                "nearby_needy_agents": 0,
+                "anchor_agents": 0,
+                "has_food_buffer": False,
+                "recent_use": False,
+                "recent_food_activity": False,
+                "support_score": 0,
+                "viable": False,
+            }
+        cx, cy = int(camp.get("x", 0)), int(camp.get("y", 0))
+        camp_id = str(camp.get("camp_id", "") or "")
+        nearby_agents = 0
+        nearby_needy_agents = 0
+        anchor_agents = 0
+        for agent in self.agents:
+            if not getattr(agent, "alive", False):
+                continue
+            dist = abs(int(getattr(agent, "x", 0)) - cx) + abs(int(getattr(agent, "y", 0)) - cy)
+            if dist > int(CAMP_SUPPORT_EVAL_RADIUS):
+                continue
+            nearby_agents += 1
+            if float(getattr(agent, "hunger", 100.0)) < 55.0:
+                nearby_needy_agents += 1
+            if str(getattr(agent, "proto_specialization", "none") or "none") != "none":
+                anchor = getattr(agent, "proto_task_anchor", {})
+                if isinstance(anchor, dict) and str(anchor.get("camp_id", "") or "") == camp_id:
+                    anchor_agents += 1
+        has_food_buffer = int(camp.get("food_cache", 0)) > 0
+        last_use_tick = int(camp.get("last_use_tick", camp.get("last_active_tick", current_tick)))
+        last_food_activity_tick = int(camp.get("last_food_activity_tick", camp.get("last_active_tick", current_tick)))
+        recent_use = (int(current_tick) - int(last_use_tick)) <= int(CAMP_SUPPORT_RECENT_USE_TICKS)
+        recent_food_activity = (int(current_tick) - int(last_food_activity_tick)) <= int(CAMP_SUPPORT_RECENT_USE_TICKS)
+        support_score = 0
+        if nearby_agents > 0:
+            support_score += 2
+        if nearby_needy_agents > 0 and has_food_buffer:
+            support_score += 2
+        elif has_food_buffer:
+            support_score += 1
+        if recent_use:
+            support_score += 1
+        if recent_food_activity:
+            support_score += 1
+        if anchor_agents > 0:
+            support_score += 1
+        viable = bool(
+            nearby_agents > 0
+            or (has_food_buffer and nearby_needy_agents > 0)
+            or recent_use
+            or recent_food_activity
+            or anchor_agents > 0
+        )
+        return {
+            "nearby_agents": int(nearby_agents),
+            "nearby_needy_agents": int(nearby_needy_agents),
+            "anchor_agents": int(anchor_agents),
+            "has_food_buffer": bool(has_food_buffer),
+            "recent_use": bool(recent_use),
+            "recent_food_activity": bool(recent_food_activity),
+            "support_score": int(support_score),
+            "viable": bool(viable),
+        }
+
+    def _record_camp_retention_from_support(self, support: Dict[str, Any], *, region: str) -> None:
+        if not isinstance(support, dict):
+            return
+        if bool(support.get("recent_use", False)) or bool(support.get("recent_food_activity", False)):
+            self.record_camp_retention_reason("recent_use", region=region)
+        if int(support.get("nearby_agents", 0)) > 0:
+            self.record_camp_retention_reason("nearby_agents", region=region)
+        if bool(support.get("has_food_buffer", False)):
+            self.record_camp_retention_reason("food_cache", region=region)
+        if int(support.get("anchor_agents", 0)) > 0:
+            self.record_camp_retention_reason("anchored_loop_support", region=region)
+
+    def update_proto_communities_and_camps(self) -> None:
+        components = self._agents_components_for_proto()
+        clusters = [c for c in components if len(c) >= PROTO_COMMUNITY_MIN_AGENTS]
+        current_tick = int(getattr(self, "tick", 0))
+        previous = self.proto_communities if isinstance(self.proto_communities, dict) else {}
+        next_state: Dict[str, Dict[str, Any]] = {}
+        used_prev: Set[str] = set()
+        for component in components:
+            center = self._cluster_center(component)
+            region = self._region_key_for_pos(center[0], center[1])
+            self.record_proto_funnel_stage("co_presence_detected", region=region)
+            if len(component) >= PROTO_COMMUNITY_MIN_AGENTS:
+                self.record_proto_funnel_stage("co_presence_cluster_valid", region=region)
+            else:
+                self.record_proto_funnel_failure("cluster_too_small", region=region)
+
+        for cluster in clusters:
+            center = self._cluster_center(cluster)
+            region = self._region_key_for_pos(center[0], center[1])
+            member_ids = tuple(str(getattr(a, "agent_id", "")) for a in cluster)
+            best_prev_id = ""
+            best_key = (10**9, 10**9)
+            for pid, entry in previous.items():
+                if not isinstance(entry, dict) or pid in used_prev:
+                    continue
+                px, py = int(entry.get("x", center[0])), int(entry.get("y", center[1]))
+                dist = abs(px - center[0]) + abs(py - center[1])
+                prev_members = set(entry.get("agent_ids", [])) if isinstance(entry.get("agent_ids", []), list) else set()
+                overlap = len(prev_members.intersection(member_ids))
+                key = (0 if overlap > 0 else 1, dist)
+                if key < best_key and dist <= PROTO_COMMUNITY_RADIUS + 2:
+                    best_key = key
+                    best_prev_id = str(pid)
+
+            if best_prev_id:
+                used_prev.add(best_prev_id)
+                prev_entry = previous.get(best_prev_id, {})
+                prev_streak = int(prev_entry.get("streak", 1))
+                streak = prev_streak + 1 if best_key[0] == 0 else 1
+                community_id = best_prev_id
+                if best_key[0] != 0:
+                    self.record_proto_funnel_failure("cluster_not_persistent", region=region)
+            else:
+                community_id = self._next_proto_community_id()
+                streak = 1
+                stats = self.progression_stats if isinstance(self.progression_stats, dict) else _default_progression_stats()
+                stats["proto_community_formed_count"] = int(stats.get("proto_community_formed_count", 0)) + 1
+                self.progression_stats = stats
+                self.record_proto_funnel_stage("proto_community_formed", region=region)
+            self.record_proto_funnel_stage("proto_streak_incremented", region=region)
+            if self._cluster_true_survival_crisis(cluster):
+                self.record_proto_funnel_failure("agents_starving", region=region)
+            else:
+                self.record_proto_funnel_stage("proto_viability_check_passed", region=region)
+            if self.is_tile_blocked_by_building(center[0], center[1]):
+                self.record_proto_funnel_failure("blocked_by_existing_structure", region=region)
+
+            next_state[community_id] = {
+                "community_id": community_id,
+                "x": int(center[0]),
+                "y": int(center[1]),
+                "agent_ids": list(member_ids),
+                "agent_count": int(len(member_ids)),
+                "streak": int(streak),
+                "last_seen_tick": int(current_tick),
+                "active": True,
+            }
+
+        self.proto_communities = next_state
+        for pid, entry in previous.items():
+            if not isinstance(entry, dict):
+                continue
+            if str(pid) in used_prev:
+                continue
+            px, py = int(entry.get("x", 0)), int(entry.get("y", 0))
+            region = self._region_key_for_pos(px, py)
+            self.record_proto_funnel_failure("agents_moving_apart", region=region)
+
+        camps = self.camps if isinstance(self.camps, dict) else {}
+        for community in next_state.values():
+            cx, cy = int(community.get("x", 0)), int(community.get("y", 0))
+            region = self._region_key_for_pos(cx, cy)
+            if int(community.get("streak", 0)) < int(PROTO_COMMUNITY_FORMATION_STREAK):
+                continue
+            if self._cluster_true_survival_crisis(
+                [a for a in self.agents if str(getattr(a, "agent_id", "")) in set(community.get("agent_ids", []))]
+            ):
+                self.record_proto_funnel_failure("agents_starving", region=region)
+                continue
+            avg_hunger = 0.0
+            members = [a for a in self.agents if str(getattr(a, "agent_id", "")) in set(community.get("agent_ids", []))]
+            if members:
+                avg_hunger = sum(float(getattr(a, "hunger", 0.0)) for a in members) / float(len(members))
+            if avg_hunger < CAMP_FORMATION_HUNGER_MIN:
+                self.record_proto_funnel_failure("area_not_viable", region=region)
+                continue
+            nearby_existing = None
+            for camp in camps.values():
+                if not isinstance(camp, dict):
+                    continue
+                if not bool(camp.get("active", True)):
+                    continue
+                dist = abs(int(camp.get("x", 0)) - cx) + abs(int(camp.get("y", 0)) - cy)
+                if dist <= PROTO_COMMUNITY_RADIUS:
+                    nearby_existing = camp
+                    break
+            if nearby_existing is not None:
+                nearby_existing["last_active_tick"] = int(current_tick)
+                continue
+            pos = self._camp_viable_walkable_pos(cx, cy)
+            if pos is None:
+                self.record_proto_funnel_failure("area_not_viable", region=region)
+                continue
+            camp_id = self._next_camp_id()
+            camps[camp_id] = {
+                "camp_id": camp_id,
+                "x": int(pos[0]),
+                "y": int(pos[1]),
+                "community_id": str(community.get("community_id", "")),
+                "created_tick": int(current_tick),
+                "last_active_tick": int(current_tick),
+                "active": True,
+                "absence_ticks": 0,
+                "village_uid": self._resolve_camp_village_uid(int(pos[0]), int(pos[1])),
+                "return_events": 0,
+                "rest_events": 0,
+                "food_cache": 0,
+                "last_use_tick": int(current_tick),
+                "last_food_activity_tick": int(current_tick),
+            }
+            stats = self.progression_stats if isinstance(self.progression_stats, dict) else _default_progression_stats()
+            stats["camp_created_count"] = int(stats.get("camp_created_count", 0)) + 1
+            self.progression_stats = stats
+            self.record_camp_lifecycle_stage("camp_created", region=region)
+            self.record_camp_lifecycle_stage("camp_became_active", region=region)
+
+        for camp in camps.values():
+            if not isinstance(camp, dict):
+                continue
+            x, y = int(camp.get("x", 0)), int(camp.get("y", 0))
+            region = self._region_key_for_pos(x, y)
+            near = 0
+            for agent in self.agents:
+                if not getattr(agent, "alive", False):
+                    continue
+                if abs(int(agent.x) - x) + abs(int(agent.y) - y) <= CAMP_ANCHOR_RADIUS:
+                    near += 1
+            if near > 0:
+                was_active = bool(camp.get("active", False))
+                camp["active"] = True
+                camp["last_active_tick"] = int(current_tick)
+                camp["absence_ticks"] = 0
+                self.record_camp_lifecycle_stage("camp_population_present", region=region)
+                if not was_active:
+                    self.record_camp_lifecycle_stage("camp_became_active", region=region)
+            else:
+                camp["absence_ticks"] = int(camp.get("absence_ticks", 0)) + 1
+                stale = int(current_tick) - int(camp.get("last_active_tick", current_tick))
+                linked_community = str(camp.get("community_id", "")) in next_state
+                required_absence = int(CAMP_DEACTIVATION_ABSENCE_TICKS) + (
+                    int(CAMP_LINKED_COMMUNITY_ABSENCE_BONUS_TICKS) if linked_community else 0
+                )
+                sustained_absence = int(camp.get("absence_ticks", 0)) > int(required_absence)
+                support = self._camp_support_snapshot(camp, current_tick=current_tick)
+                support_viable = bool(support.get("viable", False))
+                support_grace = int(CAMP_SUPPORT_GRACE_ABSENCE_BONUS_TICKS) if support_viable else 0
+                if stale > CAMP_ACTIVE_STALE_TICKS:
+                    if support_viable and stale <= int(CAMP_ACTIVE_STALE_TICKS + CAMP_SUPPORT_RECENT_USE_TICKS):
+                        camp["active"] = True
+                        self._record_camp_retention_from_support(support, region=region)
+                    else:
+                        if bool(camp.get("active", False)):
+                            self.record_camp_lifecycle_stage("camp_deactivated", region=region)
+                            self.record_camp_deactivation_reason("camp_stale_timeout", region=region)
+                            self.record_camp_deactivation_support_snapshot(region=region, support=support)
+                        camp["active"] = False
+                        camp["food_cache"] = 0
+                elif sustained_absence:
+                    if int(camp.get("absence_ticks", 0)) <= int(required_absence + support_grace):
+                        camp["active"] = True
+                        self._record_camp_retention_from_support(support, region=region)
+                    else:
+                        if bool(camp.get("active", False)):
+                            self.record_camp_lifecycle_stage("camp_deactivated", region=region)
+                            reason = "agents_migrated" if not linked_community else "no_agents_nearby"
+                            if not support_viable:
+                                reason = "no_viable_support"
+                            self.record_camp_deactivation_reason(reason, region=region)
+                            self.record_camp_deactivation_support_snapshot(region=region, support=support)
+                        camp["active"] = False
+                        camp["food_cache"] = 0
+            camp["village_uid"] = self._resolve_camp_village_uid(x, y)
+            community_id = str(camp.get("community_id", ""))
+            if community_id and community_id not in next_state and int(current_tick) - int(camp.get("created_tick", current_tick)) > PROTO_COMMUNITY_STALE_TICKS:
+                was_active = bool(camp.get("active", False))
+                if was_active:
+                    self.record_camp_lifecycle_stage("camp_deactivated", region=region)
+                    self.record_camp_deactivation_support_snapshot(
+                        region=region, support=self._camp_support_snapshot(camp, current_tick=current_tick)
+                    )
+                reason = "agents_migrated"
+                if str(camp.get("village_uid", "") or ""):
+                    reason = "replaced_by_village_anchor"
+                if any(
+                    isinstance(b, dict)
+                    and str(b.get("type", "")) == "house"
+                    and str(b.get("operational_state", "")) == "active"
+                    and abs(int(b.get("x", 0)) - x) + abs(int(b.get("y", 0)) - y) <= 6
+                    for b in self.buildings.values()
+                ):
+                    reason = "replaced_by_house_anchor"
+                if was_active:
+                    self.record_camp_deactivation_reason(reason, region=region)
+                camp["active"] = False
+                camp["food_cache"] = 0
+            if not self.is_walkable(x, y):
+                was_active = bool(camp.get("active", False))
+                if was_active:
+                    self.record_camp_lifecycle_stage("camp_deactivated", region=region)
+                    self.record_camp_deactivation_reason("area_no_longer_viable", region=region)
+                    self.record_camp_deactivation_support_snapshot(
+                        region=region, support=self._camp_support_snapshot(camp, current_tick=current_tick)
+                    )
+                camp["active"] = False
+                camp["food_cache"] = 0
+        self.update_camp_food_decay()
+        self.camps = camps
+
+    def nearest_active_camp_for_agent(self, agent: Agent, *, max_distance: int = CAMP_ANCHOR_RADIUS) -> Optional[Dict[str, Any]]:
+        camps = self.camps if isinstance(self.camps, dict) else {}
+        status = str(getattr(agent, "village_affiliation_status", "unaffiliated") or "unaffiliated")
+        preferred_uid = str(getattr(agent, "home_village_uid", "") or getattr(agent, "primary_village_uid", "") or "")
+        candidates: List[Tuple[int, int, str, Dict[str, Any]]] = []
+        for camp_id, camp in camps.items():
+            if not isinstance(camp, dict) or not bool(camp.get("active", False)):
+                continue
+            cx, cy = int(camp.get("x", 0)), int(camp.get("y", 0))
+            dist = abs(int(getattr(agent, "x", 0)) - cx) + abs(int(getattr(agent, "y", 0)) - cy)
+            if dist > int(max_distance):
+                continue
+            camp_uid = str(camp.get("village_uid", "") or "")
+            uid_bias = 0 if (preferred_uid and camp_uid == preferred_uid) else 1
+            status_bias = 0 if status in {"attached", "transient", "unaffiliated"} else 1
+            candidates.append((uid_bias, status_bias * 2 + dist, str(camp_id), camp))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+        return candidates[0][3]
+
+    def is_agent_near_camp(self, agent: Agent, *, radius: int = CAMP_REST_RADIUS) -> bool:
+        camp = self.nearest_active_camp_for_agent(agent, max_distance=max(1, int(radius)))
+        if not isinstance(camp, dict):
+            return False
+        cx, cy = int(camp.get("x", 0)), int(camp.get("y", 0))
+        return (
+            abs(int(getattr(agent, "x", 0)) - cx) + abs(int(getattr(agent, "y", 0)) - cy)
+        ) <= int(radius)
+
+    def camp_has_food_for_agent(self, agent: Agent, *, max_distance: int = 4) -> bool:
+        camp = self.nearest_active_camp_for_agent(agent, max_distance=max(1, int(max_distance)))
+        if not isinstance(camp, dict):
+            return False
+        return int(camp.get("food_cache", 0)) > 0
+
+    def compute_local_food_pressure_for_agent(self, agent: Agent, *, max_distance: int = LOCAL_FOOD_PRESSURE_RADIUS) -> Dict[str, Any]:
+        camp = self.nearest_active_camp_for_agent(agent, max_distance=max(1, int(max_distance)))
+        if not isinstance(camp, dict):
+            return {
+                "has_camp": False,
+                "pressure_score": 0,
+                "pressure_active": False,
+                "unmet_pressure": False,
+                "camp_id": "",
+                "camp_food": 0,
+                "nearby_needy_agents": 0,
+                "near_food_sources": 0,
+                "drop_distance": 9999,
+            }
+        cx, cy = int(camp.get("x", 0)), int(camp.get("y", 0))
+        camp_food = max(0, int(camp.get("food_cache", 0)))
+        nearby_needy_agents = 0
+        for other in self.agents:
+            if not getattr(other, "alive", False):
+                continue
+            dist = abs(int(getattr(other, "x", 0)) - cx) + abs(int(getattr(other, "y", 0)) - cy)
+            if dist > int(max_distance):
+                continue
+            if float(getattr(other, "hunger", 100.0)) < float(LOCAL_FOOD_PRESSURE_NEEDY_HUNGER):
+                nearby_needy_agents += 1
+        near_food_sources = 0
+        for fx, fy in self.food:
+            if abs(int(fx) - cx) + abs(int(fy) - cy) <= int(max_distance):
+                near_food_sources += 1
+                if near_food_sources >= 4:
+                    break
+        drop_distance = abs(int(getattr(agent, "x", 0)) - cx) + abs(int(getattr(agent, "y", 0)) - cy)
+        score = 0
+        if camp_food <= 1:
+            score += 2
+        elif camp_food <= 3:
+            score += 1
+        if nearby_needy_agents > 0:
+            score += 2
+        if near_food_sources > 0:
+            score += 1
+        if drop_distance <= 4:
+            score += 1
+        has_carried_food = int(getattr(agent, "inventory", {}).get("food", 0)) > 0
+        unmet = bool(camp_food <= 1 and nearby_needy_agents > 0 and near_food_sources <= 0 and not has_carried_food)
+        pressure_active = bool(score >= 3)
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        if score > 0:
+            stats["camp_food_pressure_ticks"] = int(stats.get("camp_food_pressure_ticks", 0)) + 1
+        if pressure_active:
+            stats["local_food_pressure_events"] = int(stats.get("local_food_pressure_events", 0)) + 1
+        if unmet:
+            stats["unmet_food_pressure_count"] = int(stats.get("unmet_food_pressure_count", 0)) + 1
+            stats["loop_abandoned_due_to_no_source"] = int(stats.get("loop_abandoned_due_to_no_source", 0)) + 1
+        self.camp_food_stats = stats
+        return {
+            "has_camp": True,
+            "pressure_score": int(score),
+            "pressure_active": bool(pressure_active),
+            "unmet_pressure": bool(unmet),
+            "camp_id": str(camp.get("camp_id", "")),
+            "camp_food": int(camp_food),
+            "nearby_needy_agents": int(nearby_needy_agents),
+            "near_food_sources": int(near_food_sources),
+            "drop_distance": int(drop_distance),
+        }
+
+    def record_pressure_backed_loop_selected(self) -> None:
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["pressure_backed_loop_selected_count"] = int(stats.get("pressure_backed_loop_selected_count", 0)) + 1
+        self.camp_food_stats = stats
+
+    def record_communication_event(self, kind: str) -> None:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        stats["communication_events"] = int(stats.get("communication_events", 0)) + 1
+        if str(kind) == "food":
+            stats["food_knowledge_shared_count"] = int(stats.get("food_knowledge_shared_count", 0)) + 1
+        elif str(kind) == "camp":
+            stats["camp_knowledge_shared_count"] = int(stats.get("camp_knowledge_shared_count", 0)) + 1
+        self.communication_stats = stats
+
+    def record_shared_knowledge_used(self, kind: str) -> None:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        if str(kind) == "food":
+            stats["shared_food_knowledge_used_count"] = int(stats.get("shared_food_knowledge_used_count", 0)) + 1
+        elif str(kind) == "camp":
+            stats["shared_camp_knowledge_used_count"] = int(stats.get("shared_camp_knowledge_used_count", 0)) + 1
+        self.communication_stats = stats
+
+    def record_stale_knowledge_expired(self, count: int = 1) -> None:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        stats["stale_knowledge_expired_count"] = int(stats.get("stale_knowledge_expired_count", 0)) + max(0, int(count))
+        self.communication_stats = stats
+
+    def record_invalidated_shared_knowledge(self, count: int = 1) -> None:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        stats["invalidated_shared_knowledge_count"] = int(stats.get("invalidated_shared_knowledge_count", 0)) + max(0, int(count))
+        self.communication_stats = stats
+
+    def record_social_knowledge_decision(self, *, accepted: bool, reason: str = "", subject: str = "") -> None:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        if bool(accepted):
+            stats["social_knowledge_accept_count"] = int(stats.get("social_knowledge_accept_count", 0)) + 1
+            sub = str(subject or "")
+            if sub == "food":
+                stats["social_food_knowledge_adopted_count"] = int(stats.get("social_food_knowledge_adopted_count", 0)) + 1
+            elif sub == "camp":
+                stats["social_camp_knowledge_adopted_count"] = int(stats.get("social_camp_knowledge_adopted_count", 0)) + 1
+        else:
+            stats["social_knowledge_reject_count"] = int(stats.get("social_knowledge_reject_count", 0)) + 1
+            key = f"social_knowledge_reject_{str(reason or '').strip()}"
+            if key in stats:
+                stats[key] = int(stats.get(key, 0)) + 1
+        self.communication_stats = stats
+
+    def record_direct_overrides_social(self, count: int = 1) -> None:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        stats["direct_overrides_social_count"] = int(stats.get("direct_overrides_social_count", 0)) + max(0, int(count))
+        self.communication_stats = stats
+
+    def record_duplicate_share_suppressed(self, count: int = 1) -> None:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        stats["repeated_duplicate_share_suppressed_count"] = int(stats.get("repeated_duplicate_share_suppressed_count", 0)) + max(0, int(count))
+        self.communication_stats = stats
+
+    def record_camp_knowledge_share_suppressed(self, count: int = 1) -> None:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        stats["camp_knowledge_share_suppressed_count"] = int(stats.get("camp_knowledge_share_suppressed_count", 0)) + max(0, int(count))
+        self.communication_stats = stats
+
+    def record_completion_bias_applied(self) -> None:
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["completion_bias_applied_count"] = int(stats.get("completion_bias_applied_count", 0)) + 1
+        self.camp_food_stats = stats
+
+    def record_delivery_commitment_retained(self) -> None:
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["delivery_commitment_retained_ticks"] = int(stats.get("delivery_commitment_retained_ticks", 0)) + 1
+        self.camp_food_stats = stats
+
+    def record_loop_retarget_outcome(self, *, success: bool) -> None:
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        key = "loop_retarget_success_count" if bool(success) else "loop_retarget_failure_count"
+        stats[key] = int(stats.get(key, 0)) + 1
+        self.camp_food_stats = stats
+
+    def try_deposit_food_to_nearby_camp(self, agent: Agent, *, amount: int = 1, hunger_before: Optional[float] = None) -> int:
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["camp_food_deposit_attempts"] = int(stats.get("camp_food_deposit_attempts", 0)) + 1
+        self.camp_food_stats = stats
+        pressure = self.compute_local_food_pressure_for_agent(agent, max_distance=LOCAL_FOOD_PRESSURE_RADIUS)
+        near_complete = bool(
+            isinstance(pressure, dict)
+            and int(pressure.get("drop_distance", 9999)) <= 2
+            and int(getattr(agent, "inventory", {}).get("food", 0)) > 0
+        )
+        if near_complete:
+            stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+            stats["near_complete_loop_opportunities"] = int(stats.get("near_complete_loop_opportunities", 0)) + 1
+            self.camp_food_stats = stats
+        inventory_food = int(getattr(agent, "inventory", {}).get("food", 0))
+        if inventory_food <= 0:
+            return 0
+        hunger_gate = float(hunger_before if hunger_before is not None else getattr(agent, "hunger", 100.0))
+        if hunger_gate < 30.0:
+            stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+            stats["camp_food_deposit_blocked_low_hunger"] = int(stats.get("camp_food_deposit_blocked_low_hunger", 0)) + 1
+            self.camp_food_stats = stats
+            return 0
+        camp = self.nearest_active_camp_for_agent(agent, max_distance=2)
+        if not isinstance(camp, dict):
+            stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+            stats["loop_abandoned_count"] = int(stats.get("loop_abandoned_count", 0)) + 1
+            stats["loop_abandoned_due_to_no_drop_target"] = int(stats.get("loop_abandoned_due_to_no_drop_target", 0)) + 1
+            if near_complete:
+                stats["near_complete_loop_abandoned"] = int(stats.get("near_complete_loop_abandoned", 0)) + 1
+            self.camp_food_stats = stats
+            return 0
+        cache_now = max(0, int(camp.get("food_cache", 0)))
+        space = max(0, int(CAMP_FOOD_CACHE_CAPACITY) - cache_now)
+        if space <= 0:
+            stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+            stats["loop_abandoned_count"] = int(stats.get("loop_abandoned_count", 0)) + 1
+            stats["loop_abandoned_due_to_saturated_cache"] = int(stats.get("loop_abandoned_due_to_saturated_cache", 0)) + 1
+            if near_complete:
+                stats["near_complete_loop_abandoned"] = int(stats.get("near_complete_loop_abandoned", 0)) + 1
+            self.camp_food_stats = stats
+            return 0
+        # Avoid low-value churn: if local camp pressure is low and cache is already buffered, keep food local.
+        if int(pressure.get("pressure_score", 0)) <= 2 and cache_now >= 3 and hunger_gate < 80.0:
+            stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+            stats["loop_abandoned_count"] = int(stats.get("loop_abandoned_count", 0)) + 1
+            stats["loop_abandoned_due_to_saturated_cache"] = int(stats.get("loop_abandoned_due_to_saturated_cache", 0)) + 1
+            if near_complete:
+                stats["near_complete_loop_abandoned"] = int(stats.get("near_complete_loop_abandoned", 0)) + 1
+            self.camp_food_stats = stats
+            return 0
+        # Preserve a bounded self-ration so cooperation does not become suicidal over-donation.
+        reserve_food = 0
+        if hunger_gate < 45.0:
+            reserve_food = 1
+        if hunger_gate < 35.0:
+            reserve_food = min(2, max(1, int(inventory_food)))
+        if cache_now > 0 and hunger_gate >= 40.0:
+            reserve_food = max(0, int(reserve_food) - 1)
+        depositable = max(0, int(inventory_food) - int(reserve_food))
+        if depositable <= 0:
+            stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+            stats["camp_food_deposit_blocked_self_reserve"] = int(stats.get("camp_food_deposit_blocked_self_reserve", 0)) + 1
+            self.camp_food_stats = stats
+            return 0
+        move_amount = min(max(0, int(amount)), int(depositable), space)
+        if move_amount <= 0:
+            return 0
+        agent.inventory["food"] = int(agent.inventory.get("food", 0)) - move_amount
+        camp["food_cache"] = cache_now + move_amount
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["camp_food_deposits"] = int(stats.get("camp_food_deposits", 0)) + int(move_amount)
+        self.camp_food_stats = stats
+        camp["last_active_tick"] = int(getattr(self, "tick", 0))
+        camp["last_use_tick"] = int(getattr(self, "tick", 0))
+        camp["last_food_activity_tick"] = int(getattr(self, "tick", 0))
+        camp["active"] = True
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["loop_completed_count"] = int(stats.get("loop_completed_count", 0)) + 1
+        if bool(pressure.get("pressure_active", False)):
+            stats["pressure_backed_food_deliveries"] = int(stats.get("pressure_backed_food_deliveries", 0)) + int(move_amount)
+        if near_complete:
+            stats["near_complete_loop_completed"] = int(stats.get("near_complete_loop_completed", 0)) + 1
+        self.camp_food_stats = stats
+        return int(move_amount)
+
+    def consume_food_from_nearby_camp(self, agent: Agent, *, amount: int = 1) -> int:
+        camp = self.nearest_active_camp_for_agent(agent, max_distance=3)
+        if not isinstance(camp, dict):
+            return 0
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["camp_food_consume_attempts"] = int(stats.get("camp_food_consume_attempts", 0)) + 1
+        self.camp_food_stats = stats
+        cache_now = max(0, int(camp.get("food_cache", 0)))
+        if cache_now <= 0:
+            stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+            stats["camp_food_consume_misses"] = int(stats.get("camp_food_consume_misses", 0)) + 1
+            self.camp_food_stats = stats
+            return 0
+        consume_amount = min(max(0, int(amount)), cache_now)
+        if consume_amount <= 0:
+            stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+            stats["camp_food_consume_misses"] = int(stats.get("camp_food_consume_misses", 0)) + 1
+            self.camp_food_stats = stats
+            return 0
+        camp["food_cache"] = cache_now - consume_amount
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["camp_food_consumptions"] = int(stats.get("camp_food_consumptions", 0)) + int(consume_amount)
+        self.camp_food_stats = stats
+        camp["last_active_tick"] = int(getattr(self, "tick", 0))
+        camp["last_use_tick"] = int(getattr(self, "tick", 0))
+        camp["last_food_activity_tick"] = int(getattr(self, "tick", 0))
+        camp["active"] = True
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        stats["loop_completed_count"] = int(stats.get("loop_completed_count", 0)) + 1
+        self.camp_food_stats = stats
+        return int(consume_amount)
+
+    def record_food_consumption(self, source: str, *, amount: int = 1) -> None:
+        qty = max(0, int(amount))
+        if qty <= 0:
+            return
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        src = str(source or "")
+        if src == "inventory":
+            stats["food_consumed_from_inventory"] = int(stats.get("food_consumed_from_inventory", 0)) + qty
+        elif src == "camp":
+            stats["food_consumed_from_camp"] = int(stats.get("food_consumed_from_camp", 0)) + qty
+        elif src == "storage":
+            stats["food_consumed_from_storage"] = int(stats.get("food_consumed_from_storage", 0)) + qty
+        elif src == "wild_direct":
+            stats["food_consumed_from_wild_direct"] = int(stats.get("food_consumed_from_wild_direct", 0)) + qty
+        self.camp_food_stats = stats
+
+    def update_camp_food_decay(self) -> None:
+        if int(getattr(self, "tick", 0)) % int(CAMP_FOOD_DECAY_INTERVAL_TICKS) != 0:
+            return
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        decayed = 0
+        for camp in (self.camps or {}).values():
+            if not isinstance(camp, dict):
+                continue
+            if not bool(camp.get("active", False)):
+                camp["food_cache"] = 0
+                continue
+            food_now = max(0, int(camp.get("food_cache", 0)))
+            if food_now > 0:
+                camp["food_cache"] = food_now - 1
+                decayed += 1
+        if decayed > 0:
+            stats["camp_food_decay"] = int(stats.get("camp_food_decay", 0)) + int(decayed)
+            self.camp_food_stats = stats
+
+    def compute_camp_food_snapshot(self) -> Dict[str, int]:
+        camps = self.camps if isinstance(self.camps, dict) else {}
+        total_food = 0
+        camps_with_food = 0
+        for camp in camps.values():
+            if not isinstance(camp, dict):
+                continue
+            food = max(0, int(camp.get("food_cache", 0)))
+            total_food += food
+            if food > 0:
+                camps_with_food += 1
+        stats = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else _default_camp_food_stats()
+        total_consumed = int(stats.get("food_consumed_from_inventory", 0)) + int(stats.get("food_consumed_from_camp", 0)) + int(
+            stats.get("food_consumed_from_storage", 0)
+        ) + int(stats.get("food_consumed_from_wild_direct", 0))
+        camp_consumed = int(stats.get("food_consumed_from_camp", 0))
+        pressure_events = int(stats.get("local_food_pressure_events", 0))
+        pressure_delivered = int(stats.get("pressure_backed_food_deliveries", 0))
+        unmet_pressure = int(stats.get("unmet_food_pressure_count", 0))
+        return {
+            "total_food_in_camps": int(total_food),
+            "camp_food_deposits": int(stats.get("camp_food_deposits", 0)),
+            "camp_food_consumptions": int(stats.get("camp_food_consumptions", 0)),
+            "camp_food_decay": int(stats.get("camp_food_decay", 0)),
+            "camps_with_food": int(camps_with_food),
+            "camp_food_deposit_attempts": int(stats.get("camp_food_deposit_attempts", 0)),
+            "camp_food_deposit_blocked_low_hunger": int(stats.get("camp_food_deposit_blocked_low_hunger", 0)),
+            "camp_food_deposit_blocked_self_reserve": int(stats.get("camp_food_deposit_blocked_self_reserve", 0)),
+            "camp_food_consume_attempts": int(stats.get("camp_food_consume_attempts", 0)),
+            "camp_food_consume_misses": int(stats.get("camp_food_consume_misses", 0)),
+            "food_consumed_from_inventory": int(stats.get("food_consumed_from_inventory", 0)),
+            "food_consumed_from_camp": int(stats.get("food_consumed_from_camp", 0)),
+            "food_consumed_from_storage": int(stats.get("food_consumed_from_storage", 0)),
+            "food_consumed_from_wild_direct": int(stats.get("food_consumed_from_wild_direct", 0)),
+            "camp_food_pressure_ticks": int(stats.get("camp_food_pressure_ticks", 0)),
+            "local_food_pressure_events": int(pressure_events),
+            "pressure_backed_loop_selected_count": int(stats.get("pressure_backed_loop_selected_count", 0)),
+            "pressure_backed_food_deliveries": int(pressure_delivered),
+            "unmet_food_pressure_count": int(unmet_pressure),
+            "loop_completed_count": int(stats.get("loop_completed_count", 0)),
+            "loop_abandoned_count": int(stats.get("loop_abandoned_count", 0)),
+            "loop_abandoned_due_to_no_source": int(stats.get("loop_abandoned_due_to_no_source", 0)),
+            "loop_abandoned_due_to_saturated_cache": int(stats.get("loop_abandoned_due_to_saturated_cache", 0)),
+            "loop_abandoned_due_to_no_drop_target": int(stats.get("loop_abandoned_due_to_no_drop_target", 0)),
+            "near_complete_loop_opportunities": int(stats.get("near_complete_loop_opportunities", 0)),
+            "near_complete_loop_completed": int(stats.get("near_complete_loop_completed", 0)),
+            "near_complete_loop_abandoned": int(stats.get("near_complete_loop_abandoned", 0)),
+            "completion_bias_applied_count": int(stats.get("completion_bias_applied_count", 0)),
+            "delivery_commitment_retained_ticks": int(stats.get("delivery_commitment_retained_ticks", 0)),
+            "loop_retarget_success_count": int(stats.get("loop_retarget_success_count", 0)),
+            "loop_retarget_failure_count": int(stats.get("loop_retarget_failure_count", 0)),
+            "pressure_served_ratio": round(float(pressure_delivered) / float(max(1, pressure_events + unmet_pressure)), 4),
+            "camp_food_consumption_share": round(float(camp_consumed) / float(max(1, total_consumed)), 4),
+        }
+
+    def compute_food_patch_snapshot(self) -> Dict[str, int]:
+        patches = self.food_rich_patches if isinstance(self.food_rich_patches, list) else []
+        total_area = 0
+        for patch in patches:
+            if not isinstance(patch, dict):
+                continue
+            r = max(0, int(patch.get("radius", 0)))
+            total_area += int(3.14159 * float(r * r))
+        return {
+            "food_patch_count": int(len([p for p in patches if isinstance(p, dict)])),
+            "food_patch_total_area": int(total_area),
+            "food_patch_food_spawned": int(getattr(self, "food_patch_food_spawned", 0)),
+        }
+
+    def compute_communication_snapshot(self) -> Dict[str, int]:
+        stats = self.communication_stats if isinstance(self.communication_stats, dict) else _default_communication_stats()
+        out = _default_communication_stats()
+        for k in out.keys():
+            out[k] = int(stats.get(k, 0))
+        return out
+
+    def _proto_specialization_context(self, agent: Agent) -> Dict[str, Any]:
+        active_camp = self.nearest_active_camp_for_agent(agent, max_distance=8)
+        has_any_camp = False
+        has_inactive_camp = False
+        if isinstance(self.camps, dict):
+            for camp in self.camps.values():
+                if not isinstance(camp, dict):
+                    continue
+                cx, cy = int(camp.get("x", 0)), int(camp.get("y", 0))
+                dist = abs(int(getattr(agent, "x", 0)) - cx) + abs(int(getattr(agent, "y", 0)) - cy)
+                if dist > 8:
+                    continue
+                has_any_camp = True
+                if not bool(camp.get("active", False)):
+                    has_inactive_camp = True
+                    break
+        camp = active_camp if isinstance(active_camp, dict) else None
+        if not isinstance(camp, dict):
+            return {
+                "has_active_camp": False,
+                "has_any_camp": bool(has_any_camp),
+                "has_inactive_camp": bool(has_inactive_camp),
+                "camp": None,
+                "camp_food": 0,
+                "near_food": 0,
+                "near_material": 0,
+                "nearby_agents": 0,
+                "houses_near": False,
+            }
+        cx, cy = int(camp.get("x", 0)), int(camp.get("y", 0))
+        camp_food = max(0, int(camp.get("food_cache", 0)))
+        near_food = 0
+        near_material = 0
+        for fx, fy in self.food:
+            if abs(int(fx) - cx) + abs(int(fy) - cy) <= 8:
+                near_food += 1
+                if near_food >= 3:
+                    break
+        for wx, wy in self.wood:
+            if abs(int(wx) - cx) + abs(int(wy) - cy) <= 8:
+                near_material += 1
+                if near_material >= 2:
+                    break
+        for sx, sy in self.stone:
+            if abs(int(sx) - cx) + abs(int(sy) - cy) <= 8:
+                near_material += 1
+                if near_material >= 2:
+                    break
+        nearby_agents = 0
+        for other in self.agents:
+            if not getattr(other, "alive", False):
+                continue
+            if abs(int(getattr(other, "x", 0)) - cx) + abs(int(getattr(other, "y", 0)) - cy) <= 6:
+                nearby_agents += 1
+        houses_near = any(
+            isinstance(b, dict)
+            and str(b.get("type", "")) == "house"
+            and str(b.get("operational_state", "")) == "active"
+            and abs(int(b.get("x", 0)) - cx) + abs(int(b.get("y", 0)) - cy) <= 8
+            for b in self.buildings.values()
+        )
+        return {
+            "has_active_camp": True,
+            "has_any_camp": True,
+            "has_inactive_camp": bool(has_inactive_camp),
+            "camp": camp,
+            "camp_id": str(camp.get("camp_id", "")),
+            "camp_pos": (int(cx), int(cy)),
+            "camp_food": int(camp_food),
+            "near_food": int(near_food),
+            "near_material": int(near_material),
+            "nearby_agents": int(nearby_agents),
+            "houses_near": bool(houses_near),
+        }
+
+    def _find_nearest_food_to(self, x: int, y: int, *, radius: int = 10) -> Optional[Coord]:
+        candidates: List[Tuple[int, int, int]] = []
+        for fx, fy in self.food:
+            dist = abs(int(fx) - int(x)) + abs(int(fy) - int(y))
+            if dist <= int(radius):
+                candidates.append((dist, int(fx), int(fy)))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+        return (int(candidates[0][1]), int(candidates[0][2]))
+
+    def _find_proto_builder_target(self, camp_pos: Coord) -> Optional[Coord]:
+        cx, cy = int(camp_pos[0]), int(camp_pos[1])
+        for radius in (2, 3, 4, 5):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    if abs(dx) + abs(dy) > radius:
+                        continue
+                    tx = cx + dx
+                    ty = cy + dy
+                    if tx < 1 or ty < 1 or tx >= self.width - 1 or ty >= self.height - 1:
+                        continue
+                    if self.can_place_building("house", tx, ty):
+                        return (int(tx), int(ty))
+        return None
+
+    def _acquire_proto_task_anchor(self, agent: Agent, specialization: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        camp = context.get("camp")
+        if not isinstance(camp, dict):
+            return None
+        camp_id = str(context.get("camp_id", "") or camp.get("camp_id", ""))
+        camp_pos = tuple(context.get("camp_pos", (int(camp.get("x", 0)), int(camp.get("y", 0)))))
+        if len(camp_pos) != 2:
+            return None
+        tick_now = int(getattr(self, "tick", 0))
+        anchor: Dict[str, Any] = {
+            "anchor_type": str(specialization),
+            "role_loop_type": str(specialization),
+            "camp_id": camp_id,
+            "village_uid": str(camp.get("village_uid", "") or ""),
+            "target_pos": [int(camp_pos[0]), int(camp_pos[1])],
+            "drop_pos": [int(camp_pos[0]), int(camp_pos[1])],
+            "source_pos": [],
+            "assigned_tick": tick_now,
+            "last_validated_tick": tick_now,
+            "expiry_tick": tick_now + int(PROTO_SPECIALIZATION_PERSISTENCE_TICKS.get(specialization, 14)),
+        }
+        if specialization in {"food_gatherer", "food_hauler"}:
+            source = self._find_nearest_food_to(int(camp_pos[0]), int(camp_pos[1]), radius=10)
+            if source is None and int(getattr(agent, "inventory", {}).get("food", 0)) <= 0:
+                return None
+            if isinstance(source, tuple):
+                anchor["source_pos"] = [int(source[0]), int(source[1])]
+        elif specialization == "builder":
+            target = self._find_proto_builder_target((int(camp_pos[0]), int(camp_pos[1])))
+            if target is None:
+                return None
+            anchor["target_pos"] = [int(target[0]), int(target[1])]
+        return anchor
+
+    def _validate_proto_task_anchor(self, agent: Agent, specialization: str, anchor: Dict[str, Any], context: Dict[str, Any]) -> Tuple[bool, str]:
+        if not isinstance(anchor, dict):
+            return (False, "anchor_missing")
+        if float(getattr(agent, "hunger", 100.0)) < 20.0:
+            return (False, "critical_hunger")
+        camp_id = str(anchor.get("camp_id", "") or "")
+        camp = (self.camps or {}).get(camp_id) if camp_id else None
+        if not isinstance(camp, dict):
+            return (False, "anchor_missing")
+        if not bool(camp.get("active", False)):
+            return (False, "camp_not_active")
+        camp_food = max(0, int(camp.get("food_cache", 0)))
+        source = anchor.get("source_pos", [])
+        if specialization == "food_gatherer":
+            if camp_food > 3:
+                return (False, "no_local_need")
+            if isinstance(source, list) and len(source) == 2:
+                if (int(source[0]), int(source[1])) not in self.food:
+                    replacement = self._find_nearest_food_to(int(camp.get("x", 0)), int(camp.get("y", 0)), radius=10)
+                    if isinstance(replacement, tuple):
+                        anchor["source_pos"] = [int(replacement[0]), int(replacement[1])]
+                        self.record_loop_retarget_outcome(success=True)
+                    else:
+                        self.record_loop_retarget_outcome(success=False)
+                        return (False, "target_missing")
+            elif self._find_nearest_food_to(int(camp.get("x", 0)), int(camp.get("y", 0)), radius=10) is None:
+                self.record_loop_retarget_outcome(success=False)
+                return (False, "local_loop_broken")
+        elif specialization == "food_hauler":
+            if camp_food > 4:
+                return (False, "no_local_need")
+            if int(getattr(agent, "inventory", {}).get("food", 0)) <= 0:
+                if isinstance(source, list) and len(source) == 2:
+                    if (int(source[0]), int(source[1])) not in self.food:
+                        replacement = self._find_nearest_food_to(int(camp.get("x", 0)), int(camp.get("y", 0)), radius=10)
+                        if isinstance(replacement, tuple):
+                            anchor["source_pos"] = [int(replacement[0]), int(replacement[1])]
+                            self.record_loop_retarget_outcome(success=True)
+                        else:
+                            self.record_loop_retarget_outcome(success=False)
+                            return (False, "target_missing")
+                elif self._find_nearest_food_to(int(camp.get("x", 0)), int(camp.get("y", 0)), radius=10) is None:
+                    self.record_loop_retarget_outcome(success=False)
+                    return (False, "local_loop_broken")
+        elif specialization == "builder":
+            t = anchor.get("target_pos", [])
+            if not (isinstance(t, list) and len(t) == 2):
+                return (False, "anchor_invalid")
+            tx, ty = int(t[0]), int(t[1])
+            if not self.can_place_building("house", tx, ty):
+                return (False, "target_missing")
+        return (True, "")
+
+    def _proto_specialization_valid_for_context(self, agent: Agent, specialization: str, context: Dict[str, Any]) -> bool:
+        if specialization not in {"food_gatherer", "food_hauler", "builder"}:
+            return False
+        if float(getattr(agent, "hunger", 100.0)) < 20.0:
+            return False
+        if not bool(context.get("has_active_camp", False)):
+            return False
+        camp_food = int(context.get("camp_food", 0))
+        near_food = int(context.get("near_food", 0))
+        near_material = int(context.get("near_material", 0))
+        nearby_agents = int(context.get("nearby_agents", 0))
+        houses_near = bool(context.get("houses_near", False))
+        has_carried_food = int(getattr(agent, "inventory", {}).get("food", 0)) > 0
+        if specialization == "food_hauler":
+            return bool(camp_food <= 2 and (has_carried_food or near_food > 0))
+        if specialization == "food_gatherer":
+            return bool(camp_food <= 2 and near_food > 0)
+        return bool(
+            camp_food >= 2
+            and not houses_near
+            and nearby_agents >= 2
+            and near_material > 0
+            and float(getattr(agent, "hunger", 100.0)) >= 35.0
+        )
+
+    def compute_agent_proto_specialization(self, agent: Agent) -> str:
+        if not getattr(agent, "alive", False) or getattr(agent, "is_player", False):
+            return "none"
+        if float(getattr(agent, "hunger", 100.0)) < 20.0:
+            return "none"
+        context = self._proto_specialization_context(agent)
+        if not bool(context.get("has_active_camp", False)):
+            return "none"
+        camp_food = int(context.get("camp_food", 0))
+        near_food = int(context.get("near_food", 0))
+        near_material = int(context.get("near_material", 0))
+        nearby_agents = int(context.get("nearby_agents", 0))
+        houses_near = bool(context.get("houses_near", False))
+        has_carried_food = int(getattr(agent, "inventory", {}).get("food", 0)) > 0
+        if camp_food <= 1 and has_carried_food:
+            return "food_hauler"
+        if camp_food <= 2 and near_food > 0:
+            return "food_gatherer"
+        if (
+            camp_food >= 2
+            and not houses_near
+            and nearby_agents >= 2
+            and near_material > 0
+            and float(getattr(agent, "hunger", 100.0)) >= 35.0
+        ):
+            return "builder"
+        return "none"
+
+    def _record_proto_specialization_cleared(self, reason: str) -> None:
+        self.proto_specialization_cleared_count = int(getattr(self, "proto_specialization_cleared_count", 0)) + 1
+        reasons = self.proto_specialization_cleared_reasons if isinstance(self.proto_specialization_cleared_reasons, dict) else {}
+        key = str(reason or "opportunity_gone")
+        reasons[key] = int(reasons.get(key, 0)) + 1
+        self.proto_specialization_cleared_reasons = reasons
+
+    def _record_proto_anchor_invalidation(self, reason: str) -> None:
+        self.proto_specialization_anchor_invalidations = int(
+            getattr(self, "proto_specialization_anchor_invalidations", 0)
+        ) + 1
+        reasons = getattr(self, "proto_specialization_anchor_invalidation_reasons", {})
+        if not isinstance(reasons, dict):
+            reasons = {}
+        key = str(reason or "anchor_invalid")
+        reasons[key] = int(reasons.get(key, 0)) + 1
+        self.proto_specialization_anchor_invalidation_reasons = reasons
+
+    def update_agent_proto_specialization(self, agent: Agent) -> None:
+        if not getattr(agent, "alive", False) or getattr(agent, "is_player", False):
+            setattr(agent, "proto_specialization", "none")
+            setattr(agent, "proto_specialization_until_tick", -1)
+            setattr(agent, "proto_task_anchor", {})
+            return
+        tick_now = int(getattr(self, "tick", 0))
+        previous = str(getattr(agent, "proto_specialization", "none") or "none")
+        until_tick = int(getattr(agent, "proto_specialization_until_tick", -1))
+        current_anchor = getattr(agent, "proto_task_anchor", {})
+        if not isinstance(current_anchor, dict):
+            current_anchor = {}
+        context = self._proto_specialization_context(agent)
+        computed_spec = str(self.compute_agent_proto_specialization(agent) or "none")
+        if computed_spec not in PROTO_SPECIALIZATION_KEYS:
+            computed_spec = "none"
+        next_spec = computed_spec
+        cleared_recorded = False
+
+        def _clear(reason: str) -> None:
+            nonlocal next_spec, cleared_recorded
+            if next_spec != "none":
+                next_spec = "none"
+            if previous != "none":
+                self._record_proto_specialization_cleared(reason)
+                cleared_recorded = True
+
+        if previous != "none":
+            if float(getattr(agent, "hunger", 100.0)) < 20.0:
+                _clear("critical_hunger")
+            elif not bool(context.get("has_active_camp", False)):
+                _clear("camp_not_active" if bool(context.get("has_inactive_camp", False)) else "camp_missing")
+            elif not self._proto_specialization_valid_for_context(agent, previous, context):
+                _clear("no_local_need")
+            else:
+                anchor_ok, anchor_reason = self._validate_proto_task_anchor(agent, previous, current_anchor, context)
+                if not anchor_ok:
+                    reacquired = self._acquire_proto_task_anchor(agent, previous, context)
+                    if isinstance(reacquired, dict):
+                        current_anchor = reacquired
+                        self.proto_specialization_anchor_assignments = int(
+                            getattr(self, "proto_specialization_anchor_assignments", 0)
+                        ) + 1
+                        anchor_ok = True
+                    else:
+                        reason = str(anchor_reason or "anchor_invalid")
+                        _clear(reason)
+                        self._record_proto_anchor_invalidation(reason)
+                if anchor_ok and tick_now <= until_tick:
+                    # Keep valid local specialization/loop through its bounded persistence window.
+                    next_spec = previous
+                    self.proto_specialization_retained_ticks = int(
+                        getattr(self, "proto_specialization_retained_ticks", 0)
+                    ) + 1
+                    self.proto_specialization_anchor_retained_ticks = int(
+                        getattr(self, "proto_specialization_anchor_retained_ticks", 0)
+                    ) + 1
+                    current_anchor["last_validated_tick"] = tick_now
+                elif anchor_ok and computed_spec == "none":
+                    _clear("opportunity_gone")
+
+        if previous != "none" and next_spec not in {"none", previous}:
+            self._record_proto_specialization_cleared("replaced_by_higher_need")
+            cleared_recorded = True
+
+        agent.proto_specialization = next_spec
+        if next_spec != "none":
+            if previous != next_spec or not current_anchor:
+                acquired = self._acquire_proto_task_anchor(agent, next_spec, context)
+                if not isinstance(acquired, dict):
+                    agent.proto_task_anchor = {}
+                    agent.proto_specialization = "none"
+                    agent.proto_specialization_until_tick = -1
+                    if previous != "none" or not cleared_recorded:
+                        self._record_proto_specialization_cleared("anchor_missing")
+                    self._record_proto_anchor_invalidation("anchor_missing")
+                    if previous != "none":
+                        self.proto_specialization_switches = int(
+                            getattr(self, "proto_specialization_switches", 0)
+                        ) + 1
+                    return
+                current_anchor = acquired
+                self.proto_specialization_anchor_assignments = int(
+                    getattr(self, "proto_specialization_anchor_assignments", 0)
+                ) + 1
+            duration = int(PROTO_SPECIALIZATION_PERSISTENCE_TICKS.get(next_spec, 14))
+            agent.proto_specialization_until_tick = tick_now + max(1, duration)
+            if previous != next_spec:
+                agent.proto_specialization_last_assigned_tick = tick_now
+                self.proto_specialization_assigned_tick_count = int(
+                    getattr(self, "proto_specialization_assigned_tick_count", 0)
+                ) + 1
+            current_anchor["last_validated_tick"] = tick_now
+            current_anchor["expiry_tick"] = int(agent.proto_specialization_until_tick)
+            agent.proto_task_anchor = current_anchor
+        else:
+            agent.proto_specialization_until_tick = -1
+            agent.proto_task_anchor = {}
+        if previous != str(getattr(agent, "proto_specialization", "none") or "none"):
+            self.proto_specialization_switches = int(getattr(self, "proto_specialization_switches", 0)) + 1
+
+    def compute_proto_specialization_snapshot(self) -> Dict[str, Any]:
+        counts = {k: 0 for k in PROTO_SPECIALIZATION_KEYS}
+        by_region: Dict[str, Dict[str, int]] = {}
+        for agent in self.agents:
+            if not getattr(agent, "alive", False):
+                continue
+            spec = str(getattr(agent, "proto_specialization", "none") or "none")
+            if spec not in counts:
+                spec = "none"
+            counts[spec] += 1
+            camp = self.nearest_active_camp_for_agent(agent, max_distance=8)
+            if isinstance(camp, dict):
+                region = self._region_key_for_pos(int(camp.get("x", 0)), int(camp.get("y", 0)))
+                entry = by_region.get(region)
+                if not isinstance(entry, dict):
+                    entry = {
+                        "proto_food_gatherer_count": 0,
+                        "proto_food_hauler_count": 0,
+                        "proto_builder_count": 0,
+                    }
+                    by_region[region] = entry
+                if spec == "food_gatherer":
+                    entry["proto_food_gatherer_count"] += 1
+                elif spec == "food_hauler":
+                    entry["proto_food_hauler_count"] += 1
+                elif spec == "builder":
+                    entry["proto_builder_count"] += 1
+        return {
+            "proto_food_gatherer_count": int(counts.get("food_gatherer", 0)),
+            "proto_food_hauler_count": int(counts.get("food_hauler", 0)),
+            "proto_builder_count": int(counts.get("builder", 0)),
+            "proto_specialization_switches": int(getattr(self, "proto_specialization_switches", 0)),
+            "proto_specialization_assigned_tick_count": int(getattr(self, "proto_specialization_assigned_tick_count", 0)),
+            "proto_specialization_retained_ticks": int(getattr(self, "proto_specialization_retained_ticks", 0)),
+            "proto_specialization_anchor_assignments": int(getattr(self, "proto_specialization_anchor_assignments", 0)),
+            "proto_specialization_anchor_retained_ticks": int(getattr(self, "proto_specialization_anchor_retained_ticks", 0)),
+            "proto_specialization_anchor_invalidations": int(getattr(self, "proto_specialization_anchor_invalidations", 0)),
+            "proto_specialization_anchor_invalidation_reasons": dict(
+                sorted((getattr(self, "proto_specialization_anchor_invalidation_reasons", {}) or {}).items(), key=lambda item: item[0])
+            ),
+            "proto_specialization_cleared_count": int(getattr(self, "proto_specialization_cleared_count", 0)),
+            "proto_specialization_cleared_reasons": dict(sorted((getattr(self, "proto_specialization_cleared_reasons", {}) or {}).items(), key=lambda item: item[0])),
+            "proto_specialization_by_region": dict(sorted(by_region.items(), key=lambda item: item[0])),
+        }
+
+    def record_camp_event(self, event_key: str, *, camp_id: Optional[str] = None, village_uid: Optional[str] = None) -> None:
+        key = str(event_key).strip().lower()
+        if key not in {"camp_return_events", "camp_rest_events"}:
+            return
+        stats = self.progression_stats if isinstance(self.progression_stats, dict) else _default_progression_stats()
+        stats[key] = int(stats.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if not uid and camp_id is not None:
+            camp = (self.camps or {}).get(str(camp_id), {})
+            if isinstance(camp, dict):
+                uid = str(camp.get("village_uid", "") or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = {
+                    "camp_return_events": 0,
+                    "camp_rest_events": 0,
+                    "early_road_suppressed_count": 0,
+                    "road_priority_deferred_reasons": {},
+                }
+                by_village[uid] = entry
+            entry[key] = int(entry.get(key, 0)) + 1
+        if camp_id is not None:
+            camp = (self.camps or {}).get(str(camp_id))
+            if isinstance(camp, dict):
+                region = self._region_key_for_pos(int(camp.get("x", 0)), int(camp.get("y", 0)))
+                if key == "camp_return_events":
+                    camp["return_events"] = int(camp.get("return_events", 0)) + 1
+                    self.record_camp_lifecycle_stage("camp_used_for_return", region=region)
+                elif key == "camp_rest_events":
+                    camp["rest_events"] = int(camp.get("rest_events", 0)) + 1
+                    self.record_camp_lifecycle_stage("camp_used_for_rest", region=region)
+                camp["last_active_tick"] = int(getattr(self, "tick", 0))
+                camp["last_use_tick"] = int(getattr(self, "tick", 0))
+                camp["active"] = True
+        self.progression_stats = stats
+
+    def should_defer_road_growth_for_village(self, village: Dict[str, Any]) -> Tuple[bool, str]:
+        if not isinstance(village, dict):
+            return (False, "")
+        uid = str(village.get("village_uid", "") or "")
+        needs = village.get("needs", {}) if isinstance(village.get("needs"), dict) else {}
+        metrics = village.get("metrics", {}) if isinstance(village.get("metrics"), dict) else {}
+        pop = int(metrics.get("population", village.get("population", 0)))
+        houses = int(village.get("houses", 0))
+        food_stock = int(metrics.get("food_stock", (village.get("storage", {}) or {}).get("food", 0)))
+        food_buffer_critical = bool(needs.get("food_buffer_critical", False))
+        camps = self.compute_progression_snapshot().get("active_camps_by_village", {})
+        camp_count = int(camps.get(uid, 0)) if isinstance(camps, dict) else 0
+        reason = ""
+        if pop < 5:
+            reason = "population_too_low"
+        elif houses < 2 and camp_count <= 0:
+            reason = "no_settlement_anchor"
+        elif food_buffer_critical or food_stock < max(3, pop // 2):
+            reason = "food_crisis_active"
+        if not reason:
+            return (False, "")
+        stats = self.progression_stats if isinstance(self.progression_stats, dict) else _default_progression_stats()
+        stats["early_road_suppressed_count"] = int(stats.get("early_road_suppressed_count", 0)) + 1
+        reasons = stats.setdefault("road_priority_deferred_reasons", {})
+        reasons[reason] = int(reasons.get(reason, 0)) + 1
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = {
+                    "camp_return_events": 0,
+                    "camp_rest_events": 0,
+                    "early_road_suppressed_count": 0,
+                    "road_priority_deferred_reasons": {},
+                }
+                by_village[uid] = entry
+            entry["early_road_suppressed_count"] = int(entry.get("early_road_suppressed_count", 0)) + 1
+            vreasons = entry.setdefault("road_priority_deferred_reasons", {})
+            vreasons[reason] = int(vreasons.get(reason, 0)) + 1
+        self.progression_stats = stats
+        return (True, reason)
+
+    def compute_progression_snapshot(self) -> Dict[str, Any]:
+        communities = self.proto_communities if isinstance(self.proto_communities, dict) else {}
+        camps = self.camps if isinstance(self.camps, dict) else {}
+        active_communities = [
+            c for c in communities.values()
+            if isinstance(c, dict) and int(getattr(self, "tick", 0)) - int(c.get("last_seen_tick", -10**9)) <= PROTO_COMMUNITY_STALE_TICKS
+        ]
+        active_camps = [c for c in camps.values() if isinstance(c, dict) and bool(c.get("active", False))]
+        active_camps_by_village: Dict[str, int] = {}
+        for camp in active_camps:
+            uid = str(camp.get("village_uid", "") or "")
+            if not uid:
+                continue
+            active_camps_by_village[uid] = int(active_camps_by_village.get(uid, 0)) + 1
+
+        camp_population = 0
+        for agent in self.agents:
+            if not getattr(agent, "alive", False):
+                continue
+            camp = self.nearest_active_camp_for_agent(agent, max_distance=4)
+            if camp is not None:
+                camp_population += 1
+        house_population = sum(
+            1 for a in self.agents if getattr(a, "alive", False) and getattr(a, "home_building_id", None) is not None
+        )
+        stats = self.progression_stats if isinstance(self.progression_stats, dict) else _default_progression_stats()
+        return {
+            "proto_community_count": int(len(active_communities)),
+            "proto_community_agents": int(sum(int(c.get("agent_count", 0)) for c in active_communities)),
+            "camps_count": int(len(camps)),
+            "active_camps_count": int(len(active_camps)),
+            "active_camps_by_village": dict(sorted(active_camps_by_village.items(), key=lambda item: item[0])),
+            "camp_return_events": int(stats.get("camp_return_events", 0)),
+            "camp_rest_events": int(stats.get("camp_rest_events", 0)),
+            "house_vs_camp_population": {
+                "house_population": int(house_population),
+                "camp_population": int(camp_population),
+            },
+            "early_road_suppressed_count": int(stats.get("early_road_suppressed_count", 0)),
+            "road_priority_deferred_reasons": {
+                str(k): int(v) for k, v in ((stats.get("road_priority_deferred_reasons", {}) or {}).items())
+            },
+            "settlement_stage_counts": {
+                "survival": int(sum(1 for v in self.villages if str(v.get("phase", "")) in {"bootstrap", "survival"})),
+                "camp": int(len(active_camps)),
+                "village": int(len(self.villages)),
+                "mature_village": int(sum(1 for v in self.villages if int(v.get("houses", 0)) >= 6)),
+            },
+            "by_village": dict(sorted((stats.get("by_village", {}) or {}).items(), key=lambda item: item[0])),
+        }
+
+    def record_social_gravity_event(self, event_key: str, *, village_uid: Optional[str] = None) -> None:
+        key = str(event_key).strip()
+        if key not in {"return_to_village_events", "stay_near_village_bias_events", "home_return_events"}:
+            return
+        stats = self.social_gravity_event_stats
+        if not isinstance(stats, dict):
+            stats = _default_social_gravity_event_stats()
+            self.social_gravity_event_stats = stats
+        stats[key] = int(stats.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = {
+                    "return_to_village_events": 0,
+                    "stay_near_village_bias_events": 0,
+                    "home_return_events": 0,
+                }
+                by_village[uid] = entry
+            entry[key] = int(entry.get(key, 0)) + 1
+
+    def compute_social_gravity_event_snapshot(self) -> Dict[str, Any]:
+        stats = self.social_gravity_event_stats if isinstance(self.social_gravity_event_stats, dict) else _default_social_gravity_event_stats()
+        by_village: Dict[str, Dict[str, int]] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            by_village[str(uid)] = {
+                "return_to_village_events": int(entry.get("return_to_village_events", 0)),
+                "stay_near_village_bias_events": int(entry.get("stay_near_village_bias_events", 0)),
+                "home_return_events": int(entry.get("home_return_events", 0)),
+            }
+        return {
+            "global": {
+                "return_to_village_events": int(stats.get("return_to_village_events", 0)),
+                "stay_near_village_bias_events": int(stats.get("stay_near_village_bias_events", 0)),
+                "home_return_events": int(stats.get("home_return_events", 0)),
+            },
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def record_resident_conversion_attempt(self, *, village_uid: Optional[str] = None) -> None:
+        stats = self.residence_stabilization_stats
+        if not isinstance(stats, dict):
+            stats = _default_residence_stabilization_stats()
+            self.residence_stabilization_stats = stats
+        stats["resident_conversion_attempt_count"] = int(stats.get("resident_conversion_attempt_count", 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = {
+                    "resident_conversion_attempt_count": 0,
+                    "resident_conversion_count": 0,
+                    "resident_persistence_count": 0,
+                    "resident_release_count": 0,
+                    "resident_release_reasons": {},
+                }
+                by_village[uid] = entry
+            entry["resident_conversion_attempt_count"] = int(entry.get("resident_conversion_attempt_count", 0)) + 1
+
+    def record_resident_conversion(self, *, village_uid: Optional[str] = None) -> None:
+        stats = self.residence_stabilization_stats
+        if not isinstance(stats, dict):
+            stats = _default_residence_stabilization_stats()
+            self.residence_stabilization_stats = stats
+        stats["resident_conversion_count"] = int(stats.get("resident_conversion_count", 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = {
+                    "resident_conversion_attempt_count": 0,
+                    "resident_conversion_count": 0,
+                    "resident_persistence_count": 0,
+                    "resident_release_count": 0,
+                    "resident_release_reasons": {},
+                }
+                by_village[uid] = entry
+            entry["resident_conversion_count"] = int(entry.get("resident_conversion_count", 0)) + 1
+
+    def record_resident_persistence(self, *, village_uid: Optional[str] = None) -> None:
+        stats = self.residence_stabilization_stats
+        if not isinstance(stats, dict):
+            stats = _default_residence_stabilization_stats()
+            self.residence_stabilization_stats = stats
+        stats["resident_persistence_count"] = int(stats.get("resident_persistence_count", 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = {
+                    "resident_conversion_attempt_count": 0,
+                    "resident_conversion_count": 0,
+                    "resident_persistence_count": 0,
+                    "resident_release_count": 0,
+                    "resident_release_reasons": {},
+                }
+                by_village[uid] = entry
+            entry["resident_persistence_count"] = int(entry.get("resident_persistence_count", 0)) + 1
+
+    def record_resident_release(self, reason: str, *, village_uid: Optional[str] = None) -> None:
+        stats = self.residence_stabilization_stats
+        if not isinstance(stats, dict):
+            stats = _default_residence_stabilization_stats()
+            self.residence_stabilization_stats = stats
+        key = str(reason).strip().lower() or "unknown_release"
+        stats["resident_release_count"] = int(stats.get("resident_release_count", 0)) + 1
+        reasons = stats.setdefault("resident_release_reasons", {})
+        reasons[key] = int(reasons.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = {
+                    "resident_conversion_attempt_count": 0,
+                    "resident_conversion_count": 0,
+                    "resident_persistence_count": 0,
+                    "resident_release_count": 0,
+                    "resident_release_reasons": {},
+                }
+                by_village[uid] = entry
+            entry["resident_release_count"] = int(entry.get("resident_release_count", 0)) + 1
+            vreasons = entry.setdefault("resident_release_reasons", {})
+            vreasons[key] = int(vreasons.get(key, 0)) + 1
+
+    def compute_residence_stabilization_snapshot(self) -> Dict[str, Any]:
+        stats = self.residence_stabilization_stats if isinstance(self.residence_stabilization_stats, dict) else _default_residence_stabilization_stats()
+        attempts = int(stats.get("resident_conversion_attempt_count", 0))
+        success = int(stats.get("resident_conversion_count", 0))
+        by_village: Dict[str, Dict[str, Any]] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            v_attempts = int(entry.get("resident_conversion_attempt_count", 0))
+            v_success = int(entry.get("resident_conversion_count", 0))
+            by_village[str(uid)] = {
+                "resident_conversion_attempt_count": v_attempts,
+                "resident_conversion_count": v_success,
+                "resident_persistence_count": int(entry.get("resident_persistence_count", 0)),
+                "resident_release_count": int(entry.get("resident_release_count", 0)),
+                "resident_release_reasons": {
+                    str(k): int(v) for k, v in ((entry.get("resident_release_reasons", {}) or {}).items())
+                },
+                "attached_to_resident_success_rate": round(float(v_success) / float(v_attempts), 3) if v_attempts > 0 else 0.0,
+            }
+        return {
+            "global": {
+                "resident_conversion_attempt_count": attempts,
+                "resident_conversion_count": success,
+                "resident_persistence_count": int(stats.get("resident_persistence_count", 0)),
+                "resident_release_count": int(stats.get("resident_release_count", 0)),
+                "resident_release_reasons": {
+                    str(k): int(v) for k, v in ((stats.get("resident_release_reasons", {}) or {}).items())
+                },
+                "attached_to_resident_success_rate": round(float(success) / float(attempts), 3) if attempts > 0 else 0.0,
+            },
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def _resident_conversion_gate_entry(self, village_uid: Optional[str] = None) -> Dict[str, Any]:
+        stats = self.resident_conversion_gate_stats
+        if not isinstance(stats, dict):
+            stats = _default_resident_conversion_gate_stats()
+            self.resident_conversion_gate_stats = stats
+        uid = str(village_uid or "")
+        if uid:
+            by_village = stats.setdefault("by_village", {})
+            entry = by_village.get(uid)
+            if not isinstance(entry, dict):
+                entry = _empty_resident_conversion_gate_metrics()
+                by_village[uid] = entry
+            return entry
+        entry = stats.get("global")
+        if not isinstance(entry, dict):
+            entry = _empty_resident_conversion_gate_metrics()
+            stats["global"] = entry
+        return entry
+
+    def record_resident_conversion_gate_stage(self, stage: str, *, village_uid: Optional[str] = None) -> None:
+        key = str(stage).strip()
+        if key not in RESIDENT_CONVERSION_GATE_STAGES:
+            return
+        entry_global = self._resident_conversion_gate_entry(None)
+        entry_global[key] = int(entry_global.get(key, 0)) + 1
+        if key == "resident_conversion_granted":
+            entry_global["conversion_success_count"] = int(entry_global.get("conversion_success_count", 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            entry_village = self._resident_conversion_gate_entry(uid)
+            entry_village[key] = int(entry_village.get(key, 0)) + 1
+            if key == "resident_conversion_granted":
+                entry_village["conversion_success_count"] = int(entry_village.get("conversion_success_count", 0)) + 1
+
+    def record_resident_conversion_gate_failure(self, reason: str, *, village_uid: Optional[str] = None) -> None:
+        key = str(reason).strip()
+        if key not in RESIDENT_CONVERSION_GATE_FAILURE_REASONS:
+            key = "eligibility_failed_other_guard"
+        entry_global = self._resident_conversion_gate_entry(None)
+        g_reasons = entry_global.setdefault("failure_reasons", {})
+        g_reasons[key] = int(g_reasons.get(key, 0)) + 1
+        uid = str(village_uid or "")
+        if uid:
+            entry_village = self._resident_conversion_gate_entry(uid)
+            v_reasons = entry_village.setdefault("failure_reasons", {})
+            v_reasons[key] = int(v_reasons.get(key, 0)) + 1
+
+    def compute_resident_conversion_gate_snapshot(self) -> Dict[str, Any]:
+        stats = self.resident_conversion_gate_stats if isinstance(self.resident_conversion_gate_stats, dict) else _default_resident_conversion_gate_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_resident_conversion_gate_metrics()
+            for stage in RESIDENT_CONVERSION_GATE_STAGES:
+                out[stage] = int(src.get(stage, 0))
+            out["failure_reasons"] = {
+                str(k): int(v) for k, v in ((src.get("failure_reasons", {}) or {}).items())
+            }
+            out["conversion_success_count"] = int(src.get("conversion_success_count", 0))
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_village: Dict[str, Dict[str, Any]] = {}
+        for uid, entry in (stats.get("by_village", {}) or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            by_village[str(uid)] = _copy(entry)
+        return {
+            "global": global_out,
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def _recovery_bucket(self, stats: Dict[str, Any], key: str, label: str) -> Dict[str, Any]:
+        bucket_map = stats.setdefault(key, {})
+        bucket = bucket_map.get(label)
+        if not isinstance(bucket, dict):
+            bucket = _empty_recovery_diagnostic_metrics()
+            bucket_map[label] = bucket
+        return bucket
+
+    def _iter_recovery_buckets(self, role: str, village_uid: Optional[str]) -> List[Dict[str, Any]]:
+        stats = self.recovery_diagnostic_stats
+        if not isinstance(stats, dict):
+            stats = _default_recovery_diagnostic_stats()
+            self.recovery_diagnostic_stats = stats
+        role_key = role if role in RECOVERY_DIAGNOSTIC_ROLES else "other"
+        buckets = [stats.setdefault("global", _empty_recovery_diagnostic_metrics())]
+        buckets.append(self._recovery_bucket(stats, "by_role", role_key))
+        uid = str(village_uid or "")
+        if uid:
+            buckets.append(self._recovery_bucket(stats, "by_village", uid))
+        return buckets
+
+    def record_recovery_stage(self, agent: Agent, stage: str, *, village_uid: Optional[str] = None, role: Optional[str] = None) -> None:
+        key = str(stage).strip()
+        if key not in RECOVERY_FUNNEL_STAGES:
+            return
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+        role_key = str(role or getattr(agent, "role", "other") or "other")
+        for bucket in self._iter_recovery_buckets(role_key, uid):
+            bucket[key] = int(bucket.get(key, 0)) + 1
+
+    def record_recovery_failure_reason(self, agent: Agent, reason: str, *, village_uid: Optional[str] = None, role: Optional[str] = None) -> None:
+        key = str(reason).strip()
+        if key not in RECOVERY_FAILURE_REASONS:
+            key = "unknown_failure"
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+        role_key = str(role or getattr(agent, "role", "other") or "other")
+        for bucket in self._iter_recovery_buckets(role_key, uid):
+            reasons = bucket.setdefault("failure_reasons", {})
+            reasons[key] = int(reasons.get(key, 0)) + 1
+
+    def record_recovery_home_context(
+        self,
+        agent: Agent,
+        *,
+        valid_home: bool = False,
+        high_pressure_with_valid_home: bool = False,
+        home_possible_not_chosen: bool = False,
+        village_uid: Optional[str] = None,
+        role: Optional[str] = None,
+    ) -> None:
+        uid = str(village_uid or self._resolve_agent_work_village_uid(agent) or "")
+        role_key = str(role or getattr(agent, "role", "other") or "other")
+        for bucket in self._iter_recovery_buckets(role_key, uid):
+            if bool(valid_home):
+                bucket["agents_with_valid_home"] = int(bucket.get("agents_with_valid_home", 0)) + 1
+            if bool(high_pressure_with_valid_home):
+                bucket["high_pressure_with_valid_home"] = int(bucket.get("high_pressure_with_valid_home", 0)) + 1
+            if bool(home_possible_not_chosen):
+                bucket["home_recovery_possible_not_chosen"] = int(bucket.get("home_recovery_possible_not_chosen", 0)) + 1
+
+    def compute_recovery_diagnostics_snapshot(self) -> Dict[str, Any]:
+        stats = self.recovery_diagnostic_stats if isinstance(self.recovery_diagnostic_stats, dict) else _default_recovery_diagnostic_stats()
+
+        def _copy(src: Dict[str, Any]) -> Dict[str, Any]:
+            out = _empty_recovery_diagnostic_metrics()
+            for stage in RECOVERY_FUNNEL_STAGES:
+                out[stage] = int(src.get(stage, 0))
+            out["failure_reasons"] = {
+                str(k): int(v) for k, v in ((src.get("failure_reasons", {}) or {}).items())
+            }
+            out["agents_with_valid_home"] = int(src.get("agents_with_valid_home", 0))
+            out["high_pressure_with_valid_home"] = int(src.get("high_pressure_with_valid_home", 0))
+            out["home_recovery_possible_not_chosen"] = int(src.get("home_recovery_possible_not_chosen", 0))
+            return out
+
+        global_out = _copy(stats.get("global", {}) if isinstance(stats.get("global", {}), dict) else {})
+        by_role = {
+            str(k): _copy(v if isinstance(v, dict) else {})
+            for k, v in (stats.get("by_role", {}) or {}).items()
+        }
+        by_village = {
+            str(k): _copy(v if isinstance(v, dict) else {})
+            for k, v in (stats.get("by_village", {}) or {}).items()
+        }
+        return {
+            "global": global_out,
+            "by_role": dict(sorted(by_role.items(), key=lambda item: item[0])),
+            "by_village": dict(sorted(by_village.items(), key=lambda item: item[0])),
+        }
+
+    def compute_task_completion_snapshot(self) -> Dict[str, Any]:
+        stats = self.workforce_realization_stats if isinstance(self.workforce_realization_stats, dict) else _default_workforce_realization_stats()
+        by_task = stats.get("task_completion_stage_counts_by_task", {})
+        by_task_village = stats.get("task_completion_stage_counts_by_task_by_village", {})
+        reasons = stats.get("task_completion_failure_reasons_by_task", {})
+        reasons_village = stats.get("task_completion_failure_reasons_by_task_by_village", {})
+        by_aff = stats.get("task_completion_stage_counts_by_affiliation", {})
+        by_aff_village = stats.get("task_completion_stage_counts_by_affiliation_by_village", {})
+
+        global_out = {task: _empty_task_completion_task_metrics() for task in TASK_COMPLETION_KEYS}
+        for task in TASK_COMPLETION_KEYS:
+            task_counts = (by_task or {}).get(task, {})
+            for stage in TASK_COMPLETION_STAGES:
+                global_out[task][stage] = int((task_counts or {}).get(stage, 0))
+            global_out[task]["failure_reasons"] = {
+                str(k): int(v) for k, v in (((reasons or {}).get(task, {}) or {}).items())
+            }
+
+        by_village_out: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        for village in self.villages:
+            uid = str(village.get("village_uid", ""))
+            if not uid:
+                continue
+            by_village_out[uid] = {task: _empty_task_completion_task_metrics() for task in TASK_COMPLETION_KEYS}
+            vcounts = (by_task_village or {}).get(uid, {})
+            vreasons = (reasons_village or {}).get(uid, {})
+            for task in TASK_COMPLETION_KEYS:
+                for stage in TASK_COMPLETION_STAGES:
+                    by_village_out[uid][task][stage] = int(((vcounts or {}).get(task, {}) or {}).get(stage, 0))
+                by_village_out[uid][task]["failure_reasons"] = {
+                    str(k): int(v) for k, v in ((((vreasons or {}).get(task, {}) or {}).items()))
+                }
+
+        by_aff_out = {
+            status: {
+                "preconditions_failed_count": int(((by_aff or {}).get(status, {}) or {}).get("preconditions_failed_count", 0)),
+                "productive_completion_count": int(((by_aff or {}).get(status, {}) or {}).get("productive_completion_count", 0)),
+            }
+            for status in WORKFORCE_AFFILIATION_CLASSES
+        }
+        by_aff_village_out: Dict[str, Dict[str, Dict[str, int]]] = {}
+        for uid, entry in (by_aff_village or {}).items():
+            by_aff_village_out[str(uid)] = {
+                status: {
+                    "preconditions_failed_count": int(((entry or {}).get(status, {}) or {}).get("preconditions_failed_count", 0)),
+                    "productive_completion_count": int(((entry or {}).get(status, {}) or {}).get("productive_completion_count", 0)),
+                }
+                for status in WORKFORCE_AFFILIATION_CLASSES
+            }
+
+        return {
+            "global": global_out,
+            "by_village": by_village_out,
+            "by_affiliation": {
+                "global": by_aff_out,
+                "by_village": by_aff_village_out,
+            },
+        }
+
+    def compute_assignment_to_action_gap_snapshot(self) -> Dict[str, Any]:
+        roles = WORKFORCE_REALIZATION_ROLES
+        global_counts = {role: _empty_assignment_gap_role_metrics() for role in roles}
+        by_village: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        by_affiliation = {
+            status: {
+                "assigned_role_count": 0,
+                "task_selected_count": 0,
+                "productive_action_count": 0,
+                "abandoned_or_overridden_count": 0,
+            }
+            for status in WORKFORCE_AFFILIATION_CLASSES
+        }
+
+        stats = self.workforce_realization_stats if isinstance(self.workforce_realization_stats, dict) else _default_workforce_realization_stats()
+        by_role = stats.get("assignment_gap_stage_counts_by_role", {})
+        by_role_village = stats.get("assignment_gap_stage_counts_by_role_by_village", {})
+        by_aff = stats.get("assignment_gap_stage_counts_by_affiliation", {})
+        by_role_reasons = stats.get("assignment_gap_block_reasons_by_role", {})
+        by_role_reasons_village = stats.get("assignment_gap_block_reasons_by_role_by_village", {})
+
+        for role in roles:
+            role_counts = (by_role or {}).get(role, {})
+            for stage in ASSIGNMENT_GAP_STAGES:
+                if stage == "assigned_role_count":
+                    continue
+                global_counts[role][stage] = int((role_counts or {}).get(stage, 0))
+            global_counts[role]["block_reasons"] = {
+                str(k): int(v) for k, v in (((by_role_reasons or {}).get(role, {}) or {}).items())
+            }
+
+        for village in self.villages:
+            uid = str(village.get("village_uid", ""))
+            if not uid:
+                continue
+            by_village[uid] = {role: _empty_assignment_gap_role_metrics() for role in roles}
+            vcounts = (by_role_village or {}).get(uid, {})
+            vreasons = (by_role_reasons_village or {}).get(uid, {})
+            for role in roles:
+                for stage in ASSIGNMENT_GAP_STAGES:
+                    if stage == "assigned_role_count":
+                        continue
+                    by_village[uid][role][stage] = int(((vcounts or {}).get(role, {}) or {}).get(stage, 0))
+                by_village[uid][role]["block_reasons"] = {
+                    str(k): int(v) for k, v in ((((vreasons or {}).get(role, {}) or {}).items()))
+                }
+
+        for agent in self.agents:
+            if not getattr(agent, "alive", False) or bool(getattr(agent, "is_player", False)):
+                continue
+            role = str(getattr(agent, "role", "npc"))
+            if role not in roles:
+                continue
+            uid = self._resolve_agent_work_village_uid(agent)
+            if uid and uid not in by_village:
+                by_village[uid] = {r: _empty_assignment_gap_role_metrics() for r in roles}
+            aff = self._workforce_affiliation_for_village(agent, uid) if uid else "unaffiliated"
+            global_counts[role]["assigned_role_count"] += 1
+            if uid:
+                by_village[uid][role]["assigned_role_count"] += 1
+            by_affiliation[aff]["assigned_role_count"] += 1
+
+        for status in WORKFORCE_AFFILIATION_CLASSES:
+            sc = (by_aff or {}).get(status, {})
+            by_affiliation[status]["task_selected_count"] = int((sc or {}).get("task_selected_count", 0))
+            by_affiliation[status]["productive_action_count"] = int((sc or {}).get("productive_action_count", 0))
+            by_affiliation[status]["abandoned_or_overridden_count"] = int((sc or {}).get("abandoned_or_overridden_count", 0))
+
+        return {
+            "global": global_counts,
+            "by_village": by_village,
+            "by_affiliation": by_affiliation,
+        }
+
+    def compute_workforce_realization_snapshot(self) -> Dict[str, Any]:
+        role_task_map = {
+            "farmer": {"farm_cycle"},
+            "forager": {"gather_food_wild"},
+            "hauler": {"food_logistics", "village_logistics"},
+            "builder": {"build_storage", "build_house", "gather_materials"},
+            "miner": {"mine_cycle"},
+            "woodcutter": {"lumber_cycle"},
+        }
+        roles = WORKFORCE_REALIZATION_ROLES
+        target_by_village: Dict[str, Dict[str, int]] = {}
+        by_village: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        global_role: Dict[str, Dict[str, Any]] = {
+            role: _empty_workforce_realization_role_metrics()
+            for role in roles
+        }
+        affiliation_global = {
+            status: {
+                "assigned_count": 0,
+                "active_task_count": 0,
+                "productive_action_count": 0,
+                "blocked_or_idle_count": 0,
+            }
+            for status in WORKFORCE_AFFILIATION_CLASSES
+        }
+        affiliation_by_village: Dict[str, Dict[str, Dict[str, int]]] = {}
+
+        for village in self.villages:
+            uid = str(village.get("village_uid", ""))
+            if not uid:
+                continue
+            metrics = village.get("metrics", {}) if isinstance(village.get("metrics"), dict) else {}
+            target = metrics.get("workforce_target_mix", {})
+            if not isinstance(target, dict):
+                target = {}
+            target_by_village[uid] = {
+                role: int(target.get(role, 0))
+                for role in roles
+            }
+            by_village[uid] = {role: _empty_workforce_realization_role_metrics() for role in roles}
+            affiliation_by_village[uid] = {
+                status: {
+                    "assigned_count": 0,
+                    "active_task_count": 0,
+                    "productive_action_count": 0,
+                    "blocked_or_idle_count": 0,
+                }
+                for status in WORKFORCE_AFFILIATION_CLASSES
+            }
+
+        for uid, role_targets in target_by_village.items():
+            for role in roles:
+                t = int(role_targets.get(role, 0))
+                by_village[uid][role]["target_count"] = t
+                global_role[role]["target_count"] += t
+
+        window = int(WORKFORCE_REALIZATION_PRODUCTIVE_WINDOW_TICKS)
+        idle_grace = int(WORKFORCE_REALIZATION_IDLE_GRACE_TICKS)
+        for agent in self.agents:
+            if not getattr(agent, "alive", False) or bool(getattr(agent, "is_player", False)):
+                continue
+            role = str(getattr(agent, "role", "npc"))
+            if role not in roles:
+                continue
+            uid = self._resolve_agent_work_village_uid(agent)
+            if not uid:
+                continue
+            if uid not in by_village:
+                by_village[uid] = {r: _empty_workforce_realization_role_metrics() for r in roles}
+                affiliation_by_village[uid] = {
+                    status: {
+                        "assigned_count": 0,
+                        "active_task_count": 0,
+                        "productive_action_count": 0,
+                        "blocked_or_idle_count": 0,
+                    }
+                    for status in WORKFORCE_AFFILIATION_CLASSES
+                }
+            affiliation = self._workforce_affiliation_for_village(agent, uid)
+
+            by_village[uid][role]["assigned_count"] += 1
+            global_role[role]["assigned_count"] += 1
+            affiliation_by_village[uid][affiliation]["assigned_count"] += 1
+            affiliation_global[affiliation]["assigned_count"] += 1
+
+            task = str(getattr(agent, "task", ""))
+            if task in role_task_map.get(role, set()):
+                by_village[uid][role]["active_task_count"] += 1
+                global_role[role]["active_task_count"] += 1
+                affiliation_by_village[uid][affiliation]["active_task_count"] += 1
+                affiliation_global[affiliation]["active_task_count"] += 1
+
+            assigned_tick = int(getattr(agent, "workforce_role_assigned_tick", self.tick))
+            last_prod_map = getattr(agent, "workforce_last_productive_tick_by_role", {})
+            last_prod_tick = int(last_prod_map.get(role, -10**9)) if isinstance(last_prod_map, dict) else -10**9
+            recent_productive = last_prod_tick >= int(self.tick) - window
+            if not recent_productive and int(self.tick) - assigned_tick >= idle_grace:
+                by_village[uid][role]["blocked_or_idle_count"] += 1
+                global_role[role]["blocked_or_idle_count"] += 1
+                affiliation_by_village[uid][affiliation]["blocked_or_idle_count"] += 1
+                affiliation_global[affiliation]["blocked_or_idle_count"] += 1
+
+        stats = self.workforce_realization_stats if isinstance(self.workforce_realization_stats, dict) else _default_workforce_realization_stats()
+        productive_by_role = stats.get("productive_actions_by_role", {})
+        productive_actions_by_role = stats.get("productive_actions_by_role_actions", {})
+        blocks_by_role = stats.get("block_reasons_by_role", {})
+        productive_by_village = stats.get("productive_actions_by_role_by_village", {})
+        productive_actions_by_village = stats.get("productive_actions_by_role_actions_by_village", {})
+        blocks_by_village = stats.get("block_reasons_by_role_by_village", {})
+
+        for role in roles:
+            global_role[role]["productive_action_count"] = int((productive_by_role or {}).get(role, 0))
+            global_role[role]["productive_actions"] = {
+                str(k): int(v) for k, v in (((productive_actions_by_role or {}).get(role, {}) or {}).items())
+            }
+            global_role[role]["block_reasons"] = {
+                str(k): int(v) for k, v in (((blocks_by_role or {}).get(role, {}) or {}).items())
+            }
+
+        for uid, role_metrics in by_village.items():
+            vprod = (productive_by_village or {}).get(uid, {})
+            vprod_actions = (productive_actions_by_village or {}).get(uid, {})
+            vblocks = (blocks_by_village or {}).get(uid, {})
+            for role in roles:
+                role_metrics[role]["productive_action_count"] = int((vprod or {}).get(role, 0))
+                role_metrics[role]["productive_actions"] = {
+                    str(k): int(v) for k, v in (((vprod_actions or {}).get(role, {}) or {}).items())
+                }
+                role_metrics[role]["block_reasons"] = {
+                    str(k): int(v) for k, v in (((vblocks or {}).get(role, {}) or {}).items())
+                }
+
+        by_aff_role = stats.get("productive_actions_by_affiliation", {})
+        by_aff_role_village = stats.get("productive_actions_by_affiliation_by_village", {})
+        for role in roles:
+            aff_map = (by_aff_role or {}).get(role, {})
+            for status in WORKFORCE_AFFILIATION_CLASSES:
+                affiliation_global[status]["productive_action_count"] += int((aff_map or {}).get(status, 0))
+        for uid, by_status in affiliation_by_village.items():
+            rv = (by_aff_role_village or {}).get(uid, {})
+            for role in roles:
+                aff_map = (rv or {}).get(role, {})
+                for status in WORKFORCE_AFFILIATION_CLASSES:
+                    by_status[status]["productive_action_count"] += int((aff_map or {}).get(status, 0))
+
+        return {
+            "window_ticks": int(window),
+            "idle_grace_ticks": int(idle_grace),
+            "global": global_role,
+            "by_village": by_village,
+            "affiliation_contribution": {
+                "global": affiliation_global,
+                "by_village": affiliation_by_village,
+            },
+        }
+
     def get_events_since(self, since_tick: int = -1) -> List[Dict]:
         cutoff = int(since_tick)
         return [e for e in self.events if int(e.get("tick", -1)) > cutoff]
@@ -1270,8 +5535,12 @@ class World:
         old_role = getattr(agent, "role", "npc")
         if old_role == new_role:
             agent.role = new_role
+            if str(new_role) in WORKFORCE_REALIZATION_ROLES and getattr(agent, "workforce_role_assigned_tick", None) is None:
+                agent.workforce_role_assigned_tick = int(self.tick)
             return
         agent.role = new_role
+        if str(new_role) in WORKFORCE_REALIZATION_ROLES:
+            agent.workforce_role_assigned_tick = int(self.tick)
         self.emit_event(
             "role_changed",
             {
@@ -1476,6 +5745,82 @@ class World:
 
         return None
 
+    def _generate_food_rich_patches(self) -> None:
+        self.food_rich_patches = []
+        map_area = max(1, int(self.width) * int(self.height))
+        scale = (float(map_area) / float(72 * 72)) ** 0.5
+        target_count = int(round(4 * scale))
+        target_count = max(int(FOOD_PATCH_MIN_COUNT), min(int(FOOD_PATCH_MAX_COUNT), target_count))
+        min_radius = max(3, int(round(float(FOOD_PATCH_MIN_RADIUS) * scale)))
+        max_radius = max(min_radius + 1, int(round(float(FOOD_PATCH_MAX_RADIUS) * scale)))
+        attempts = max(200, target_count * 160)
+        while len(self.food_rich_patches) < target_count and attempts > 0:
+            attempts -= 1
+            x = self._eco_rng.randint(0, self.width - 1)
+            y = self._eco_rng.randint(0, self.height - 1)
+            if str(self.tiles[y][x]) == "W":
+                continue
+            radius = self._eco_rng.randint(min_radius, max_radius)
+            overlap = False
+            for patch in self.food_rich_patches:
+                px = int(patch.get("center_x", 0))
+                py = int(patch.get("center_y", 0))
+                pr = int(patch.get("radius", min_radius))
+                if abs(px - x) + abs(py - y) < int((pr + radius) * 0.8):
+                    overlap = True
+                    break
+            if overlap:
+                continue
+            self.food_rich_patches.append(
+                {
+                    "center_x": int(x),
+                    "center_y": int(y),
+                    "radius": int(radius),
+                    "regen_multiplier": float(FOOD_PATCH_REGEN_MULTIPLIER),
+                    "density_multiplier": float(FOOD_PATCH_DENSITY_MULTIPLIER),
+                }
+            )
+
+    def _is_in_food_patch(self, x: int, y: int) -> bool:
+        for patch in self.food_rich_patches:
+            if not isinstance(patch, dict):
+                continue
+            px = int(patch.get("center_x", 0))
+            py = int(patch.get("center_y", 0))
+            pr = int(patch.get("radius", 0))
+            if abs(int(x) - px) + abs(int(y) - py) <= pr:
+                return True
+        return False
+
+    def _spawn_food_in_patch_once(self) -> bool:
+        if not self.food_rich_patches:
+            return False
+        patch = self._eco_rng.choice(self.food_rich_patches)
+        if not isinstance(patch, dict):
+            return False
+        cx = int(patch.get("center_x", 0))
+        cy = int(patch.get("center_y", 0))
+        radius = max(1, int(patch.get("radius", 1)))
+        for _ in range(24):
+            dx = self._eco_rng.randint(-radius, radius)
+            dy = self._eco_rng.randint(-radius, radius)
+            if abs(dx) + abs(dy) > radius:
+                continue
+            x = cx + dx
+            y = cy + dy
+            if not (0 <= x < self.width and 0 <= y < self.height):
+                continue
+            if str(self.tiles[y][x]) != "G":
+                continue
+            if (x, y) in self.food:
+                continue
+            if self.is_occupied(x, y):
+                continue
+            self.food.add((x, y))
+            self.food_patch_food_spawned = int(self.food_patch_food_spawned) + 1
+            return True
+        return False
+
     def _spawn_initial_food(self, n: int):
         added = 0
 
@@ -1512,6 +5857,13 @@ class World:
             if pos and pos not in self.food:
                 self.food.add(pos)
                 added += 1
+        # Additive ecological boost: food-rich patches start denser than the baseline world.
+        extra_food = int(round(float(n) * float(FOOD_PATCH_EXTRA_INITIAL_FOOD_RATIO)))
+        spawned = 0
+        while spawned < extra_food and len(self.food) < int(self.MAX_FOOD):
+            if not self._spawn_food_in_patch_once():
+                break
+            spawned += 1
 
     def _spawn_initial_wood(self, n: int):
         added = 0
@@ -1570,6 +5922,16 @@ class World:
                     pos = self.find_random_free()
                     if pos:
                         self.food.add(pos)
+            # Ecological variation: patches regenerate food faster than the global baseline.
+            extra_factor = float(FOOD_RESPAWN_PER_TICK) * max(0.0, float(FOOD_PATCH_REGEN_MULTIPLIER) - 1.0)
+            patch_extra = int(extra_factor)
+            fractional = max(0.0, extra_factor - float(patch_extra))
+            if self._eco_rng.random() < fractional:
+                patch_extra += 1
+            for _ in range(max(0, patch_extra)):
+                if len(self.food) >= MAX_FOOD:
+                    break
+                self._spawn_food_in_patch_once()
 
         if len(self.wood) < MAX_WOOD:
             for _ in range(WOOD_RESPAWN_PER_TICK):
@@ -1594,12 +5956,15 @@ class World:
         village = self.get_village_by_id(getattr(agent, "village_id", None))
 
         if pos in self.food:
+            hunger_before = float(getattr(agent, "hunger", 100.0))
             self.food.remove(pos)
             if agent.inventory_space() > 0:
                 agent.inventory["food"] = agent.inventory.get("food", 0) + 1
             agent.hunger += FOOD_EAT_GAIN
             if agent.hunger > 100:
                 agent.hunger = 100
+            self.record_food_consumption("wild_direct", amount=1)
+            self.try_deposit_food_to_nearby_camp(agent, amount=1, hunger_before=hunger_before)
             building_system.record_village_resource_gather(village, "food", amount=1)
             self.record_resource_production("food", 1)
             self.emit_event(
@@ -1614,6 +5979,8 @@ class World:
                     "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
                 },
             )
+            if str(getattr(agent, "role", "")) == "forager":
+                self.record_workforce_productive_action(agent, "forager", "direct_food_gather")
 
     def gather_resource(self, agent: Agent):
         pos = (agent.x, agent.y)
@@ -1649,6 +6016,8 @@ class World:
                     "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
                 },
             )
+            if str(getattr(agent, "role", "")) == "woodcutter":
+                self.record_workforce_productive_action(agent, "woodcutter", "wood_gather")
             return True
 
         if pos in self.stone:
@@ -1679,6 +6048,8 @@ class World:
                     "village_uid": self.resolve_village_uid(getattr(agent, "village_id", None)),
                 },
             )
+            if str(getattr(agent, "role", "")) == "miner":
+                self.record_workforce_productive_action(agent, "miner", "stone_gather")
             return True
 
         return False
@@ -1747,6 +6118,9 @@ class World:
     def haul_harvest(self, agent: Agent):
         return farming_system.haul_harvest(self, agent)
 
+    def is_farmer_task_viable(self, agent: Agent) -> bool:
+        return bool(farming_system.is_farmer_task_viable(self, agent))
+
     def detect_villages(self):
         village_system.detect_villages(self)
 
@@ -1769,6 +6143,8 @@ class World:
             agent.update(self)
 
         self.agents = [a for a in self.agents if a.alive]
+        self.record_movement_congestion_snapshot()
+        self.update_proto_communities_and_camps()
 
         if len(self.agents) > MAX_AGENTS:
             extra = len(self.agents) - MAX_AGENTS
