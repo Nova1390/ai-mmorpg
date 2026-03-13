@@ -91,6 +91,24 @@ def summarize_family_aggregate(aggregate: Dict[str, Any]) -> Dict[str, float]:
         "avg_farm_work_events": float(aggregate.get("avg_farm_work_events", 0.0)),
         "avg_local_food_surplus_rate": float(aggregate.get("avg_local_food_surplus_rate", 0.0)),
         "avg_storage_emergence_attempts": float(aggregate.get("avg_storage_emergence_attempts", 0.0)),
+        "avg_wood_available_world_total": float(aggregate.get("avg_wood_available_world_total", 0.0)),
+        "avg_wood_gathered_total": float(aggregate.get("avg_wood_gathered_total", 0.0)),
+        "avg_wood_respawned_total": float(aggregate.get("avg_wood_respawned_total", 0.0)),
+        "avg_wood_shortage_events": float(aggregate.get("avg_wood_shortage_events", 0.0)),
+        "avg_local_wood_pressure": float(aggregate.get("avg_local_wood_pressure", 0.0)),
+        "avg_construction_sites_created": float(aggregate.get("avg_construction_sites_created", 0.0)),
+        "avg_active_construction_sites": float(aggregate.get("avg_active_construction_sites", 0.0)),
+        "avg_partially_built_sites_count": float(aggregate.get("avg_partially_built_sites_count", 0.0)),
+        "avg_construction_completed_count": float(aggregate.get("avg_construction_completed_count", 0.0)),
+        "avg_construction_material_delivery_failures": float(
+            aggregate.get("avg_construction_material_delivery_failures", 0.0)
+        ),
+        "avg_construction_material_shortage_blocks": float(
+            aggregate.get("avg_construction_material_shortage_blocks", 0.0)
+        ),
+        "avg_houses_completed_count": float(aggregate.get("avg_houses_completed_count", 0.0)),
+        "avg_storage_completed_count": float(aggregate.get("avg_storage_completed_count", 0.0)),
+        "avg_storage_completion_rate": float(aggregate.get("avg_storage_completion_rate", 0.0)),
     }
 
 

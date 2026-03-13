@@ -416,6 +416,7 @@ def run_global_balance_scenario(
                     "road_build_suppressed_reasons": dict(cog.get("road_build_suppressed_reasons", {})) if isinstance(cog.get("road_build_suppressed_reasons", {}), dict) else {},
                 },
                 "settlement_progression_metrics": dict(cog.get("settlement_progression_metrics", {})) if isinstance(cog.get("settlement_progression_metrics", {}), dict) else {},
+                "material_feasibility_metrics": dict(cog.get("material_feasibility_metrics", {})) if isinstance(cog.get("material_feasibility_metrics", {}), dict) else {},
                 "food_patch_metrics": {
                     "food_patch_count": int(world_block.get("food_patch_count", 0)),
                     "food_patch_total_area": int(world_block.get("food_patch_total_area", 0)),
@@ -702,6 +703,51 @@ def aggregate_global_balance_results(
     )
     secondary_nucleus_with_house_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "secondary_nucleus_with_house_count"))
     secondary_nucleus_house_growth_events = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "secondary_nucleus_house_growth_events"))
+    wood_available_world_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_available_world_total"))
+    wood_available_on_map = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_available_on_map"))
+    wood_in_agent_inventories = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_in_agent_inventories"))
+    wood_in_storage_buildings = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_in_storage_buildings"))
+    wood_in_construction_buffers = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_in_construction_buffers"))
+    wood_gathered_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_gathered_total"))
+    wood_respawned_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_respawned_total"))
+    wood_consumed_for_construction_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "wood_consumed_for_construction_total")
+    )
+    wood_shortage_events = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_shortage_events"))
+    avg_local_wood_pressure = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "avg_local_wood_pressure"))
+    construction_sites_created = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "construction_sites_created"))
+    construction_sites_created_house = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_sites_created_house")
+    )
+    construction_sites_created_storage = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_sites_created_storage")
+    )
+    active_construction_sites = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "active_construction_sites"))
+    partially_built_sites_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "partially_built_sites_count")
+    )
+    construction_stalled_ticks_material = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_stalled_ticks")
+    )
+    construction_stalled_sites_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_stalled_sites_count")
+    )
+    construction_completed_count_material = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_completed_count")
+    )
+    construction_abandoned_count_material = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_abandoned_count")
+    )
+    construction_material_delivery_failures = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_material_delivery_failures")
+    )
+    construction_material_shortage_blocks = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_material_shortage_blocks")
+    )
+    houses_completed_count = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "houses_completed_count"))
+    storage_attempts = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "storage_attempts"))
+    storage_completed_count = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "storage_completed_count"))
+    storage_completion_rate = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "storage_completion_rate"))
 
     avg_final_population_value = float(mean(final_pop)) if final_pop else 0.0
     avg_confirmed_memory_reinforcements_value = float(mean(confirmed_memory_reinforcements)) if confirmed_memory_reinforcements else 0.0
@@ -941,5 +987,48 @@ def aggregate_global_balance_results(
             "avg_surplus_storage_abandoned": float(mean(surplus_storage_abandoned)) if surplus_storage_abandoned else 0.0,
             "avg_secondary_nucleus_with_house_count": float(mean(secondary_nucleus_with_house_count)) if secondary_nucleus_with_house_count else 0.0,
             "avg_secondary_nucleus_house_growth_events": float(mean(secondary_nucleus_house_growth_events)) if secondary_nucleus_house_growth_events else 0.0,
+            "avg_wood_available_world_total": float(mean(wood_available_world_total)) if wood_available_world_total else 0.0,
+            "avg_wood_available_on_map": float(mean(wood_available_on_map)) if wood_available_on_map else 0.0,
+            "avg_wood_in_agent_inventories": float(mean(wood_in_agent_inventories)) if wood_in_agent_inventories else 0.0,
+            "avg_wood_in_storage_buildings": float(mean(wood_in_storage_buildings)) if wood_in_storage_buildings else 0.0,
+            "avg_wood_in_construction_buffers": float(mean(wood_in_construction_buffers)) if wood_in_construction_buffers else 0.0,
+            "avg_wood_gathered_total": float(mean(wood_gathered_total)) if wood_gathered_total else 0.0,
+            "avg_wood_respawned_total": float(mean(wood_respawned_total)) if wood_respawned_total else 0.0,
+            "avg_wood_consumed_for_construction_total": float(
+                mean(wood_consumed_for_construction_total)
+            ) if wood_consumed_for_construction_total else 0.0,
+            "avg_wood_shortage_events": float(mean(wood_shortage_events)) if wood_shortage_events else 0.0,
+            "avg_local_wood_pressure": float(mean(avg_local_wood_pressure)) if avg_local_wood_pressure else 0.0,
+            "avg_construction_sites_created": float(mean(construction_sites_created)) if construction_sites_created else 0.0,
+            "avg_construction_sites_created_house": float(
+                mean(construction_sites_created_house)
+            ) if construction_sites_created_house else 0.0,
+            "avg_construction_sites_created_storage": float(
+                mean(construction_sites_created_storage)
+            ) if construction_sites_created_storage else 0.0,
+            "avg_active_construction_sites": float(mean(active_construction_sites)) if active_construction_sites else 0.0,
+            "avg_partially_built_sites_count": float(mean(partially_built_sites_count)) if partially_built_sites_count else 0.0,
+            "avg_construction_stalled_ticks_material": float(
+                mean(construction_stalled_ticks_material)
+            ) if construction_stalled_ticks_material else 0.0,
+            "avg_construction_stalled_sites_count": float(
+                mean(construction_stalled_sites_count)
+            ) if construction_stalled_sites_count else 0.0,
+            "avg_construction_completed_count": float(
+                mean(construction_completed_count_material)
+            ) if construction_completed_count_material else 0.0,
+            "avg_construction_abandoned_count_material": float(
+                mean(construction_abandoned_count_material)
+            ) if construction_abandoned_count_material else 0.0,
+            "avg_construction_material_delivery_failures": float(
+                mean(construction_material_delivery_failures)
+            ) if construction_material_delivery_failures else 0.0,
+            "avg_construction_material_shortage_blocks": float(
+                mean(construction_material_shortage_blocks)
+            ) if construction_material_shortage_blocks else 0.0,
+            "avg_houses_completed_count": float(mean(houses_completed_count)) if houses_completed_count else 0.0,
+            "avg_storage_attempts": float(mean(storage_attempts)) if storage_attempts else 0.0,
+            "avg_storage_completed_count": float(mean(storage_completed_count)) if storage_completed_count else 0.0,
+            "avg_storage_completion_rate": float(mean(storage_completion_rate)) if storage_completion_rate else 0.0,
         },
     }

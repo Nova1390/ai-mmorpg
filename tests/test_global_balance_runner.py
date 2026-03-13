@@ -251,6 +251,33 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
                         "proto_farm_practices": 3,
                         "construction_cluster_practices": 2,
                     },
+                    "material_feasibility_metrics": {
+                        "wood_available_world_total": 120,
+                        "wood_available_on_map": 40,
+                        "wood_in_agent_inventories": 18,
+                        "wood_in_storage_buildings": 45,
+                        "wood_in_construction_buffers": 17,
+                        "wood_gathered_total": 90,
+                        "wood_respawned_total": 55,
+                        "wood_consumed_for_construction_total": 48,
+                        "wood_shortage_events": 7,
+                        "avg_local_wood_pressure": 0.22,
+                        "construction_sites_created": 14,
+                        "construction_sites_created_house": 10,
+                        "construction_sites_created_storage": 4,
+                        "active_construction_sites": 5,
+                        "partially_built_sites_count": 3,
+                        "construction_stalled_ticks": 9,
+                        "construction_stalled_sites_count": 2,
+                        "construction_completed_count": 6,
+                        "construction_abandoned_count": 2,
+                        "construction_material_delivery_failures": 4,
+                        "construction_material_shortage_blocks": 6,
+                        "houses_completed_count": 5,
+                        "storage_attempts": 6,
+                        "storage_completed_count": 2,
+                        "storage_completion_rate": 0.3333,
+                    },
                 },
                 "behavior_map": {
                     "secondary_nucleus_lifecycle": {
@@ -418,6 +445,33 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
                         "proto_farm_practices": 2,
                         "construction_cluster_practices": 1,
                     },
+                    "material_feasibility_metrics": {
+                        "wood_available_world_total": 80,
+                        "wood_available_on_map": 28,
+                        "wood_in_agent_inventories": 10,
+                        "wood_in_storage_buildings": 30,
+                        "wood_in_construction_buffers": 12,
+                        "wood_gathered_total": 62,
+                        "wood_respawned_total": 32,
+                        "wood_consumed_for_construction_total": 30,
+                        "wood_shortage_events": 14,
+                        "avg_local_wood_pressure": 0.44,
+                        "construction_sites_created": 10,
+                        "construction_sites_created_house": 7,
+                        "construction_sites_created_storage": 3,
+                        "active_construction_sites": 4,
+                        "partially_built_sites_count": 2,
+                        "construction_stalled_ticks": 14,
+                        "construction_stalled_sites_count": 3,
+                        "construction_completed_count": 4,
+                        "construction_abandoned_count": 3,
+                        "construction_material_delivery_failures": 7,
+                        "construction_material_shortage_blocks": 11,
+                        "houses_completed_count": 3,
+                        "storage_attempts": 4,
+                        "storage_completed_count": 1,
+                        "storage_completion_rate": 0.25,
+                    },
                 },
                 "behavior_map": {
                     "secondary_nucleus_lifecycle": {
@@ -558,6 +612,31 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
     assert float(agg["avg_exploration_shift_due_to_low_density"]) == 15.0
     assert float(agg["avg_secondary_cluster_nonzero_count"]) == 1.5
     assert float(agg["avg_secondary_nucleus_structure_count"]) == 50.0
+    assert float(agg["avg_wood_available_world_total"]) == 100.0
+    assert float(agg["avg_wood_available_on_map"]) == 34.0
+    assert float(agg["avg_wood_in_agent_inventories"]) == 14.0
+    assert float(agg["avg_wood_in_storage_buildings"]) == 37.5
+    assert float(agg["avg_wood_in_construction_buffers"]) == 14.5
+    assert float(agg["avg_wood_gathered_total"]) == 76.0
+    assert float(agg["avg_wood_respawned_total"]) == 43.5
+    assert float(agg["avg_wood_consumed_for_construction_total"]) == 39.0
+    assert float(agg["avg_wood_shortage_events"]) == 10.5
+    assert float(agg["avg_local_wood_pressure"]) == pytest.approx(0.33)
+    assert float(agg["avg_construction_sites_created"]) == 12.0
+    assert float(agg["avg_construction_sites_created_house"]) == 8.5
+    assert float(agg["avg_construction_sites_created_storage"]) == 3.5
+    assert float(agg["avg_active_construction_sites"]) == 4.5
+    assert float(agg["avg_partially_built_sites_count"]) == 2.5
+    assert float(agg["avg_construction_stalled_ticks_material"]) == 11.5
+    assert float(agg["avg_construction_stalled_sites_count"]) == 2.5
+    assert float(agg["avg_construction_completed_count"]) == 5.0
+    assert float(agg["avg_construction_abandoned_count_material"]) == 2.5
+    assert float(agg["avg_construction_material_delivery_failures"]) == 5.5
+    assert float(agg["avg_construction_material_shortage_blocks"]) == 8.5
+    assert float(agg["avg_houses_completed_count"]) == 4.0
+    assert float(agg["avg_storage_attempts"]) == 5.0
+    assert float(agg["avg_storage_completed_count"]) == 1.5
+    assert float(agg["avg_storage_completion_rate"]) == pytest.approx(0.29165)
     assert float(agg["avg_secondary_nucleus_build_support_events"]) == 19.0
     assert float(agg["avg_secondary_nucleus_material_delivery_events"]) == 15.0
     assert float(agg["avg_secondary_nucleus_materialization_ticks"]) == 59.0

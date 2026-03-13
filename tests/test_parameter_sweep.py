@@ -5,6 +5,7 @@ from systems.parameter_sweep import (
     aggregate_across_families,
     generate_sweep_configs,
     is_breakeven_candidate,
+    summarize_family_aggregate,
 )
 import agent as agent_module
 import world as world_module
@@ -78,3 +79,38 @@ def test_breakeven_detection_logic() -> None:
     }
     assert is_breakeven_candidate(aggregate_all=improved, baseline_reference=baseline) is True
     assert is_breakeven_candidate(aggregate_all=non_candidate, baseline_reference=baseline) is False
+
+
+def test_summarize_family_aggregate_includes_material_feasibility_metrics() -> None:
+    agg = summarize_family_aggregate(
+        {
+            "avg_wood_available_world_total": 88.0,
+            "avg_wood_gathered_total": 44.0,
+            "avg_wood_respawned_total": 21.0,
+            "avg_wood_shortage_events": 7.0,
+            "avg_local_wood_pressure": 0.28,
+            "avg_construction_sites_created": 9.0,
+            "avg_active_construction_sites": 3.0,
+            "avg_partially_built_sites_count": 2.0,
+            "avg_construction_completed_count": 4.0,
+            "avg_construction_material_delivery_failures": 5.0,
+            "avg_construction_material_shortage_blocks": 6.0,
+            "avg_houses_completed_count": 3.0,
+            "avg_storage_completed_count": 1.0,
+            "avg_storage_completion_rate": 0.25,
+        }
+    )
+    assert float(agg["avg_wood_available_world_total"]) == 88.0
+    assert float(agg["avg_wood_gathered_total"]) == 44.0
+    assert float(agg["avg_wood_respawned_total"]) == 21.0
+    assert float(agg["avg_wood_shortage_events"]) == 7.0
+    assert float(agg["avg_local_wood_pressure"]) == 0.28
+    assert float(agg["avg_construction_sites_created"]) == 9.0
+    assert float(agg["avg_active_construction_sites"]) == 3.0
+    assert float(agg["avg_partially_built_sites_count"]) == 2.0
+    assert float(agg["avg_construction_completed_count"]) == 4.0
+    assert float(agg["avg_construction_material_delivery_failures"]) == 5.0
+    assert float(agg["avg_construction_material_shortage_blocks"]) == 6.0
+    assert float(agg["avg_houses_completed_count"]) == 3.0
+    assert float(agg["avg_storage_completed_count"]) == 1.0
+    assert float(agg["avg_storage_completion_rate"]) == 0.25

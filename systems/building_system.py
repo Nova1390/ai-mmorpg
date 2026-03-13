@@ -2527,6 +2527,12 @@ def _create_construction_site(
     )
     if isinstance(site, dict):
         _mark_construction_site_demand_tick(world, site)
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("construction_sites_created")
+            if str(building_type) == "house":
+                world.record_settlement_progression_metric("construction_sites_created_house")
+            elif str(building_type) == "storage":
+                world.record_settlement_progression_metric("construction_sites_created_storage")
         if str(building_type) == "house":
             _record_housing_stage(
                 world,

@@ -161,6 +161,14 @@ def _default_world_production_metrics() -> Dict[str, int]:
     }
 
 
+def _default_resource_respawn_stats() -> Dict[str, int]:
+    return {
+        "food_respawned_total": 0,
+        "wood_respawned_total": 0,
+        "stone_respawned_total": 0,
+    }
+
+
 WORKFORCE_REALIZATION_ROLES = ("farmer", "forager", "hauler", "builder", "miner", "woodcutter")
 WORKFORCE_AFFILIATION_CLASSES = ("resident", "attached", "transient", "unaffiliated")
 WORKFORCE_BLOCK_REASONS = {
@@ -670,6 +678,11 @@ def _default_settlement_progression_stats() -> Dict[str, Any]:
         "storage_construction_interrupted_invalid": 0,
         "storage_construction_abandoned_count": 0,
         "storage_construction_completed_count": 0,
+        "construction_sites_created": 0,
+        "construction_sites_created_house": 0,
+        "construction_sites_created_storage": 0,
+        "active_construction_sites": 0,
+        "partially_built_sites_count": 0,
         "construction_material_delivery_events": 0,
         "construction_material_delivery_to_active_site": 0,
         "construction_material_delivery_drift_events": 0,
@@ -1111,6 +1124,7 @@ class World:
         self.proto_asset_proposals: List[Dict] = []
         self.proto_asset_prototypes: List[Dict] = []
         self.production_metrics: Dict[str, int] = _default_world_production_metrics()
+        self.resource_respawn_stats: Dict[str, int] = _default_resource_respawn_stats()
         self.specialization_diagnostics: Dict[str, Any] = {}
         if hasattr(building_system, "get_or_init_specialization_diagnostics"):
             self.specialization_diagnostics = building_system.get_or_init_specialization_diagnostics(self)
@@ -5977,6 +5991,25 @@ class World:
                 ]
             )
         )
+        housing_diag = self.compute_housing_construction_diagnostics_snapshot()
+        hglobal = housing_diag.get("global", {}) if isinstance(housing_diag, dict) else {}
+        stats["houses_completed_count"] = int(hglobal.get("houses_completed_count", 0))
+        active_sites = 0
+        partial_sites = 0
+        for b in (self.buildings or {}).values():
+            if not isinstance(b, dict):
+                continue
+            if str(b.get("type", "")) not in {"house", "storage"}:
+                continue
+            if str(b.get("operational_state", "")) != "under_construction":
+                continue
+            active_sites += 1
+            progress = int(b.get("construction_progress", 0))
+            required = max(1, int(b.get("construction_required_work", 1)))
+            if progress > 0 and progress < required:
+                partial_sites += 1
+        stats["active_construction_sites"] = int(active_sites)
+        stats["partially_built_sites_count"] = int(partial_sites)
         local_memory = self.local_practice_memory if isinstance(self.local_practice_memory, dict) else {}
         stats["active_cultural_practices"] = int(len(local_memory))
         counts_by_type: Dict[str, int] = {
@@ -6007,6 +6040,9 @@ class World:
         rate_samples = int(stats.get("_surplus_rate_samples", 0))
         food_rate = float(stats.get("_surplus_food_rate_sum_scaled", 0)) / 1000.0
         resource_rate = float(stats.get("_surplus_resource_rate_sum_scaled", 0)) / 1000.0
+        storage_attempts = int(stats.get("storage_emergence_attempts", 0))
+        storage_completions = int(stats.get("storage_construction_completed_count", 0))
+        storage_completion_rate = float(storage_completions) / float(max(1, storage_attempts))
         return {
             "farm_sites_created": int(stats.get("farm_sites_created", 0)),
             "farm_work_events": int(stats.get("farm_work_events", 0)),
@@ -6043,6 +6079,11 @@ class World:
             "storage_construction_interrupted_invalid": int(stats.get("storage_construction_interrupted_invalid", 0)),
             "storage_construction_abandoned_count": int(stats.get("storage_construction_abandoned_count", 0)),
             "storage_construction_completed_count": int(stats.get("storage_construction_completed_count", 0)),
+            "construction_sites_created": int(stats.get("construction_sites_created", 0)),
+            "construction_sites_created_house": int(stats.get("construction_sites_created_house", 0)),
+            "construction_sites_created_storage": int(stats.get("construction_sites_created_storage", 0)),
+            "active_construction_sites": int(stats.get("active_construction_sites", 0)),
+            "partially_built_sites_count": int(stats.get("partially_built_sites_count", 0)),
             "construction_material_delivery_events": int(stats.get("construction_material_delivery_events", 0)),
             "construction_material_delivery_to_active_site": int(stats.get("construction_material_delivery_to_active_site", 0)),
             "construction_material_delivery_drift_events": int(stats.get("construction_material_delivery_drift_events", 0)),
@@ -6050,6 +6091,10 @@ class World:
             "construction_progress_stalled_ticks": int(stats.get("construction_progress_stalled_ticks", 0)),
             "construction_completion_events": int(stats.get("construction_completion_events", 0)),
             "construction_abandonment_events": int(stats.get("construction_abandonment_events", 0)),
+            "houses_completed_count": int(stats.get("houses_completed_count", 0)),
+            "storage_attempts": int(storage_attempts),
+            "storage_completed_count": int(storage_completions),
+            "storage_completion_rate": round(float(storage_completion_rate), 4),
             "local_food_surplus_rate": round(float(food_rate / float(max(1, rate_samples))), 4),
             "local_resource_surplus_rate": round(float(resource_rate / float(max(1, rate_samples))), 4),
             "buffer_saturation_events": int(stats.get("buffer_saturation_events", 0)),
@@ -6070,6 +6115,110 @@ class World:
             "productive_food_patch_practices": int(stats.get("productive_food_patch_practices", 0)),
             "proto_farm_practices": int(stats.get("proto_farm_practices", 0)),
             "construction_cluster_practices": int(stats.get("construction_cluster_practices", 0)),
+        }
+
+    def compute_material_feasibility_snapshot(self) -> Dict[str, Any]:
+        production = self.production_metrics if isinstance(self.production_metrics, dict) else _default_world_production_metrics()
+        respawn = self.resource_respawn_stats if isinstance(self.resource_respawn_stats, dict) else _default_resource_respawn_stats()
+        progression = self.compute_settlement_progression_snapshot()
+
+        wood_on_map = int(len(self.wood))
+        wood_in_agents = int(
+            sum(
+                int(getattr(a, "inventory", {}).get("wood", 0))
+                for a in (self.agents or [])
+                if getattr(a, "alive", False) and isinstance(getattr(a, "inventory", {}), dict)
+            )
+        )
+        wood_in_storage = 0
+        wood_in_construction_buffers = 0
+        active_sites = 0
+        partial_sites = 0
+        stalled_sites = 0
+        outstanding_wood_total = 0
+        for b in (self.buildings or {}).values():
+            if not isinstance(b, dict):
+                continue
+            if str(b.get("type", "")) == "storage":
+                st = b.get("storage", {}) if isinstance(b.get("storage"), dict) else {}
+                wood_in_storage += int(st.get("wood", 0))
+            if str(b.get("type", "")) not in {"house", "storage"}:
+                continue
+            if str(b.get("operational_state", "")) != "under_construction":
+                continue
+            active_sites += 1
+            progress = int(b.get("construction_progress", 0))
+            required = max(1, int(b.get("construction_required_work", 1)))
+            if progress > 0 and progress < required:
+                partial_sites += 1
+            if int(b.get("builder_waiting_tick", -10_000)) >= int(self.tick) - 24:
+                stalled_sites += 1
+            buf = b.get("construction_buffer", {}) if isinstance(b.get("construction_buffer", {}), dict) else {}
+            wood_in_construction_buffers += int(buf.get("wood", 0))
+            if hasattr(building_system, "get_outstanding_construction_needs"):
+                try:
+                    needs = building_system.get_outstanding_construction_needs(b)
+                except Exception:
+                    needs = {}
+                if isinstance(needs, dict):
+                    outstanding_wood_total += int(needs.get("wood", 0))
+
+        workforce = self.workforce_realization_stats if isinstance(self.workforce_realization_stats, dict) else {}
+        by_role_blocks = workforce.get("block_reasons_by_role", {}) if isinstance(workforce.get("block_reasons_by_role", {}), dict) else {}
+        shortage_blocks = 0
+        for role in ("builder", "hauler"):
+            role_blocks = by_role_blocks.get(role, {}) if isinstance(by_role_blocks.get(role, {}), dict) else {}
+            shortage_blocks += int(role_blocks.get("no_materials_available", 0))
+
+        delivery_diag = self.delivery_diagnostic_stats if isinstance(self.delivery_diagnostic_stats, dict) else _default_delivery_diagnostic_stats()
+        delivery_global = delivery_diag.get("global", {}) if isinstance(delivery_diag.get("global", {}), dict) else {}
+        delivery_fail_reasons = delivery_global.get("delivery_failure_reasons", {}) if isinstance(delivery_global.get("delivery_failure_reasons", {}), dict) else {}
+        construction_delivery_failures = int(delivery_global.get("delivery_abandoned_count", 0))
+        material_delivery_failures = int(delivery_fail_reasons.get("no_resource_available", 0)) + int(
+            delivery_fail_reasons.get("no_source_storage", 0)
+        )
+
+        houses_completed = int(progression.get("houses_completed_count", 0))
+        storage_completed = int(progression.get("storage_completed_count", 0))
+        wood_consumed_for_construction_total = int(houses_completed * int(HOUSE_WOOD_COST)) + int(
+            storage_completed * int(getattr(building_system, "STORAGE_WOOD_COST", 0))
+        )
+        wood_available_world_total = int(wood_on_map + wood_in_agents + wood_in_storage + wood_in_construction_buffers)
+        avg_local_wood_pressure = float(outstanding_wood_total) / float(max(1, wood_available_world_total))
+        wood_shortage_events = int(shortage_blocks + material_delivery_failures)
+
+        return {
+            "wood_available_world_total": int(wood_available_world_total),
+            "wood_available_on_map": int(wood_on_map),
+            "wood_in_agent_inventories": int(wood_in_agents),
+            "wood_in_storage_buildings": int(wood_in_storage),
+            "wood_in_construction_buffers": int(wood_in_construction_buffers),
+            "wood_gathered_total": int(production.get("total_wood_gathered", 0)),
+            "wood_respawned_total": int(respawn.get("wood_respawned_total", 0)),
+            "wood_consumed_for_construction_total": int(wood_consumed_for_construction_total),
+            "wood_shortage_events": int(wood_shortage_events),
+            "avg_local_wood_pressure": round(float(avg_local_wood_pressure), 4),
+            "construction_sites_created": int(progression.get("construction_sites_created", 0)),
+            "construction_sites_created_house": int(progression.get("construction_sites_created_house", 0)),
+            "construction_sites_created_storage": int(progression.get("construction_sites_created_storage", 0)),
+            "active_construction_sites": int(active_sites),
+            "partially_built_sites_count": int(partial_sites),
+            "construction_stalled_ticks": int(progression.get("construction_progress_stalled_ticks", 0)),
+            "construction_stalled_sites_count": int(stalled_sites),
+            "construction_completed_count": int(progression.get("construction_completion_events", 0)),
+            "construction_abandoned_count": int(progression.get("construction_abandonment_events", 0)),
+            "construction_progress_ticks": int(progression.get("construction_progress_ticks", 0)),
+            "construction_material_delivery_events": int(progression.get("construction_material_delivery_events", 0)),
+            "construction_material_delivery_to_active_site": int(progression.get("construction_material_delivery_to_active_site", 0)),
+            "construction_material_delivery_drift_events": int(progression.get("construction_material_delivery_drift_events", 0)),
+            "construction_material_delivery_failures": int(construction_delivery_failures),
+            "construction_material_shortage_blocks": int(shortage_blocks),
+            "construction_material_source_failures": int(material_delivery_failures),
+            "houses_completed_count": int(houses_completed),
+            "storage_attempts": int(progression.get("storage_attempts", 0)),
+            "storage_completed_count": int(storage_completed),
+            "storage_completion_rate": float(progression.get("storage_completion_rate", 0.0)),
+            "storage_emergence_attempts": int(progression.get("storage_emergence_attempts", 0)),
         }
 
     def _behavior_region_key(self, x: int, y: int, *, cell: int = 6) -> str:
@@ -7592,6 +7741,7 @@ class World:
 
     def respawn_resources(self):
         if len(self.food) < MAX_FOOD:
+            food_added = 0
             for _ in range(FOOD_RESPAWN_PER_TICK):
                 # preferisci ancora pianure libere
                 placed = False
@@ -7600,13 +7750,16 @@ class World:
                     y = random.randint(0, self.height - 1)
                     if self.tiles[y][x] == "G" and (x, y) not in self.food and not self.is_occupied(x, y):
                         self.food.add((x, y))
+                        food_added += 1
                         placed = True
                         break
 
                 if not placed:
                     pos = self.find_random_free()
                     if pos:
-                        self.food.add(pos)
+                        if pos not in self.food:
+                            self.food.add(pos)
+                            food_added += 1
             # Ecological variation: patches regenerate food faster than the global baseline.
             extra_factor = float(FOOD_RESPAWN_PER_TICK) * max(0.0, float(FOOD_PATCH_REGEN_MULTIPLIER) - 1.0)
             patch_extra = int(extra_factor)
@@ -7616,25 +7769,48 @@ class World:
             for _ in range(max(0, patch_extra)):
                 if len(self.food) >= MAX_FOOD:
                     break
+                before = len(self.food)
                 self._spawn_food_in_patch_once()
+                if len(self.food) > before:
+                    food_added += 1
+            if food_added > 0:
+                stats = self.resource_respawn_stats if isinstance(self.resource_respawn_stats, dict) else _default_resource_respawn_stats()
+                stats["food_respawned_total"] = int(stats.get("food_respawned_total", 0)) + int(food_added)
+                self.resource_respawn_stats = stats
 
         if len(self.wood) < MAX_WOOD:
+            wood_added = 0
             for _ in range(WOOD_RESPAWN_PER_TICK):
                 for _ in range(80):
                     x = random.randint(0, self.width - 1)
                     y = random.randint(0, self.height - 1)
                     if self.tiles[y][x] == "F":
+                        before = len(self.wood)
                         self.wood.add((x, y))
+                        if len(self.wood) > before:
+                            wood_added += 1
                         break
+            if wood_added > 0:
+                stats = self.resource_respawn_stats if isinstance(self.resource_respawn_stats, dict) else _default_resource_respawn_stats()
+                stats["wood_respawned_total"] = int(stats.get("wood_respawned_total", 0)) + int(wood_added)
+                self.resource_respawn_stats = stats
 
         if len(self.stone) < MAX_STONE:
+            stone_added = 0
             for _ in range(STONE_RESPAWN_PER_TICK):
                 for _ in range(80):
                     x = random.randint(0, self.width - 1)
                     y = random.randint(0, self.height - 1)
                     if self.tiles[y][x] == "M":
+                        before = len(self.stone)
                         self.stone.add((x, y))
+                        if len(self.stone) > before:
+                            stone_added += 1
                         break
+            if stone_added > 0:
+                stats = self.resource_respawn_stats if isinstance(self.resource_respawn_stats, dict) else _default_resource_respawn_stats()
+                stats["stone_respawned_total"] = int(stats.get("stone_respawned_total", 0)) + int(stone_added)
+                self.resource_respawn_stats = stats
 
     def autopickup(self, agent: Agent):
         pos = (agent.x, agent.y)

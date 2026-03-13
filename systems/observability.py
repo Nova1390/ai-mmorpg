@@ -954,6 +954,13 @@ class SimulationMetricsCollector:
                 settlement_progression_diag = spd if isinstance(spd, dict) else {}
             except Exception:
                 settlement_progression_diag = {}
+        material_feasibility_diag = {}
+        if hasattr(world, "compute_material_feasibility_snapshot"):
+            try:
+                mfd = world.compute_material_feasibility_snapshot()
+                material_feasibility_diag = mfd if isinstance(mfd, dict) else {}
+            except Exception:
+                material_feasibility_diag = {}
 
         snapshot = {
             "tick": int(getattr(world, "tick", 0)),
@@ -1130,6 +1137,7 @@ class SimulationMetricsCollector:
                 "proto_specialization_global": dict(proto_specialization_diag) if isinstance(proto_specialization_diag, dict) else {},
                 "behavior_map_global": dict(behavior_map_diag) if isinstance(behavior_map_diag, dict) else {},
                 "settlement_progression_metrics": dict(settlement_progression_diag) if isinstance(settlement_progression_diag, dict) else {},
+                "material_feasibility_metrics": dict(material_feasibility_diag) if isinstance(material_feasibility_diag, dict) else {},
             },
             "llm_reflection": {
                 "reflection_trigger_detected_count": int(reflection_stats.get("reflection_trigger_detected_count", 0)),
