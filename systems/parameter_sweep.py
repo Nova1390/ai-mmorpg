@@ -165,6 +165,82 @@ def summarize_family_aggregate(aggregate: Dict[str, Any]) -> Dict[str, float]:
         "avg_construction_near_complete_sites_count": float(
             aggregate.get("avg_construction_near_complete_sites_count", 0.0)
         ),
+        "avg_builder_assigned_site_count": float(aggregate.get("avg_builder_assigned_site_count", 0.0)),
+        "avg_builder_site_arrival_count": float(aggregate.get("avg_builder_site_arrival_count", 0.0)),
+        "avg_builder_left_site_count": float(aggregate.get("avg_builder_left_site_count", 0.0)),
+        "avg_builder_left_site_before_completion_count": float(
+            aggregate.get("avg_builder_left_site_before_completion_count", 0.0)
+        ),
+        "avg_builder_waiting_on_site_ticks_total": float(
+            aggregate.get("avg_builder_waiting_on_site_ticks_total", 0.0)
+        ),
+        "avg_builder_on_site_ticks_total": float(aggregate.get("avg_builder_on_site_ticks_total", 0.0)),
+        "avg_builder_work_tick_applied_count": float(
+            aggregate.get("avg_builder_work_tick_applied_count", 0.0)
+        ),
+        "avg_builder_survival_override_during_construction_count": float(
+            aggregate.get("avg_builder_survival_override_during_construction_count", 0.0)
+        ),
+        "avg_builder_redirected_to_storage_during_construction_count": float(
+            aggregate.get("avg_builder_redirected_to_storage_during_construction_count", 0.0)
+        ),
+        "avg_builder_commitment_created_count": float(
+            aggregate.get("avg_builder_commitment_created_count", 0.0)
+        ),
+        "avg_builder_commitment_pause_count": float(
+            aggregate.get("avg_builder_commitment_pause_count", 0.0)
+        ),
+        "avg_builder_commitment_resume_count": float(
+            aggregate.get("avg_builder_commitment_resume_count", 0.0)
+        ),
+        "avg_builder_commitment_completed_count": float(
+            aggregate.get("avg_builder_commitment_completed_count", 0.0)
+        ),
+        "avg_builder_commitment_abandoned_count": float(
+            aggregate.get("avg_builder_commitment_abandoned_count", 0.0)
+        ),
+        "avg_builder_returned_to_same_site_count": float(
+            aggregate.get("avg_builder_returned_to_same_site_count", 0.0)
+        ),
+        "avg_builder_commitment_duration_avg": float(
+            aggregate.get("avg_builder_commitment_duration_avg", 0.0)
+        ),
+        "avg_builder_commitment_resume_delay_avg": float(
+            aggregate.get("avg_builder_commitment_resume_delay_avg", 0.0)
+        ),
+        "avg_construction_site_buildable_ticks_total": float(
+            aggregate.get("avg_construction_site_buildable_ticks_total", 0.0)
+        ),
+        "avg_construction_site_idle_buildable_ticks_total": float(
+            aggregate.get("avg_construction_site_idle_buildable_ticks_total", 0.0)
+        ),
+        "avg_construction_site_buildable_but_idle_ticks_total": float(
+            aggregate.get("avg_construction_site_buildable_but_idle_ticks_total", 0.0)
+        ),
+        "avg_construction_site_waiting_materials_ticks_total": float(
+            aggregate.get("avg_construction_site_waiting_materials_ticks_total", 0.0)
+        ),
+        "avg_construction_site_in_progress_ticks_total": float(
+            aggregate.get("avg_construction_site_in_progress_ticks_total", 0.0)
+        ),
+        "avg_construction_site_distinct_builders_avg": float(
+            aggregate.get("avg_construction_site_distinct_builders_avg", 0.0)
+        ),
+        "avg_construction_site_work_ticks_per_builder_avg": float(
+            aggregate.get("avg_construction_site_work_ticks_per_builder_avg", 0.0)
+        ),
+        "avg_construction_site_delivery_to_work_gap_avg": float(
+            aggregate.get("avg_construction_site_delivery_to_work_gap_avg", 0.0)
+        ),
+        "avg_construction_site_active_age_ticks_avg": float(
+            aggregate.get("avg_construction_site_active_age_ticks_avg", 0.0)
+        ),
+        "avg_construction_site_first_builder_arrival_delay_avg": float(
+            aggregate.get("avg_construction_site_first_builder_arrival_delay_avg", 0.0)
+        ),
+        "avg_construction_site_material_ready_to_first_work_delay_avg": float(
+            aggregate.get("avg_construction_site_material_ready_to_first_work_delay_avg", 0.0)
+        ),
         "avg_construction_site_completion_time_avg": float(aggregate.get("avg_construction_site_completion_time_avg", 0.0)),
         "avg_construction_time_first_delivery_to_completion_avg": float(
             aggregate.get("avg_construction_time_first_delivery_to_completion_avg", 0.0)

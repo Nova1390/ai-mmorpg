@@ -155,6 +155,231 @@ def test_builder_keeps_build_storage_task_when_active_site_exists() -> None:
     assert builder.task == "build_storage"
 
 
+def test_builder_started_site_stickiness_suppresses_immediate_inventory_bounce() -> None:
+    world, village = _world()
+    village["storage"]["wood"] = 0
+    village["storage"]["stone"] = 0
+    village["needs"] = {"need_storage": True}
+    world.tick = 200
+    builder = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    builder.village_id = 1
+    builder.role = "builder"
+    builder.task = "build_storage"
+    builder.inventory["wood"] = 0
+    builder.inventory["stone"] = 0
+    world.agents = [builder]
+    world.buildings["b-site"] = {
+        "building_id": "b-site",
+        "type": "storage",
+        "x": 10,
+        "y": 10,
+        "village_id": 1,
+        "village_uid": "v-000001",
+        "operational_state": "under_construction",
+        "construction_request": {
+            "wood_needed": 4,
+            "wood_reserved": 0,
+            "stone_needed": 2,
+            "stone_reserved": 0,
+            "food_needed": 0,
+            "food_reserved": 0,
+        },
+        "construction_buffer": {"wood": 0, "stone": 0, "food": 0},
+        "construction_progress": 1,
+        "construction_required_work": 6,
+        "construction_last_progress_tick": 199,
+        "construction_delivered_units": 2,
+    }
+    builder.assigned_building_id = "b-site"
+
+    builder.update(world)
+
+    assert builder.task == "build_storage"
+    assert int(builder.construction_site_commit_until_tick) > int(world.tick)
+    assert str(builder.construction_site_commit_site_id) == "b-site"
+
+
+def test_construction_commitment_created_when_builder_owns_site() -> None:
+    world, village = _world()
+    village["needs"] = {"need_storage": True}
+    builder = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    builder.village_id = 1
+    builder.role = "builder"
+    builder.task = "build_storage"
+    world.agents = [builder]
+    world.buildings["b-site"] = {
+        "building_id": "b-site",
+        "type": "storage",
+        "x": 10,
+        "y": 10,
+        "village_id": 1,
+        "village_uid": "v-000001",
+        "operational_state": "under_construction",
+        "construction_request": {"wood_needed": 4, "wood_reserved": 0, "stone_needed": 2, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        "construction_buffer": {"wood": 0, "stone": 0, "food": 0},
+        "construction_progress": 1,
+        "construction_required_work": 6,
+        "construction_delivered_units": 2,
+        "construction_last_progress_tick": 0,
+    }
+    builder.assigned_building_id = "b-site"
+
+    builder.update_role_task(world)
+
+    assert builder.primary_commitment_type == "finish_construction"
+    assert builder.primary_commitment_target_id == "b-site"
+    assert builder.primary_commitment_status == "active"
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap["builder_commitment_created_count"]) >= 1
+
+
+def test_construction_commitment_pauses_for_rest_and_resumes() -> None:
+    world, village = _world()
+    village["needs"] = {"need_storage": True}
+    builder = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    builder.village_id = 1
+    builder.role = "builder"
+    builder.task = "build_storage"
+    builder.assigned_building_id = "b-site"
+    builder.primary_commitment_type = "finish_construction"
+    builder.primary_commitment_target_id = "b-site"
+    builder.primary_commitment_status = "active"
+    builder.primary_commitment_created_tick = 0
+    world.agents = [builder]
+    world.buildings["b-site"] = {
+        "building_id": "b-site",
+        "type": "storage",
+        "x": 10,
+        "y": 10,
+        "village_id": 1,
+        "village_uid": "v-000001",
+        "operational_state": "under_construction",
+        "construction_request": {"wood_needed": 4, "wood_reserved": 0, "stone_needed": 2, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        "construction_buffer": {"wood": 0, "stone": 0, "food": 0},
+        "construction_progress": 1,
+        "construction_required_work": 6,
+        "construction_delivered_units": 2,
+        "construction_last_progress_tick": 0,
+    }
+
+    world.tick = 3
+    builder.sleep_need = 90.0
+    builder.hunger = 80.0
+    builder.update_role_task(world)
+    assert builder.task == "rest"
+    assert builder.primary_commitment_status == "paused"
+    assert builder.primary_commitment_paused_reason == "needs_rest"
+
+    world.tick = 3
+    builder.sleep_need = 0.0
+    builder.update_role_task(world)
+    assert builder.task == "build_storage"
+    assert builder.primary_commitment_status == "active"
+    assert builder.primary_commitment_target_id == "b-site"
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap["builder_commitment_pause_count"]) >= 1
+    assert int(snap["builder_commitment_resume_count"]) >= 1
+
+
+def test_construction_commitment_clears_on_completion_or_invalidation() -> None:
+    world, village = _world()
+    village["needs"] = {"need_storage": True}
+    builder = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    builder.village_id = 1
+    builder.role = "builder"
+    builder.task = "build_storage"
+    builder.primary_commitment_type = "finish_construction"
+    builder.primary_commitment_target_id = "b-site"
+    builder.primary_commitment_status = "active"
+    builder.primary_commitment_created_tick = 0
+    world.agents = [builder]
+    world.buildings["b-site"] = {
+        "building_id": "b-site",
+        "type": "storage",
+        "x": 10,
+        "y": 10,
+        "village_id": 1,
+        "village_uid": "v-000001",
+        "operational_state": "active",
+    }
+
+    builder.update_role_task(world)
+    assert builder.primary_commitment_type == "none"
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap["builder_commitment_completed_count"]) >= 1
+
+    # Recreate and ensure invalidation clears as abandoned.
+    builder.primary_commitment_type = "finish_construction"
+    builder.primary_commitment_target_id = "b-missing"
+    builder.primary_commitment_status = "active"
+    builder.primary_commitment_created_tick = int(world.tick)
+    builder.update_role_task(world)
+    assert builder.primary_commitment_type == "none"
+    snap2 = world.compute_settlement_progression_snapshot()
+    assert int(snap2["builder_commitment_abandoned_count"]) >= 1
+
+
+def test_builder_can_seed_commitment_from_existing_site_without_assignment() -> None:
+    world, village = _world()
+    village["needs"] = {"need_storage": True}
+    builder = Agent(x=9, y=10, brain=None, is_player=False, player_id=None)
+    builder.village_id = 1
+    builder.role = "builder"
+    builder.task = "idle"
+    world.agents = [builder]
+    world.buildings["b-site"] = {
+        "building_id": "b-site",
+        "type": "storage",
+        "x": 12,
+        "y": 10,
+        "village_id": 1,
+        "village_uid": "v-000001",
+        "operational_state": "under_construction",
+        "construction_request": {"wood_needed": 4, "wood_reserved": 0, "stone_needed": 2, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        "construction_buffer": {"wood": 1, "stone": 0, "food": 0},
+        "construction_progress": 1,
+        "construction_required_work": 6,
+        "construction_delivered_units": 1,
+        "construction_last_progress_tick": 0,
+    }
+
+    builder.update_role_task(world)
+    assert builder.primary_commitment_type == "finish_construction"
+    assert builder.primary_commitment_target_id == "b-site"
+    assert builder.task == "build_storage"
+
+
+def test_gather_materials_returns_to_committed_site_task() -> None:
+    world, village = _world()
+    village["needs"] = {"need_storage": True}
+    builder = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    builder.village_id = 1
+    builder.role = "builder"
+    builder.task = "gather_materials"
+    builder.primary_commitment_type = "finish_construction"
+    builder.primary_commitment_target_id = "b-site"
+    builder.primary_commitment_status = "active"
+    builder.inventory["wood"] = 1
+    world.agents = [builder]
+    world.buildings["b-site"] = {
+        "building_id": "b-site",
+        "type": "storage",
+        "x": 10,
+        "y": 10,
+        "village_id": 1,
+        "village_uid": "v-000001",
+        "operational_state": "under_construction",
+        "construction_request": {"wood_needed": 4, "wood_reserved": 0, "stone_needed": 2, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        "construction_buffer": {"wood": 0, "stone": 0, "food": 0},
+        "construction_progress": 0,
+        "construction_required_work": 6,
+    }
+
+    builder.update(world)
+    assert builder.task == "build_storage"
+    assert str(builder.assigned_building_id) == "b-site"
+
+
 def test_hauler_failure_reason_when_no_delivery_target_exists() -> None:
     world, _ = _world()
     hauler = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)

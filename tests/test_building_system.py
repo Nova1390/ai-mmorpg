@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from agent import Agent
 from brain import FoodBrain
 from config import HOUSE_STONE_COST, HOUSE_WOOD_COST
@@ -3069,6 +3071,48 @@ def test_storage_surplus_deficit_detection() -> None:
     source, target = storages[0], storages[1]
     assert building_system.get_storage_surplus(source, "wood") > 0
     assert building_system.get_storage_deficit(target, "wood") > 0
+
+
+def test_construction_debug_trace_writes_jsonl_event(tmp_path) -> None:
+    world = _flat_grass_world()
+    world.debug_construction_trace_enabled = True
+    world.debug_construction_trace_path = str(tmp_path / "construction_trace_test.jsonl")
+    world.debug_construction_trace_max_agents = 3
+    world.debug_construction_trace_max_sites = 2
+    village = _village(village_id=1, uid="v-000001", tier=1, population=8, houses=3, center_x=10, center_y=10)
+    world.villages = [village]
+    site = building_system.place_building(
+        world,
+        "house",
+        (10, 10),
+        village_id=1,
+        village_uid=village["village_uid"],
+        operational_state="under_construction",
+        construction_request={
+            "wood_needed": HOUSE_WOOD_COST,
+            "wood_reserved": 0,
+            "stone_needed": HOUSE_STONE_COST,
+            "stone_reserved": 0,
+            "food_needed": 0,
+            "food_reserved": 0,
+        },
+        construction_buffer={"wood": 0, "stone": 0, "food": 0},
+        construction_progress=0,
+        construction_required_work=4,
+    )
+    assert site is not None
+    builder = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    builder.village_id = 1
+    builder.role = "builder"
+    builder.task = "build_house"
+    builder.assigned_building_id = str(site["building_id"])
+
+    world.record_construction_debug_event(builder, "arrived_on_site", reason="test", site_id=str(site["building_id"]))
+    lines = (tmp_path / "construction_trace_test.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    payload = json.loads(lines[0])
+    assert str(payload.get("event_name", "")) == "arrived_on_site"
+    assert str(payload.get("agent_id", "")) == str(builder.agent_id)
 
 
 def test_storage_transfer_candidate_selection_is_deterministic() -> None:

@@ -44,6 +44,8 @@ EARLY_HUNGER_DECAY_MULTIPLIER = 0.85
 CAMP_BUFFER_HUNGER_DECAY_MULTIPLIER = 0.9
 LOCAL_LOOP_COMMITMENT_TICKS = 8
 EAT_TRIGGER_BASE_THRESHOLD = 50
+CONSTRUCTION_SITE_STICKINESS_TICKS = 10
+CONSTRUCTION_SITE_RECENT_ACTIVITY_TICKS = 24
 
 
 @dataclass
@@ -121,6 +123,15 @@ class Agent:
     movement_cached_target: Optional[Tuple[int, int]] = None
     movement_cached_path: List[Tuple[int, int]] = field(default_factory=list)
     movement_cached_path_tick: int = -1
+    construction_site_commit_until_tick: int = -1
+    construction_site_commit_site_id: Optional[str] = None
+    primary_commitment_type: str = "none"
+    primary_commitment_target_id: Optional[str] = None
+    primary_commitment_status: str = "none"
+    primary_commitment_created_tick: int = -1
+    primary_commitment_last_progress_tick: int = -1
+    primary_commitment_paused_reason: str = ""
+    primary_commitment_paused_tick: int = -1
     last_pos: Optional[Tuple[int, int]] = None
     stuck_ticks: int = 0
     leader_traits: Optional[Dict[str, str]] = None
@@ -207,6 +218,213 @@ class Agent:
             if resolved is not None:
                 return str(resolved)
         return ""
+
+    def _assigned_construction_site(self, world: "World", *, expected_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        sid = str(getattr(self, "assigned_building_id", "") or "")
+        if not sid:
+            return None
+        site = getattr(world, "buildings", {}).get(sid)
+        if not isinstance(site, dict):
+            return None
+        if str(site.get("operational_state", "")) != "under_construction":
+            return None
+        if expected_type and str(site.get("type", "")) != str(expected_type):
+            return None
+        return site
+
+    def _construction_commitment_site(self, world: "World") -> Optional[Dict[str, Any]]:
+        if str(getattr(self, "primary_commitment_type", "")) != "finish_construction":
+            return None
+        sid = str(getattr(self, "primary_commitment_target_id", "") or "")
+        if not sid:
+            return None
+        site = getattr(world, "buildings", {}).get(sid)
+        return site if isinstance(site, dict) else None
+
+    def _nearest_village_construction_site(self, world: "World", *, preferred_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        vid = getattr(self, "village_id", None)
+        candidates: List[Tuple[int, int, int, str, Dict[str, Any]]] = []
+        for building in getattr(world, "buildings", {}).values():
+            if not isinstance(building, dict):
+                continue
+            btype = str(building.get("type", ""))
+            if btype not in {"house", "storage"}:
+                continue
+            if preferred_type and btype != str(preferred_type):
+                continue
+            if str(building.get("operational_state", "")) != "under_construction":
+                continue
+            if vid is not None and building.get("village_id") != vid:
+                continue
+            progress = int(building.get("construction_progress", 0))
+            delivered = int(building.get("construction_delivered_units", 0))
+            dist = abs(int(self.x) - int(building.get("x", 0))) + abs(int(self.y) - int(building.get("y", 0)))
+            candidates.append(
+                (
+                    0 if progress > 0 else 1,
+                    0 if delivered > 0 else 1,
+                    dist,
+                    str(building.get("building_id", "")),
+                    building,
+                )
+            )
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+        return candidates[0][4]
+
+    def _record_commitment_event(self, world: "World", event_name: str, *, reason: str, site_id: Optional[str] = None) -> None:
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                self,
+                event_name,
+                reason=str(reason or "unknown"),
+                site_id=str(site_id or getattr(self, "primary_commitment_target_id", "") or ""),
+            )
+
+    def _set_primary_construction_commitment(self, world: "World", site: Dict[str, Any], *, reason: str) -> None:
+        sid = str(site.get("building_id", "") or "")
+        if not sid:
+            return
+        now_tick = int(getattr(world, "tick", 0))
+        previous_target = str(getattr(self, "primary_commitment_target_id", "") or "")
+        previous_status = str(getattr(self, "primary_commitment_status", "none") or "none")
+        is_new = not (str(getattr(self, "primary_commitment_type", "")) == "finish_construction" and previous_target == sid)
+
+        self.primary_commitment_type = "finish_construction"
+        self.primary_commitment_target_id = sid
+        self.primary_commitment_paused_reason = ""
+        self.primary_commitment_paused_tick = -1
+        if is_new:
+            self.primary_commitment_created_tick = now_tick
+            self.primary_commitment_last_progress_tick = max(
+                int(getattr(self, "primary_commitment_last_progress_tick", -1)),
+                int(site.get("construction_first_progress_tick", -1)),
+            )
+            self.primary_commitment_status = "active"
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("builder_commitment_created_count")
+            self._record_commitment_event(world, "commitment_created", reason=reason, site_id=sid)
+            return
+
+        if previous_status in {"paused", "interrupted"}:
+            self.primary_commitment_status = "active"
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("builder_commitment_resume_count")
+                world.record_settlement_progression_metric("builder_returned_to_same_site_count")
+                paused_tick = int(getattr(self, "primary_commitment_paused_tick", -1))
+                if paused_tick >= 0:
+                    delay = max(0, now_tick - paused_tick)
+                    world.record_settlement_progression_metric("builder_commitment_resume_delay_total", int(delay))
+                    world.record_settlement_progression_metric("builder_commitment_resume_delay_samples", 1)
+            self._record_commitment_event(world, "commitment_resumed", reason=reason, site_id=sid)
+        else:
+            self.primary_commitment_status = "active"
+        self.primary_commitment_paused_tick = -1
+
+    def _pause_primary_construction_commitment(self, world: "World", reason: str) -> None:
+        if str(getattr(self, "primary_commitment_type", "")) != "finish_construction":
+            return
+        if str(getattr(self, "primary_commitment_status", "")) == "completed":
+            return
+        sid = str(getattr(self, "primary_commitment_target_id", "") or "")
+        if not sid:
+            return
+        self.primary_commitment_status = "paused"
+        self.primary_commitment_paused_reason = str(reason or "unknown")
+        self.primary_commitment_paused_tick = int(getattr(world, "tick", 0))
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("builder_commitment_pause_count")
+        self._record_commitment_event(world, "commitment_paused", reason=str(reason or "unknown"), site_id=sid)
+
+    def _clear_primary_construction_commitment(self) -> None:
+        self.primary_commitment_type = "none"
+        self.primary_commitment_target_id = None
+        self.primary_commitment_status = "none"
+        self.primary_commitment_created_tick = -1
+        self.primary_commitment_last_progress_tick = -1
+        self.primary_commitment_paused_reason = ""
+        self.primary_commitment_paused_tick = -1
+
+    def _finalize_primary_construction_commitment(self, world: "World", *, status: str, reason: str) -> None:
+        if str(getattr(self, "primary_commitment_type", "")) != "finish_construction":
+            return
+        sid = str(getattr(self, "primary_commitment_target_id", "") or "")
+        if not sid:
+            self._clear_primary_construction_commitment()
+            return
+        now_tick = int(getattr(world, "tick", 0))
+        created_tick = int(getattr(self, "primary_commitment_created_tick", -1))
+        duration = max(0, now_tick - created_tick) if created_tick >= 0 else 0
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("builder_commitment_duration_total", int(duration))
+            world.record_settlement_progression_metric("builder_commitment_duration_samples", 1)
+            if status == "completed":
+                world.record_settlement_progression_metric("builder_commitment_completed_count")
+            else:
+                world.record_settlement_progression_metric("builder_commitment_abandoned_count")
+        self._record_commitment_event(world, f"commitment_{status}", reason=str(reason or "unknown"), site_id=sid)
+        self._clear_primary_construction_commitment()
+
+    def _refresh_primary_construction_commitment_state(self, world: "World") -> None:
+        if str(getattr(self, "primary_commitment_type", "")) != "finish_construction":
+            return
+        sid = str(getattr(self, "primary_commitment_target_id", "") or "")
+        if not sid:
+            self._clear_primary_construction_commitment()
+            return
+        site = getattr(world, "buildings", {}).get(sid)
+        if not isinstance(site, dict):
+            self._finalize_primary_construction_commitment(world, status="abandoned", reason="site_invalid")
+            return
+        state = str(site.get("operational_state", ""))
+        if state == "under_construction":
+            return
+        if state in {"active", "complete", "completed"}:
+            self._finalize_primary_construction_commitment(world, status="completed", reason="site_completed")
+            return
+        self._finalize_primary_construction_commitment(world, status="abandoned", reason="site_invalid")
+
+    def _should_hold_construction_site_commitment(self, world: "World", site: Optional[Dict[str, Any]]) -> bool:
+        if not isinstance(site, dict):
+            return False
+        if float(getattr(self, "hunger", 100.0)) <= 12.0:
+            return False
+        sid = str(site.get("building_id", "") or "")
+        now_tick = int(getattr(world, "tick", 0))
+        if (
+            sid
+            and sid == str(getattr(self, "construction_site_commit_site_id", "") or "")
+            and now_tick <= int(getattr(self, "construction_site_commit_until_tick", -1))
+        ):
+            return True
+
+        required_work = max(1, int(site.get("construction_required_work", 1)))
+        completed_work = max(0, int(site.get("construction_progress", 0)))
+        remaining_work = max(0, required_work - completed_work)
+        delivered_units = max(0, int(site.get("construction_delivered_units", 0)))
+        buffered = site.get("construction_buffer", {}) if isinstance(site.get("construction_buffer", {}), dict) else {}
+        buffered_total = max(0, int(buffered.get("wood", 0))) + max(0, int(buffered.get("stone", 0))) + max(0, int(buffered.get("food", 0)))
+
+        started = bool(delivered_units > 0 or completed_work > 0 or remaining_work > 0)
+        if not started:
+            return False
+
+        sx = int(site.get("x", self.x))
+        sy = int(site.get("y", self.y))
+        on_site = abs(int(self.x) - sx) + abs(int(self.y) - sy) <= 1
+        last_progress = int(site.get("construction_last_progress_tick", -10_000))
+        last_delivery = int(site.get("construction_last_delivery_tick", -10_000))
+        recently_active = (now_tick - max(last_progress, last_delivery)) <= int(CONSTRUCTION_SITE_RECENT_ACTIVITY_TICKS)
+        if not (on_site or recently_active or buffered_total > 0):
+            return False
+
+        self.construction_site_commit_site_id = sid or None
+        self.construction_site_commit_until_tick = max(
+            int(getattr(self, "construction_site_commit_until_tick", -1)),
+            now_tick + int(CONSTRUCTION_SITE_STICKINESS_TICKS),
+        )
+        return True
 
     def _is_house_claimably_active(self, building: Dict[str, Any]) -> bool:
         state = str(building.get("operational_state", "") or "")
@@ -439,6 +657,7 @@ class Agent:
     def update_role_task(self, world: "World") -> None:
         village = world.get_village_by_id(self.village_id)
         prev_task = str(getattr(self, "task", "idle"))
+        self._refresh_primary_construction_commitment_state(world)
         if hasattr(world, "update_agent_proto_specialization"):
             world.update_agent_proto_specialization(self)
         proto_spec = str(getattr(self, "proto_specialization", "none") or "none")
@@ -760,7 +979,53 @@ class Agent:
 
         if role == "builder":
             if _maybe_apply_rest_bias():
+                self._pause_primary_construction_commitment(world, "needs_rest")
                 return
+            committed_site = self._construction_commitment_site(world)
+            if isinstance(committed_site, dict):
+                if str(committed_site.get("operational_state", "")) == "under_construction" and not _survival_crisis():
+                    self._set_primary_construction_commitment(world, committed_site, reason="commitment_resume")
+                    stype = str(committed_site.get("type", ""))
+                    if stype == "storage":
+                        self.task = "build_storage"
+                        _stamp_task_persistence("builder", self.task)
+                        return
+                    if stype == "house":
+                        self.task = "build_house"
+                        _stamp_task_persistence("builder", self.task)
+                        return
+            if not isinstance(committed_site, dict):
+                preferred_type = "storage" if (priority == "build_storage" or needs.get("need_storage")) else None
+                candidate_site = self._nearest_village_construction_site(world, preferred_type=preferred_type)
+                if isinstance(candidate_site, dict):
+                    self._set_primary_construction_commitment(world, candidate_site, reason="site_scoped_assignment")
+                    try:
+                        self.assigned_building_id = str(candidate_site.get("building_id", "") or "")
+                    except Exception:
+                        pass
+                    ctype = str(candidate_site.get("type", ""))
+                    if ctype == "storage":
+                        if str(prev_task) == "build_storage" and hasattr(world, "record_settlement_progression_metric"):
+                            world.record_settlement_progression_metric("storage_builder_commitment_retained_ticks")
+                        self.task = "build_storage"
+                        _stamp_task_persistence("builder", self.task)
+                        return
+                    if ctype == "house":
+                        self.task = "build_house"
+                        _stamp_task_persistence("builder", self.task)
+                        return
+            sticky_site = self._assigned_construction_site(world)
+            if self._should_hold_construction_site_commitment(world, sticky_site):
+                if isinstance(sticky_site, dict):
+                    self._set_primary_construction_commitment(world, sticky_site, reason="site_sticky")
+                site_type = str((sticky_site or {}).get("type", ""))
+                if site_type == "storage":
+                    self.task = "build_storage"
+                elif site_type == "house":
+                    self.task = "build_house"
+                if str(getattr(self, "task", "")) in {"build_storage", "build_house"}:
+                    _stamp_task_persistence("builder", self.task)
+                    return
             if _try_keep_role_task("builder"):
                 return
             if priority == "build_storage" or needs.get("need_storage"):
@@ -1436,6 +1701,49 @@ class Agent:
             world.record_recovery_failure_reason(self, "not_resident", village_uid=uid, role=role_key)
         prev_task = str(getattr(self, "task", "idle"))
         self.update_role_task(world)
+        task_after_role = str(getattr(self, "task", "idle"))
+        if hasattr(world, "record_construction_debug_event"):
+            in_construction_context = str(getattr(self, "role", "")) == "builder" or prev_task in {
+                "build_house",
+                "build_storage",
+                "gather_materials",
+            } or task_after_role in {"build_house", "build_storage", "gather_materials"}
+            if in_construction_context and task_after_role != prev_task:
+                reason = "target_recomputed"
+                if task_after_role == "survive" or float(getattr(self, "hunger", 100.0)) <= 12.0:
+                    reason = "survival_override"
+                elif task_after_role == "gather_food_wild":
+                    reason = "needs_food"
+                elif task_after_role == "rest":
+                    reason = "needs_rest"
+                elif task_after_role == "gather_materials":
+                    reason = "inventory_material_logic"
+                elif task_after_role in {"village_logistics", "food_logistics"}:
+                    reason = "village_priority_override"
+                world.record_construction_debug_event(
+                    self,
+                    "task_changed",
+                    reason=reason,
+                    previous_task=prev_task,
+                )
+                assigned_bid = str(getattr(self, "assigned_building_id", "") or "")
+                if assigned_bid and task_after_role not in {"build_house", "build_storage", "gather_materials"}:
+                    world.record_construction_debug_event(
+                        self,
+                        "cleared_site_assignment",
+                        reason=reason,
+                        previous_task=prev_task,
+                        site_id=assigned_bid,
+                    )
+                if reason == "needs_food":
+                    world.record_construction_debug_event(
+                        self,
+                        "redirected_to_food",
+                        reason=reason,
+                        previous_task=prev_task,
+                    )
+                if reason in {"survival_override", "needs_food", "needs_rest"}:
+                    self._pause_primary_construction_commitment(world, reason)
         if hasattr(world, "record_behavior_transition"):
             world.record_behavior_transition(prev_task, str(getattr(self, "task", "idle")), x=int(self.x), y=int(self.y))
         if hasattr(world, "record_behavior_activity"):
@@ -1445,7 +1753,6 @@ class Agent:
                 y=int(self.y),
                 agent=self,
             )
-        task_after_role = str(getattr(self, "task", "idle"))
         if high_pressure and str(getattr(self, "task", "")) != "rest" and hasattr(world, "record_recovery_failure_reason"):
             if float(getattr(self, "hunger", 100.0)) < 25.0:
                 world.record_recovery_failure_reason(self, "survival_override", village_uid=uid, role=role_key)
@@ -1475,6 +1782,20 @@ class Agent:
                 str(getattr(self, "task", "")) == "survive"
                 or float(getattr(self, "hunger", 100.0)) <= 12.0
             ) else "task_replaced"
+            if hasattr(world, "record_construction_debug_event"):
+                world.record_construction_debug_event(
+                    self,
+                    "task_changed",
+                    reason=reason,
+                    previous_task=prev_task,
+                )
+                if reason == "survival_override":
+                    world.record_construction_debug_event(
+                        self,
+                        "survival_override",
+                        reason=reason,
+                        previous_task=prev_task,
+                    )
             world.record_task_completion_interrupted(self, prev_critical, reason)
             if prev_critical in {"build_house", "build_storage"} and hasattr(world, "record_situated_construction_event"):
                 if reason == "survival_override":
@@ -1658,6 +1979,10 @@ class Agent:
         elif self.task == "build_storage" and not fatigue_work_penalty:
             if hasattr(world, "record_assignment_pipeline_stage"):
                 world.record_assignment_pipeline_stage(self, "builder", "action_attempted_count")
+            active_storage_site = self._assigned_construction_site(world, expected_type="storage")
+            if isinstance(active_storage_site, dict):
+                self._set_primary_construction_commitment(world, active_storage_site, reason="builder_assigned_site")
+            pre_progress = int(active_storage_site.get("construction_progress", 0)) if isinstance(active_storage_site, dict) else -1
             village = world.get_village_by_id(self.village_id)
             wood_missing = max(0, 4 - int(self.inventory.get("wood", 0)))
             stone_missing = max(0, 2 - int(self.inventory.get("stone", 0)))
@@ -1678,16 +2003,39 @@ class Agent:
                     world.record_behavior_activity("build_storage", x=int(self.x), y=int(self.y), agent=self)
                 self._add_work_fatigue(0.12)
                 active_work_performed = True
+            post_site = self._assigned_construction_site(world, expected_type="storage")
+            if isinstance(post_site, dict):
+                post_progress = int(post_site.get("construction_progress", 0))
+                if post_progress > pre_progress:
+                    self.primary_commitment_last_progress_tick = int(getattr(world, "tick", 0))
+                self._set_primary_construction_commitment(world, post_site, reason="build_storage_active")
             if built and hasattr(world, "record_local_practice"):
                 world.record_local_practice("construction_cluster", x=int(self.x), y=int(self.y), weight=0.9, decay_rate=0.0055)
                 world.record_local_practice("stable_storage_area", x=int(self.x), y=int(self.y), weight=0.8, decay_rate=0.005)
             if not built:
                 inv_wood = int(self.inventory.get("wood", 0))
                 inv_stone = int(self.inventory.get("stone", 0))
+                switched_to_gather = False
                 if not withdrew and (inv_wood < int(getattr(building_system, "STORAGE_WOOD_COST", 4)) or inv_stone < int(getattr(building_system, "STORAGE_STONE_COST", 2))):
-                    self.task = "gather_materials"
-                    if hasattr(world, "record_assignment_pipeline_block_reason"):
-                        world.record_assignment_pipeline_block_reason(self, "builder", "materials_not_ready")
+                    active_site = post_site if isinstance(post_site, dict) else self._assigned_construction_site(world, expected_type="storage")
+                    if self._should_hold_construction_site_commitment(world, active_site):
+                        self.task = "build_storage"
+                    else:
+                        self.task = "gather_materials"
+                        if isinstance(active_site, dict):
+                            self.construction_focus_site_id = str(active_site.get("building_id", "") or "")
+                            self.construction_focus_tick = int(getattr(world, "tick", 0))
+                            self._set_primary_construction_commitment(world, active_site, reason="site_scoped_material_support")
+                        switched_to_gather = True
+                        if hasattr(world, "record_construction_debug_event"):
+                            world.record_construction_debug_event(
+                                self,
+                                "task_changed",
+                                reason="inventory_material_logic",
+                                previous_task="build_storage",
+                            )
+                        if hasattr(world, "record_assignment_pipeline_block_reason"):
+                            world.record_assignment_pipeline_block_reason(self, "builder", "materials_not_ready")
                 if village is not None:
                     storage = village.get("storage", {})
                     has_active_site = False
@@ -1701,14 +2049,29 @@ class Agent:
                         if b.get("village_id") == getattr(self, "village_id", None):
                             has_active_site = True
                             break
-                    if not has_active_site and (storage.get("wood", 0) < 4 or storage.get("stone", 0) < 2):
+                    if (
+                        not switched_to_gather
+                        and not has_active_site
+                        and (storage.get("wood", 0) < 4 or storage.get("stone", 0) < 2)
+                    ):
                         self.task = "gather_materials"
+                        if hasattr(world, "record_construction_debug_event"):
+                            world.record_construction_debug_event(
+                                self,
+                                "task_changed",
+                                reason="inventory_material_logic",
+                                previous_task="build_storage",
+                            )
                     else:
                         self.task = "build_storage"
 
         elif self.task == "build_house" and not fatigue_work_penalty:
             if hasattr(world, "record_assignment_pipeline_stage"):
                 world.record_assignment_pipeline_stage(self, "builder", "action_attempted_count")
+            active_house_site = self._assigned_construction_site(world, expected_type="house")
+            if isinstance(active_house_site, dict):
+                self._set_primary_construction_commitment(world, active_house_site, reason="builder_assigned_site")
+            pre_progress = int(active_house_site.get("construction_progress", 0)) if isinstance(active_house_site, dict) else -1
             village = world.get_village_by_id(self.village_id)
             wood_missing = max(0, int(HOUSE_WOOD_COST) - int(self.inventory.get("wood", 0)))
             stone_missing = max(0, int(HOUSE_STONE_COST) - int(self.inventory.get("stone", 0)))
@@ -1729,15 +2092,38 @@ class Agent:
                     world.record_behavior_activity("build_house", x=int(self.x), y=int(self.y), agent=self)
                 self._add_work_fatigue(0.12)
                 active_work_performed = True
+            post_site = self._assigned_construction_site(world, expected_type="house")
+            if isinstance(post_site, dict):
+                post_progress = int(post_site.get("construction_progress", 0))
+                if post_progress > pre_progress:
+                    self.primary_commitment_last_progress_tick = int(getattr(world, "tick", 0))
+                self._set_primary_construction_commitment(world, post_site, reason="build_house_active")
             if built_house and hasattr(world, "record_local_practice"):
                 world.record_local_practice("construction_cluster", x=int(self.x), y=int(self.y), weight=0.75, decay_rate=0.0055)
             if not built_house:
                 inv_wood = int(self.inventory.get("wood", 0))
                 inv_stone = int(self.inventory.get("stone", 0))
+                switched_to_gather = False
                 if not withdrew and (inv_wood < int(HOUSE_WOOD_COST) or inv_stone < int(HOUSE_STONE_COST)):
-                    self.task = "gather_materials"
-                    if hasattr(world, "record_assignment_pipeline_block_reason"):
-                        world.record_assignment_pipeline_block_reason(self, "builder", "materials_not_ready")
+                    active_site = post_site if isinstance(post_site, dict) else self._assigned_construction_site(world, expected_type="house")
+                    if self._should_hold_construction_site_commitment(world, active_site):
+                        self.task = "build_house"
+                    else:
+                        self.task = "gather_materials"
+                        if isinstance(active_site, dict):
+                            self.construction_focus_site_id = str(active_site.get("building_id", "") or "")
+                            self.construction_focus_tick = int(getattr(world, "tick", 0))
+                            self._set_primary_construction_commitment(world, active_site, reason="site_scoped_material_support")
+                        switched_to_gather = True
+                        if hasattr(world, "record_construction_debug_event"):
+                            world.record_construction_debug_event(
+                                self,
+                                "task_changed",
+                                reason="inventory_material_logic",
+                                previous_task="build_house",
+                            )
+                        if hasattr(world, "record_assignment_pipeline_block_reason"):
+                            world.record_assignment_pipeline_block_reason(self, "builder", "materials_not_ready")
 
         elif self.task == "build_road":
             # per ora la strada emerge dal movimento
@@ -1747,6 +2133,19 @@ class Agent:
             # builder in attesa di materiali
             if hasattr(world, "record_assignment_pipeline_stage"):
                 world.record_assignment_pipeline_stage(self, "builder", "action_attempted_count")
+            committed_site = self._construction_commitment_site(world)
+            committed_site_id = ""
+            committed_site_type = ""
+            if isinstance(committed_site, dict) and str(committed_site.get("operational_state", "")) == "under_construction":
+                committed_site_id = str(committed_site.get("building_id", "") or "")
+                committed_site_type = str(committed_site.get("type", "") or "")
+                if committed_site_id:
+                    self.construction_focus_site_id = committed_site_id
+                    self.construction_focus_tick = int(getattr(world, "tick", 0))
+                    try:
+                        self.assigned_building_id = committed_site_id
+                    except Exception:
+                        pass
             delivered = False
             if int(self.inventory.get("wood", 0)) + int(self.inventory.get("stone", 0)) + int(self.inventory.get("food", 0)) > 0:
                 try:
@@ -1759,8 +2158,19 @@ class Agent:
                 if hasattr(world, "record_behavior_activity"):
                     world.record_behavior_activity("construction_delivery", x=int(self.x), y=int(self.y), agent=self)
             if delivered or (int(self.inventory.get("wood", 0)) + int(self.inventory.get("stone", 0)) + int(self.inventory.get("food", 0)) > 0):
-                if hasattr(world, "has_active_storage_construction_for_agent") and bool(world.has_active_storage_construction_for_agent(self)):
+                if committed_site_id and committed_site_type == "storage":
                     self.task = "build_storage"
+                elif committed_site_id and committed_site_type == "house":
+                    self.task = "build_house"
+                elif hasattr(world, "has_active_storage_construction_for_agent") and bool(world.has_active_storage_construction_for_agent(self)):
+                    self.task = "build_storage"
+                    if hasattr(world, "record_construction_debug_event"):
+                        world.record_construction_debug_event(
+                            self,
+                            "redirected_to_storage",
+                            reason="inventory_material_logic",
+                            previous_task="gather_materials",
+                        )
                 elif hasattr(world, "has_active_construction_for_agent") and bool(world.has_active_construction_for_agent(self)):
                     self.task = "build_house"
             if hasattr(world, "record_assignment_pipeline_block_reason"):

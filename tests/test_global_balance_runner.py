@@ -301,6 +301,19 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
                         "construction_site_material_units_delivered_total": 13,
                         "construction_site_material_units_remaining": 7,
                         "construction_near_complete_sites_count": 1,
+                        "builder_assigned_site_count": 6,
+                        "builder_site_arrival_count": 4,
+                        "builder_left_site_count": 3,
+                        "builder_left_site_before_completion_count": 2,
+                        "builder_waiting_on_site_ticks_total": 22,
+                        "builder_on_site_ticks_total": 18,
+                        "builder_work_tick_applied_count": 9,
+                        "builder_survival_override_during_construction_count": 1,
+                        "builder_redirected_to_storage_during_construction_count": 2,
+                        "construction_site_buildable_ticks_total": 30,
+                        "construction_site_idle_buildable_ticks_total": 12,
+                        "construction_site_first_builder_arrival_delay_avg": 7.0,
+                        "construction_site_material_ready_to_first_work_delay_avg": 5.0,
                         "construction_site_completion_time_avg": 47.0,
                         "construction_time_first_delivery_to_completion_avg": 22.0,
                         "construction_time_first_progress_to_completion_avg": 16.0,
@@ -530,6 +543,19 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
                         "construction_site_material_units_delivered_total": 11,
                         "construction_site_material_units_remaining": 6,
                         "construction_near_complete_sites_count": 1,
+                        "builder_assigned_site_count": 4,
+                        "builder_site_arrival_count": 3,
+                        "builder_left_site_count": 2,
+                        "builder_left_site_before_completion_count": 1,
+                        "builder_waiting_on_site_ticks_total": 18,
+                        "builder_on_site_ticks_total": 14,
+                        "builder_work_tick_applied_count": 7,
+                        "builder_survival_override_during_construction_count": 2,
+                        "builder_redirected_to_storage_during_construction_count": 1,
+                        "construction_site_buildable_ticks_total": 24,
+                        "construction_site_idle_buildable_ticks_total": 10,
+                        "construction_site_first_builder_arrival_delay_avg": 8.0,
+                        "construction_site_material_ready_to_first_work_delay_avg": 6.0,
                         "construction_site_completion_time_avg": 42.0,
                         "construction_time_first_delivery_to_completion_avg": 19.0,
                         "construction_time_first_progress_to_completion_avg": 14.0,
@@ -731,6 +757,11 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
     assert float(agg["avg_construction_site_material_units_delivered_total"]) == 12.0
     assert float(agg["avg_construction_site_material_units_remaining"]) == 6.5
     assert float(agg["avg_construction_near_complete_sites_count"]) == 1.0
+    assert float(agg["avg_builder_assigned_site_count"]) == 5.0
+    assert float(agg["avg_builder_site_arrival_count"]) == 3.5
+    assert float(agg["avg_builder_work_tick_applied_count"]) == 8.0
+    assert float(agg["avg_construction_site_buildable_ticks_total"]) == 27.0
+    assert float(agg["avg_construction_site_first_builder_arrival_delay_avg"]) == 7.5
     assert float(agg["avg_construction_site_completion_time_avg"]) == 44.5
     assert float(agg["avg_construction_time_first_delivery_to_completion_avg"]) == 20.5
     assert float(agg["avg_construction_time_first_progress_to_completion_avg"]) == 15.0

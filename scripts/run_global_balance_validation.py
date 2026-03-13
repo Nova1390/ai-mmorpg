@@ -20,6 +20,10 @@ def _family_configs(
     ticks: int,
     snapshot_interval: int,
     history_limit: int,
+    out_dir: str,
+    debug_construction_trace: bool,
+    debug_construction_trace_max_agents: int,
+    debug_construction_trace_max_sites: int,
 ) -> List[GlobalBalanceScenarioConfig]:
     family_name = str(family_name)
     cfgs: List[GlobalBalanceScenarioConfig] = []
@@ -37,6 +41,10 @@ def _family_configs(
                     history_limit=int(history_limit),
                     llm_enabled=False,
                     food_multiplier=1.0,
+                    debug_construction_trace=bool(debug_construction_trace),
+                    debug_construction_trace_path=str(Path(out_dir) / f"construction_trace_baseline_seed_{seed}.jsonl"),
+                    debug_construction_trace_max_agents=max(1, int(debug_construction_trace_max_agents)),
+                    debug_construction_trace_max_sites=max(1, int(debug_construction_trace_max_sites)),
                 )
             )
         elif family_name == "food_stress":
@@ -52,6 +60,10 @@ def _family_configs(
                     history_limit=int(history_limit),
                     llm_enabled=False,
                     food_multiplier=0.65,
+                    debug_construction_trace=bool(debug_construction_trace),
+                    debug_construction_trace_path=str(Path(out_dir) / f"construction_trace_food_stress_seed_{seed}.jsonl"),
+                    debug_construction_trace_max_agents=max(1, int(debug_construction_trace_max_agents)),
+                    debug_construction_trace_max_sites=max(1, int(debug_construction_trace_max_sites)),
                 )
             )
         elif family_name == "population_variant":
@@ -67,6 +79,10 @@ def _family_configs(
                     history_limit=int(history_limit),
                     llm_enabled=False,
                     food_multiplier=1.0,
+                    debug_construction_trace=bool(debug_construction_trace),
+                    debug_construction_trace_path=str(Path(out_dir) / f"construction_trace_population_variant_seed_{seed}.jsonl"),
+                    debug_construction_trace_max_agents=max(1, int(debug_construction_trace_max_agents)),
+                    debug_construction_trace_max_sites=max(1, int(debug_construction_trace_max_sites)),
                 )
             )
         elif family_name == "reduced_pressure":
@@ -82,6 +98,10 @@ def _family_configs(
                     history_limit=int(history_limit),
                     llm_enabled=False,
                     food_multiplier=1.2,
+                    debug_construction_trace=bool(debug_construction_trace),
+                    debug_construction_trace_path=str(Path(out_dir) / f"construction_trace_reduced_pressure_seed_{seed}.jsonl"),
+                    debug_construction_trace_max_agents=max(1, int(debug_construction_trace_max_agents)),
+                    debug_construction_trace_max_sites=max(1, int(debug_construction_trace_max_sites)),
                 )
             )
         else:
@@ -102,6 +122,9 @@ def main() -> None:
     parser.add_argument("--history-limit", type=int, default=300)
     parser.add_argument("--seeds", type=int, nargs="+", default=[4242, 5151, 6262])
     parser.add_argument("--include-reduced-pressure", action="store_true")
+    parser.add_argument("--debug-construction-trace", action="store_true")
+    parser.add_argument("--debug-construction-trace-max-agents", type=int, default=3)
+    parser.add_argument("--debug-construction-trace-max-sites", type=int, default=2)
     parser.add_argument("--min-legit-village-population", type=int, default=2)
     parser.add_argument("--min-legit-leader-village-population", type=int, default=3)
     parser.add_argument("--early-extinction-threshold-tick", type=int, default=200)
@@ -130,6 +153,10 @@ def main() -> None:
             ticks=int(args.ticks),
             snapshot_interval=int(args.snapshot_interval),
             history_limit=int(args.history_limit),
+            out_dir=str(args.out_dir),
+            debug_construction_trace=bool(args.debug_construction_trace),
+            debug_construction_trace_max_agents=max(1, int(args.debug_construction_trace_max_agents)),
+            debug_construction_trace_max_sites=max(1, int(args.debug_construction_trace_max_sites)),
         ):
             run_payload = run_global_balance_scenario(cfg, thresholds=thresholds)
             runs.append(run_payload)

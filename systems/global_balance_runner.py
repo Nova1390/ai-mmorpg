@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from statistics import mean
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from pathlib import Path
 
 import agent as agent_module
 from brain import FoodBrain, LLMBrain
@@ -37,6 +38,10 @@ class GlobalBalanceScenarioConfig:
     history_limit: int = 300
     food_multiplier: float = 1.0
     parameter_overrides: Optional[Dict[str, float]] = None
+    debug_construction_trace: bool = False
+    debug_construction_trace_path: Optional[str] = None
+    debug_construction_trace_max_agents: int = 3
+    debug_construction_trace_max_sites: int = 2
 
 
 def _scaled_int(base: Any, scale: float, *, min_value: int = 1) -> int:
@@ -220,6 +225,18 @@ def _setup_world(cfg: GlobalBalanceScenarioConfig) -> World:
                 agent.brain = llm_brain
     if hasattr(world, "metrics_collector"):
         world.metrics_collector.snapshot_interval = max(1, int(cfg.snapshot_interval))
+    world.debug_construction_trace_enabled = bool(cfg.debug_construction_trace)
+    world.debug_construction_trace_path = str(cfg.debug_construction_trace_path or "")
+    world.debug_construction_trace_max_agents = max(1, int(cfg.debug_construction_trace_max_agents))
+    world.debug_construction_trace_max_sites = max(1, int(cfg.debug_construction_trace_max_sites))
+    if world.debug_construction_trace_enabled and world.debug_construction_trace_path:
+        try:
+            trace_path = Path(world.debug_construction_trace_path)
+            trace_path.parent.mkdir(parents=True, exist_ok=True)
+            trace_path.write_text("", encoding="utf-8")
+        except Exception:
+            world.debug_construction_trace_enabled = False
+            world.debug_construction_trace_path = ""
     _apply_food_multiplier(world, float(cfg.food_multiplier))
     return world
 
@@ -469,6 +486,10 @@ def run_global_balance_scenario(
                 "history_limit": int(cfg.history_limit),
                 "food_multiplier": float(cfg.food_multiplier),
                 "parameter_overrides": dict(cfg.parameter_overrides or {}),
+                "debug_construction_trace": bool(cfg.debug_construction_trace),
+                "debug_construction_trace_path": str(cfg.debug_construction_trace_path or ""),
+                "debug_construction_trace_max_agents": int(cfg.debug_construction_trace_max_agents),
+                "debug_construction_trace_max_sites": int(cfg.debug_construction_trace_max_sites),
             },
             "analysis_thresholds": {
                 "min_legit_village_population": int(thresholds.min_legit_village_population),
@@ -850,6 +871,90 @@ def aggregate_global_balance_results(
     )
     construction_near_complete_sites_count = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_near_complete_sites_count")
+    )
+    builder_assigned_site_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_assigned_site_count")
+    )
+    builder_site_arrival_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_site_arrival_count")
+    )
+    builder_left_site_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_left_site_count")
+    )
+    builder_left_site_before_completion_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_left_site_before_completion_count")
+    )
+    builder_waiting_on_site_ticks_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_waiting_on_site_ticks_total")
+    )
+    builder_on_site_ticks_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_on_site_ticks_total")
+    )
+    builder_work_tick_applied_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_work_tick_applied_count")
+    )
+    builder_survival_override_during_construction_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_survival_override_during_construction_count")
+    )
+    builder_redirected_to_storage_during_construction_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_redirected_to_storage_during_construction_count")
+    )
+    builder_commitment_created_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_commitment_created_count")
+    )
+    builder_commitment_pause_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_commitment_pause_count")
+    )
+    builder_commitment_resume_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_commitment_resume_count")
+    )
+    builder_commitment_completed_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_commitment_completed_count")
+    )
+    builder_commitment_abandoned_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_commitment_abandoned_count")
+    )
+    builder_returned_to_same_site_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_returned_to_same_site_count")
+    )
+    builder_commitment_duration_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_commitment_duration_avg")
+    )
+    builder_commitment_resume_delay_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "builder_commitment_resume_delay_avg")
+    )
+    construction_site_buildable_ticks_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_buildable_ticks_total")
+    )
+    construction_site_idle_buildable_ticks_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_idle_buildable_ticks_total")
+    )
+    construction_site_buildable_but_idle_ticks_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_buildable_but_idle_ticks_total")
+    )
+    construction_site_waiting_materials_ticks_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_waiting_materials_ticks_total")
+    )
+    construction_site_in_progress_ticks_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_in_progress_ticks_total")
+    )
+    construction_site_distinct_builders_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_distinct_builders_avg")
+    )
+    construction_site_work_ticks_per_builder_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_work_ticks_per_builder_avg")
+    )
+    construction_site_delivery_to_work_gap_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_delivery_to_work_gap_avg")
+    )
+    construction_site_active_age_ticks_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_active_age_ticks_avg")
+    )
+    construction_site_first_builder_arrival_delay_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_first_builder_arrival_delay_avg")
+    )
+    construction_site_material_ready_to_first_work_delay_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_material_ready_to_first_work_delay_avg")
     )
     construction_site_completion_time_avg = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_completion_time_avg")
@@ -1253,6 +1358,82 @@ def aggregate_global_balance_results(
             "avg_construction_near_complete_sites_count": float(
                 mean(construction_near_complete_sites_count)
             ) if construction_near_complete_sites_count else 0.0,
+            "avg_builder_assigned_site_count": float(mean(builder_assigned_site_count)) if builder_assigned_site_count else 0.0,
+            "avg_builder_site_arrival_count": float(mean(builder_site_arrival_count)) if builder_site_arrival_count else 0.0,
+            "avg_builder_left_site_count": float(mean(builder_left_site_count)) if builder_left_site_count else 0.0,
+            "avg_builder_left_site_before_completion_count": float(
+                mean(builder_left_site_before_completion_count)
+            ) if builder_left_site_before_completion_count else 0.0,
+            "avg_builder_waiting_on_site_ticks_total": float(
+                mean(builder_waiting_on_site_ticks_total)
+            ) if builder_waiting_on_site_ticks_total else 0.0,
+            "avg_builder_on_site_ticks_total": float(mean(builder_on_site_ticks_total)) if builder_on_site_ticks_total else 0.0,
+            "avg_builder_work_tick_applied_count": float(
+                mean(builder_work_tick_applied_count)
+            ) if builder_work_tick_applied_count else 0.0,
+            "avg_builder_survival_override_during_construction_count": float(
+                mean(builder_survival_override_during_construction_count)
+            ) if builder_survival_override_during_construction_count else 0.0,
+            "avg_builder_redirected_to_storage_during_construction_count": float(
+                mean(builder_redirected_to_storage_during_construction_count)
+            ) if builder_redirected_to_storage_during_construction_count else 0.0,
+            "avg_builder_commitment_created_count": float(
+                mean(builder_commitment_created_count)
+            ) if builder_commitment_created_count else 0.0,
+            "avg_builder_commitment_pause_count": float(
+                mean(builder_commitment_pause_count)
+            ) if builder_commitment_pause_count else 0.0,
+            "avg_builder_commitment_resume_count": float(
+                mean(builder_commitment_resume_count)
+            ) if builder_commitment_resume_count else 0.0,
+            "avg_builder_commitment_completed_count": float(
+                mean(builder_commitment_completed_count)
+            ) if builder_commitment_completed_count else 0.0,
+            "avg_builder_commitment_abandoned_count": float(
+                mean(builder_commitment_abandoned_count)
+            ) if builder_commitment_abandoned_count else 0.0,
+            "avg_builder_returned_to_same_site_count": float(
+                mean(builder_returned_to_same_site_count)
+            ) if builder_returned_to_same_site_count else 0.0,
+            "avg_builder_commitment_duration_avg": float(
+                mean(builder_commitment_duration_avg)
+            ) if builder_commitment_duration_avg else 0.0,
+            "avg_builder_commitment_resume_delay_avg": float(
+                mean(builder_commitment_resume_delay_avg)
+            ) if builder_commitment_resume_delay_avg else 0.0,
+            "avg_construction_site_buildable_ticks_total": float(
+                mean(construction_site_buildable_ticks_total)
+            ) if construction_site_buildable_ticks_total else 0.0,
+            "avg_construction_site_idle_buildable_ticks_total": float(
+                mean(construction_site_idle_buildable_ticks_total)
+            ) if construction_site_idle_buildable_ticks_total else 0.0,
+            "avg_construction_site_buildable_but_idle_ticks_total": float(
+                mean(construction_site_buildable_but_idle_ticks_total)
+            ) if construction_site_buildable_but_idle_ticks_total else 0.0,
+            "avg_construction_site_waiting_materials_ticks_total": float(
+                mean(construction_site_waiting_materials_ticks_total)
+            ) if construction_site_waiting_materials_ticks_total else 0.0,
+            "avg_construction_site_in_progress_ticks_total": float(
+                mean(construction_site_in_progress_ticks_total)
+            ) if construction_site_in_progress_ticks_total else 0.0,
+            "avg_construction_site_distinct_builders_avg": float(
+                mean(construction_site_distinct_builders_avg)
+            ) if construction_site_distinct_builders_avg else 0.0,
+            "avg_construction_site_work_ticks_per_builder_avg": float(
+                mean(construction_site_work_ticks_per_builder_avg)
+            ) if construction_site_work_ticks_per_builder_avg else 0.0,
+            "avg_construction_site_delivery_to_work_gap_avg": float(
+                mean(construction_site_delivery_to_work_gap_avg)
+            ) if construction_site_delivery_to_work_gap_avg else 0.0,
+            "avg_construction_site_active_age_ticks_avg": float(
+                mean(construction_site_active_age_ticks_avg)
+            ) if construction_site_active_age_ticks_avg else 0.0,
+            "avg_construction_site_first_builder_arrival_delay_avg": float(
+                mean(construction_site_first_builder_arrival_delay_avg)
+            ) if construction_site_first_builder_arrival_delay_avg else 0.0,
+            "avg_construction_site_material_ready_to_first_work_delay_avg": float(
+                mean(construction_site_material_ready_to_first_work_delay_avg)
+            ) if construction_site_material_ready_to_first_work_delay_avg else 0.0,
             "avg_construction_site_completion_time_avg": float(
                 mean(construction_site_completion_time_avg)
             ) if construction_site_completion_time_avg else 0.0,

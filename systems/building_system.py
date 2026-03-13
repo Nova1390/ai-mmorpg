@@ -2280,6 +2280,20 @@ def _mark_builder_waiting_on_site(world: "World", building: Dict[str, Any], agen
     _sync_construction_site_state(building, now_tick=int(getattr(world, "tick", 0)))
 
 
+def _register_builder_on_site(building: Dict[str, Any], agent: "Agent") -> None:
+    if not isinstance(building, dict):
+        return
+    aid = str(getattr(agent, "agent_id", "") or "")
+    if not aid:
+        return
+    existing = building.get("construction_builder_ids", [])
+    if not isinstance(existing, list):
+        existing = []
+    if aid not in existing:
+        existing.append(aid)
+    building["construction_builder_ids"] = existing
+
+
 def _mark_construction_site_demand_tick(world: "World", building: Dict[str, Any]) -> None:
     if not isinstance(building, dict):
         return
@@ -3691,6 +3705,13 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
                         best_pos = (x, y)
 
     if best_pos is None:
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "no_path_to_site",
+                reason="no_build_location",
+                previous_task="build_house",
+            )
         _record_housing_failure(world, "no_build_location", village_uid=village_uid or None)
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
             world.record_task_completion_preconditions_failed(agent, "build_house", "no_construction_site")
@@ -3747,6 +3768,13 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
         )
         site_was_new = isinstance(site, dict)
     if site is None:
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "invalid_site",
+                reason="site_create_failed",
+                previous_task="build_house",
+            )
         _record_housing_failure(world, "terrain_invalid", village_uid=village_uid)
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
             world.record_task_completion_preconditions_failed(agent, "build_house", "no_construction_site")
@@ -3755,6 +3783,13 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
         return False
     try:
         agent.assigned_building_id = str(site.get("building_id", ""))
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "assigned_site",
+                reason="build_house",
+                site_id=str(site.get("building_id", "")),
+            )
     except Exception:
         pass
     if site_was_new:
@@ -3774,6 +3809,13 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
             building_id=str(site.get("building_id", "")),
         )
     if not _agent_is_situated_on_site(agent, site):
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "left_site",
+                reason="site_not_in_range",
+                site_id=str(site.get("building_id", "")),
+            )
         if hasattr(world, "record_situated_construction_event"):
             world.record_situated_construction_event("construction_offsite_blocked_ticks")
             world.record_situated_construction_event("construction_interrupted_invalid_target")
@@ -3784,6 +3826,14 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
             world.record_workforce_block_reason(agent, "builder", "no_target_found")
         return False
     _record_housing_worker(world, "builder_arrived_at_house", village_uid=village_uid)
+    if hasattr(world, "record_construction_debug_event"):
+        world.record_construction_debug_event(
+            agent,
+            "arrived_on_site",
+            reason="build_house",
+            site_id=str(site.get("building_id", "")),
+        )
+    _register_builder_on_site(site, agent)
     _mark_construction_site_demand_tick(world, site)
     _attach_carried_materials_to_site(agent, site, costs)
     buffer = site.get("construction_buffer", {}) if isinstance(site.get("construction_buffer", {}), dict) else {}
@@ -3793,6 +3843,13 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
         if _try_builder_local_self_supply(world, agent, site, costs, village=village):
             return False
         _mark_builder_waiting_on_site(world, site, agent)
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "waiting_on_delivery",
+                reason="site_not_buildable",
+                site_id=str(site.get("building_id", "")),
+            )
         waiting_due_to_material = True
         if int(getattr(agent, "hunger", 100)) < 20:
             _record_housing_failure(world, "builder_starving", village_uid=village_uid)
@@ -3803,7 +3860,22 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
         world.record_task_completion_preconditions_met(agent, "construction_progress")
     if hasattr(world, "record_situated_construction_event"):
         world.record_situated_construction_event("construction_on_site_work_ticks")
+    if hasattr(world, "record_construction_debug_event"):
+        world.record_construction_debug_event(
+            agent,
+            "on_site_tick",
+            reason="build_house",
+            site_id=str(site.get("building_id", "")),
+        )
     _advance_construction_progress(site)
+    if hasattr(world, "record_construction_debug_event"):
+        world.record_construction_debug_event(
+            agent,
+            "work_tick_applied",
+            reason="build_house",
+            site_id=str(site.get("building_id", "")),
+        )
+    _register_builder_on_site(site, agent)
     site["construction_last_progress_tick"] = int(getattr(world, "tick", 0))
     if int(site.get("construction_first_progress_tick", -1)) < 0:
         site["construction_first_progress_tick"] = int(getattr(world, "tick", 0))
@@ -3842,6 +3914,13 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
         return False
     if not _site_ready_for_completion(site, costs):
         _mark_builder_waiting_on_site(world, site, agent)
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "site_not_buildable",
+                reason="materials_missing",
+                site_id=str(site.get("building_id", "")),
+            )
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
             world.record_task_completion_preconditions_failed(agent, "build_house", "waiting_on_delivery")
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_workforce_block_reason"):
@@ -3850,6 +3929,13 @@ def try_build_house(world: "World", agent: "Agent") -> bool:
         return False
     _record_housing_path(world, "house_completed_via_construction_progress", village_uid=village_uid)
     if not _use_construction_buffer(site, costs):
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "site_not_buildable",
+                reason="buffer_not_ready",
+                site_id=str(site.get("building_id", "")),
+            )
         _record_housing_failure(world, "materials_missing", village_uid=village_uid)
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
             world.record_task_completion_preconditions_failed(agent, "build_house", "no_materials_in_buffer")
@@ -3926,6 +4012,13 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
     if existing_site is None and not can_place_building(world, "storage", (sx, sy)):
         replacement = _find_nearest_storage_spot(world, village, (agent.x, agent.y))
         if replacement is None:
+            if hasattr(world, "record_construction_debug_event"):
+                world.record_construction_debug_event(
+                    agent,
+                    "no_path_to_site",
+                    reason="no_construction_site",
+                    previous_task="build_storage",
+                )
             if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
                 world.record_task_completion_preconditions_failed(agent, "build_storage", "no_construction_site")
             if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_workforce_block_reason"):
@@ -3964,6 +4057,13 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
             costs=costs,
         )
     if site is None:
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "invalid_site",
+                reason="site_create_failed",
+                previous_task="build_storage",
+            )
         if hasattr(world, "record_settlement_progression_metric"):
             world.record_settlement_progression_metric("storage_construction_interrupted_invalid")
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
@@ -3973,9 +4073,23 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
         return False
     try:
         agent.assigned_building_id = str(site.get("building_id", ""))
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "assigned_site",
+                reason="build_storage",
+                site_id=str(site.get("building_id", "")),
+            )
     except Exception:
         pass
     if not _agent_is_situated_on_site(agent, site):
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "left_site",
+                reason="site_not_in_range",
+                site_id=str(site.get("building_id", "")),
+            )
         if hasattr(world, "record_settlement_progression_metric"):
             world.record_settlement_progression_metric("storage_construction_interrupted_invalid")
         if hasattr(world, "record_situated_construction_event"):
@@ -3987,6 +4101,14 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
             world.record_workforce_block_reason(agent, "builder", "no_target_found")
         return False
     _mark_construction_site_demand_tick(world, site)
+    if hasattr(world, "record_construction_debug_event"):
+        world.record_construction_debug_event(
+            agent,
+            "arrived_on_site",
+            reason="build_storage",
+            site_id=str(site.get("building_id", "")),
+        )
+    _register_builder_on_site(site, agent)
     _attach_carried_materials_to_site(agent, site, costs)
     buffer = site.get("construction_buffer", {}) if isinstance(site.get("construction_buffer", {}), dict) else {}
     buffered_total = int(buffer.get("wood", 0)) + int(buffer.get("stone", 0)) + int(buffer.get("food", 0))
@@ -3995,6 +4117,13 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
         if _try_builder_local_self_supply(world, agent, site, costs, village=village):
             return False
         _mark_builder_waiting_on_site(world, site, agent)
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "waiting_on_delivery",
+                reason="site_not_buildable",
+                site_id=str(site.get("building_id", "")),
+            )
         waiting_due_to_material = True
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
             world.record_task_completion_preconditions_failed(agent, "build_storage", "waiting_on_delivery")
@@ -4005,7 +4134,22 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
         world.record_task_completion_preconditions_met(agent, "construction_progress")
     if hasattr(world, "record_situated_construction_event"):
         world.record_situated_construction_event("construction_on_site_work_ticks")
+    if hasattr(world, "record_construction_debug_event"):
+        world.record_construction_debug_event(
+            agent,
+            "on_site_tick",
+            reason="build_storage",
+            site_id=str(site.get("building_id", "")),
+        )
     _advance_construction_progress(site)
+    if hasattr(world, "record_construction_debug_event"):
+        world.record_construction_debug_event(
+            agent,
+            "work_tick_applied",
+            reason="build_storage",
+            site_id=str(site.get("building_id", "")),
+        )
+    _register_builder_on_site(site, agent)
     site["construction_last_progress_tick"] = int(getattr(world, "tick", 0))
     if int(site.get("construction_first_progress_tick", -1)) < 0:
         site["construction_first_progress_tick"] = int(getattr(world, "tick", 0))
@@ -4039,6 +4183,13 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
         return False
     if not _site_ready_for_completion(site, costs):
         _mark_builder_waiting_on_site(world, site, agent)
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "site_not_buildable",
+                reason="materials_missing",
+                site_id=str(site.get("building_id", "")),
+            )
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
             world.record_task_completion_preconditions_failed(agent, "build_storage", "waiting_on_delivery")
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_workforce_block_reason"):
@@ -4046,6 +4197,13 @@ def try_build_storage(world: "World", agent: "Agent") -> bool:
         _sync_construction_site_state(site, now_tick=int(getattr(world, "tick", 0)))
         return False
     if not _use_construction_buffer(site, costs):
+        if hasattr(world, "record_construction_debug_event"):
+            world.record_construction_debug_event(
+                agent,
+                "site_not_buildable",
+                reason="buffer_not_ready",
+                site_id=str(site.get("building_id", "")),
+            )
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_task_completion_preconditions_failed"):
             world.record_task_completion_preconditions_failed(agent, "build_storage", "no_materials_in_buffer")
         if str(getattr(agent, "role", "")) == "builder" and hasattr(world, "record_workforce_block_reason"):
