@@ -22,6 +22,11 @@ VILLAGE_COLORS = [
 TEMPERAMENTS = ("cautious", "balanced", "ambitious")
 FOCUSES = ("food", "housing", "logistics", "expansion")
 STYLES = ("conservative", "adaptive", "opportunistic")
+FORMAL_VILLAGE_MIN_POPULATION = 4
+FORMAL_VILLAGE_MIN_HOUSES = 3
+FORMAL_VILLAGE_MIN_STABILITY_TICKS = 90
+GHOST_VILLAGE_DOWNGRADE_GRACE_TICKS = 80
+GHOST_VILLAGE_ABANDONED_TICKS = 180
 
 
 def get_village_by_id(world: "World", village_id: Optional[int]) -> Optional[Dict]:
@@ -273,6 +278,40 @@ def detect_villages(world: "World") -> None:
         if previous is not None:
             unmatched_old.remove(previous)
         default_strategy = _default_strategy_for_new_village(len(cluster), pop)
+        prev_stability = int(previous.get("stability_ticks", 0)) if isinstance(previous, dict) else 0
+        stability_ticks = max(1, prev_stability + 1)
+        prev_formalized = bool(previous.get("formalized", False)) if isinstance(previous, dict) else False
+        prev_viability_debt = int(previous.get("viability_debt_ticks", 0)) if isinstance(previous, dict) else 0
+        formalization_ready = bool(
+            len(cluster) >= int(max(FORMAL_VILLAGE_MIN_HOUSES, world.MIN_HOUSES_FOR_VILLAGE))
+            and int(pop) >= int(FORMAL_VILLAGE_MIN_POPULATION)
+            and int(stability_ticks) >= int(FORMAL_VILLAGE_MIN_STABILITY_TICKS)
+            and (active_camp_near or mature_nucleus)
+        )
+        viability_debt_ticks = 0
+        if not formalization_ready and (prev_formalized or prev_viability_debt > 0):
+            viability_debt_ticks = int(prev_viability_debt) + 1
+        formalized = bool(formalization_ready)
+        if prev_formalized and not formalized and int(viability_debt_ticks) < int(GHOST_VILLAGE_DOWNGRADE_GRACE_TICKS):
+            # Grace period prevents noisy flicker while still allowing eventual downgrade.
+            formalized = True
+        if formalization_ready:
+            viability_debt_ticks = 0
+        settlement_stage = "formal_village" if formalized else "proto_settlement"
+        prev_abandoned = bool(previous.get("abandoned", False)) if isinstance(previous, dict) else False
+        abandoned = bool(
+            not formalized
+            and int(viability_debt_ticks) >= int(GHOST_VILLAGE_ABANDONED_TICKS)
+            and int(pop) <= 1
+        )
+        if abandoned and not prev_abandoned and hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("settlement_abandoned_count")
+            prev_needs = previous.get("needs", {}) if isinstance(previous, dict) else {}
+            if isinstance(prev_needs, dict) and bool(prev_needs.get("food_urgent", False) or prev_needs.get("food_low", False)):
+                world.record_settlement_progression_metric("proto_settlement_abandoned_due_to_food_pressure_count")
+        if prev_formalized and not formalized and int(viability_debt_ticks) == int(GHOST_VILLAGE_DOWNGRADE_GRACE_TICKS):
+            blocked = settlement_stats.setdefault("village_creation_blocked_reasons", {})
+            blocked["ghost_village_downgraded"] = int(blocked.get("ghost_village_downgraded", 0)) + 1
 
         villages.append(
             {
@@ -307,8 +346,17 @@ def detect_villages(world: "World") -> None:
                 "tier": int(previous["tier"]) if previous and "tier" in previous else 1,
                 "proto_culture": previous["proto_culture"] if previous and "proto_culture" in previous else None,
                 "culture_summary": previous["culture_summary"] if previous and "culture_summary" in previous else None,
+                "formalized": bool(formalized),
+                "settlement_stage": str(settlement_stage),
+                "stability_ticks": int(stability_ticks),
+                "viability_debt_ticks": int(viability_debt_ticks),
+                "abandoned": bool(abandoned),
             }
         )
+        if bool(formalized) and not bool(prev_formalized):
+            if hasattr(world, "settlement_progression_stats") and isinstance(world.settlement_progression_stats, dict):
+                if int(world.settlement_progression_stats.get("first_village_formalization_tick", -1)) < 0:
+                    world.settlement_progression_stats["first_village_formalization_tick"] = int(getattr(world, "tick", 0))
         if previous is None:
             world.emit_event(
                 "village_created",
@@ -320,6 +368,13 @@ def detect_villages(world: "World") -> None:
                 },
             )
         village_id += 1
+
+    if hasattr(world, "record_settlement_progression_metric"):
+        for old in unmatched_old:
+            if not isinstance(old, dict):
+                continue
+            if bool(old.get("formalized", False)):
+                world.record_settlement_progression_metric("settlement_abandoned_count")
 
     world.villages = villages
     assign_village_leaders(world)
@@ -416,7 +471,7 @@ def assign_village_leaders(world: "World") -> None:
                     if candidate not in nearby_agents:
                         nearby_agents.append(candidate)
 
-        active_village = village.get("population", 0) >= 3
+        active_village = village.get("population", 0) >= 3 and bool(village.get("formalized", False))
 
         if existing_leader is None and (not active_village or not nearby_agents):
             village["leader_id"] = None
@@ -444,7 +499,7 @@ def assign_village_leaders(world: "World") -> None:
     for village in world.villages:
         if village.get("leader_id") is not None:
             continue
-        if village.get("population", 0) < 3:
+        if village.get("population", 0) < 3 or not bool(village.get("formalized", False)):
             continue
         cx = village["center"]["x"]
         cy = village["center"]["y"]

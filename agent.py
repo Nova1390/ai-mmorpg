@@ -42,10 +42,19 @@ BASE_HUNGER_DECAY_PER_TICK = 0.75
 EARLY_SURVIVAL_GRACE_TICKS = 220
 EARLY_HUNGER_DECAY_MULTIPLIER = 0.85
 CAMP_BUFFER_HUNGER_DECAY_MULTIPLIER = 0.9
+STARTUP_NO_SHELTER_HUNGER_DECAY_MULTIPLIER = 0.9
+EARLY_FOOD_RELIABILITY_TICKS = 320
+EARLY_FOOD_PRIORITY_HUNGER_THRESHOLD = 48.0
+PRE_FIRST_FOOD_HUNGER_DECAY_MULTIPLIER = 0.9
+HIGH_HUNGER_LATENCY_THRESHOLD = 35.0
+MEDIUM_TERM_FOOD_CONTINUITY_HUNGER_THRESHOLD = 42.0
+REPRO_MIN_AGE_TICKS = 260
+REPRO_NEARBY_PARTNER_RADIUS = 3
 LOCAL_LOOP_COMMITMENT_TICKS = 8
 EAT_TRIGGER_BASE_THRESHOLD = 50
-CONSTRUCTION_SITE_STICKINESS_TICKS = 10
-CONSTRUCTION_SITE_RECENT_ACTIVITY_TICKS = 24
+CONSTRUCTION_SITE_STICKINESS_TICKS = 18
+CONSTRUCTION_SITE_RECENT_ACTIVITY_TICKS = 40
+CONSTRUCTION_SITE_JUST_WORKED_GRACE_TICKS = 8
 
 
 @dataclass
@@ -137,6 +146,9 @@ class Agent:
     leader_traits: Optional[Dict[str, str]] = None
     current_intention: Optional[Dict[str, Any]] = None
     current_innovation_proposal: Optional[Dict[str, Any]] = None
+    first_food_relief_tick: int = -1
+    high_hunger_enter_tick: int = -1
+    high_hunger_episode_count: int = 0
     self_model: Dict[str, Any] = field(default_factory=dict)
     proto_traits: Dict[str, Any] = field(default_factory=dict)
     cognitive_profile: Dict[str, Any] = field(default_factory=dict)
@@ -412,11 +424,17 @@ class Agent:
 
         sx = int(site.get("x", self.x))
         sy = int(site.get("y", self.y))
-        on_site = abs(int(self.x) - sx) + abs(int(self.y) - sy) <= 1
+        on_site = abs(int(self.x) - sx) + abs(int(self.y) - sy) <= int(max(1, getattr(building_system, "CONSTRUCTION_WORK_RANGE", 1)))
         last_progress = int(site.get("construction_last_progress_tick", -10_000))
         last_delivery = int(site.get("construction_last_delivery_tick", -10_000))
         recently_active = (now_tick - max(last_progress, last_delivery)) <= int(CONSTRUCTION_SITE_RECENT_ACTIVITY_TICKS)
-        if not (on_site or recently_active or buffered_total > 0):
+        self_recent_progress = int(getattr(self, "primary_commitment_last_progress_tick", -10_000))
+        builder_just_worked = (
+            sid
+            and sid == str(getattr(self, "primary_commitment_target_id", "") or "")
+            and (now_tick - max(self_recent_progress, last_progress)) <= int(CONSTRUCTION_SITE_JUST_WORKED_GRACE_TICKS)
+        )
+        if not (on_site or recently_active or buffered_total > 0 or builder_just_worked):
             return False
 
         self.construction_site_commit_site_id = sid or None
@@ -657,6 +675,39 @@ class Agent:
     def update_role_task(self, world: "World") -> None:
         village = world.get_village_by_id(self.village_id)
         prev_task = str(getattr(self, "task", "idle"))
+        tick_now = int(getattr(world, "tick", 0))
+        born_tick = int(getattr(self, "born_tick", tick_now))
+        age = max(0, tick_now - born_tick)
+        first_food_relief_tick = int(getattr(self, "first_food_relief_tick", -1))
+        if (
+            village is None
+            and
+            first_food_relief_tick < 0
+            and age <= int(EARLY_FOOD_RELIABILITY_TICKS)
+            and float(getattr(self, "hunger", 100.0)) <= float(EARLY_FOOD_PRIORITY_HUNGER_THRESHOLD)
+            and int(getattr(self, "inventory", {}).get("food", 0)) <= 0
+        ):
+            self.task = "gather_food_wild"
+            nearest_food = None
+            if hasattr(world, "find_scarcity_adaptive_food_target"):
+                try:
+                    nearest_food = world.find_scarcity_adaptive_food_target(
+                        self,
+                        radius=max(12, int(self.visual_radius_tiles) + 6),
+                    )
+                except Exception:
+                    nearest_food = None
+            elif hasattr(world, "_find_nearest_food_to"):
+                try:
+                    nearest_food = world._find_nearest_food_to(int(self.x), int(self.y), radius=max(12, int(self.visual_radius_tiles) + 6))
+                except Exception:
+                    nearest_food = None
+            if isinstance(nearest_food, tuple) and len(nearest_food) == 2:
+                self.task_target = (int(nearest_food[0]), int(nearest_food[1]))
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("early_food_priority_overrides")
+            return
+
         self._refresh_primary_construction_commitment_state(world)
         if hasattr(world, "update_agent_proto_specialization"):
             world.update_agent_proto_specialization(self)
@@ -674,7 +725,6 @@ class Agent:
 
         # bootstrap: prima che esista un villaggio, gli NPC fondano i primi nuclei
         if village is None:
-            tick_now = int(getattr(world, "tick", 0))
             if (
                 str(prev_task) == "camp_supply_food"
                 and tick_now <= int(getattr(self, "camp_loop_commit_until_tick", -1))
@@ -774,6 +824,73 @@ class Agent:
 
         priority = village.get("priority", "stabilize")
         needs = village.get("needs", {})
+        scarcity_pressure = {}
+        if hasattr(world, "compute_local_food_pressure_for_agent"):
+            try:
+                scarcity_pressure = world.compute_local_food_pressure_for_agent(self, max_distance=10)
+            except Exception:
+                scarcity_pressure = {}
+        severe_local_scarcity = bool(
+            isinstance(scarcity_pressure, dict)
+            and bool(scarcity_pressure.get("pressure_active", False))
+            and int(scarcity_pressure.get("near_food_sources", 0)) <= 0
+            and int(scarcity_pressure.get("camp_food", 0)) <= 1
+            and int(scarcity_pressure.get("house_food_nearby", 0)) <= 1
+            and float(getattr(self, "hunger", 100.0)) <= 58.0
+            and int(getattr(self, "inventory", {}).get("food", 0)) <= 0
+        )
+        if str(role) != "leader" and severe_local_scarcity:
+            self.task = "gather_food_wild"
+            scarcity_target = None
+            if hasattr(world, "find_scarcity_adaptive_food_target"):
+                try:
+                    scarcity_target = world.find_scarcity_adaptive_food_target(
+                        self,
+                        radius=max(14, int(self.visual_radius_tiles) + 8),
+                    )
+                except Exception:
+                    scarcity_target = None
+            elif hasattr(world, "_find_nearest_food_to"):
+                try:
+                    scarcity_target = world._find_nearest_food_to(int(self.x), int(self.y), radius=max(14, int(self.visual_radius_tiles) + 8))
+                except Exception:
+                    scarcity_target = None
+            if isinstance(scarcity_target, tuple) and len(scarcity_target) == 2:
+                self.task_target = (int(scarcity_target[0]), int(scarcity_target[1]))
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("medium_term_food_priority_overrides")
+                world.record_settlement_progression_metric("food_scarcity_adaptive_retarget_events")
+            return
+        if (
+            str(role) != "leader"
+            and int(getattr(self, "first_food_relief_tick", -1)) >= 0
+            and int(getattr(self, "inventory", {}).get("food", 0)) <= 0
+            and float(getattr(self, "hunger", 100.0)) <= float(max(30.0, MEDIUM_TERM_FOOD_CONTINUITY_HUNGER_THRESHOLD - 4.0))
+            and (
+                int(getattr(self, "high_hunger_enter_tick", -1)) >= 0
+                or int(getattr(self, "high_hunger_episode_count", 0)) >= 2
+            )
+        ):
+            self.task = "gather_food_wild"
+            nearest_food = None
+            if hasattr(world, "find_scarcity_adaptive_food_target"):
+                try:
+                    nearest_food = world.find_scarcity_adaptive_food_target(
+                        self,
+                        radius=max(14, int(self.visual_radius_tiles) + 8),
+                    )
+                except Exception:
+                    nearest_food = None
+            elif hasattr(world, "_find_nearest_food_to"):
+                try:
+                    nearest_food = world._find_nearest_food_to(int(self.x), int(self.y), radius=max(14, int(self.visual_radius_tiles) + 8))
+                except Exception:
+                    nearest_food = None
+            if isinstance(nearest_food, tuple) and len(nearest_food) == 2:
+                self.task_target = (int(nearest_food[0]), int(nearest_food[1]))
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("medium_term_food_priority_overrides")
+            return
 
         def _survival_crisis() -> bool:
             return float(getattr(self, "hunger", 0.0)) <= 18.0
@@ -1611,13 +1728,33 @@ class Agent:
         village = world.get_village_by_id(self.village_id)
         storage_food = 0
         village_pop = 0
+        if int(getattr(world, "tick", 0)) - int(getattr(self, "born_tick", 0)) < int(REPRO_MIN_AGE_TICKS):
+            return
         if village is not None:
             storage_food = village.get("storage", {}).get("food", 0)
             village_pop = village.get("population", 0)
+            if not bool(village.get("formalized", False)):
+                return
             houses = max(0, int(village.get("houses", 0)))
             population_cap = houses * 5
             if village_pop >= population_cap:
                 return
+            if houses < 2 or village_pop < 3:
+                return
+        nearby_partners = 0
+        for other in getattr(world, "agents", []):
+            if other is self or not getattr(other, "alive", False) or bool(getattr(other, "is_player", False)):
+                continue
+            if getattr(other, "village_id", None) != getattr(self, "village_id", None):
+                continue
+            other_age = int(getattr(world, "tick", 0)) - int(getattr(other, "born_tick", 0))
+            if other_age < int(REPRO_MIN_AGE_TICKS):
+                continue
+            if abs(int(getattr(other, "x", 0)) - int(self.x)) + abs(int(getattr(other, "y", 0)) - int(self.y)) <= int(REPRO_NEARBY_PARTNER_RADIUS):
+                nearby_partners += 1
+                break
+        if nearby_partners <= 0:
+            return
 
         repro_min_hunger = REPRO_MIN_HUNGER
         repro_prob = REPRO_PROB
@@ -1644,6 +1781,7 @@ class Agent:
             is_player=False,
             player_id=None,
         )
+        baby.spawn_origin = "reproduction"
 
         baby.hunger = float(AGENT_START_HUNGER)
         baby.role = "npc"
@@ -1829,12 +1967,37 @@ class Agent:
         tick_now = int(getattr(world, "tick", 0))
         if tick_now <= int(EARLY_SURVIVAL_GRACE_TICKS):
             hunger_decay *= float(EARLY_HUNGER_DECAY_MULTIPLIER)
+        if (
+            tick_now <= int(getattr(world, "EARLY_SURVIVAL_RELIEF_TICKS", 0) or 0)
+            and len(getattr(world, "structures", [])) <= 0
+            and not any(bool(v.get("formalized", False)) for v in getattr(world, "villages", []))
+        ):
+            hunger_decay *= float(STARTUP_NO_SHELTER_HUNGER_DECAY_MULTIPLIER)
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("startup_survival_relief_ticks")
         if hasattr(world, "camp_has_food_for_agent") and world.camp_has_food_for_agent(self, max_distance=3):
             hunger_decay *= float(CAMP_BUFFER_HUNGER_DECAY_MULTIPLIER)
+        born_tick = int(getattr(self, "born_tick", tick_now))
+        age = max(0, tick_now - born_tick)
+        if (
+            int(getattr(self, "first_food_relief_tick", -1)) < 0
+            and age <= int(EARLY_FOOD_RELIABILITY_TICKS)
+        ):
+            hunger_decay *= float(PRE_FIRST_FOOD_HUNGER_DECAY_MULTIPLIER)
         self.hunger -= float(hunger_decay)
         if self.hunger <= 0:
             world.set_agent_dead(self, reason="hunger")
             return
+        if float(self.hunger) <= float(HIGH_HUNGER_LATENCY_THRESHOLD):
+            if int(getattr(self, "high_hunger_enter_tick", -1)) < 0:
+                self.high_hunger_enter_tick = int(tick_now)
+                self.high_hunger_episode_count = int(getattr(self, "high_hunger_episode_count", 0)) + 1
+                if hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("high_hunger_to_eat_events_started")
+                if int(getattr(self, "first_food_relief_tick", -1)) >= 0 and hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("agent_hunger_relapse_after_first_food_count")
+        else:
+            self.high_hunger_enter_tick = -1
 
         action = self.run_brain(world)
         moved = False
@@ -2016,9 +2179,12 @@ class Agent:
                 inv_wood = int(self.inventory.get("wood", 0))
                 inv_stone = int(self.inventory.get("stone", 0))
                 switched_to_gather = False
+                builder_just_worked = bool(isinstance(post_site, dict) and pre_progress >= 0 and int(post_site.get("construction_progress", 0)) > int(pre_progress))
+                if builder_just_worked:
+                    self.task = "build_storage"
                 if not withdrew and (inv_wood < int(getattr(building_system, "STORAGE_WOOD_COST", 4)) or inv_stone < int(getattr(building_system, "STORAGE_STONE_COST", 2))):
                     active_site = post_site if isinstance(post_site, dict) else self._assigned_construction_site(world, expected_type="storage")
-                    if self._should_hold_construction_site_commitment(world, active_site):
+                    if builder_just_worked or self._should_hold_construction_site_commitment(world, active_site):
                         self.task = "build_storage"
                     else:
                         self.task = "gather_materials"
@@ -2104,9 +2270,12 @@ class Agent:
                 inv_wood = int(self.inventory.get("wood", 0))
                 inv_stone = int(self.inventory.get("stone", 0))
                 switched_to_gather = False
+                builder_just_worked = bool(isinstance(post_site, dict) and pre_progress >= 0 and int(post_site.get("construction_progress", 0)) > int(pre_progress))
+                if builder_just_worked:
+                    self.task = "build_house"
                 if not withdrew and (inv_wood < int(HOUSE_WOOD_COST) or inv_stone < int(HOUSE_STONE_COST)):
                     active_site = post_site if isinstance(post_site, dict) else self._assigned_construction_site(world, expected_type="house")
-                    if self._should_hold_construction_site_commitment(world, active_site):
+                    if builder_just_worked or self._should_hold_construction_site_commitment(world, active_site):
                         self.task = "build_house"
                     else:
                         self.task = "gather_materials"

@@ -2002,6 +2002,7 @@ def _storage_maturity_snapshot(world: "World", village: Dict[str, Any]) -> Dict[
     throughput_ready = bool(flow_events >= int(STORAGE_MATURE_FLOW_EVENTS_MIN) or food_stock >= 16)
     pressure_ready = bool(buffer_pressure >= int(STORAGE_MATURE_BUFFER_PRESSURE_MIN) or bool(signals.get("storage_pressure_high")))
     support_ready = bool(nearby_population >= int(STORAGE_MATURE_CLUSTER_POP_MIN))
+    formalized_ready = bool(village.get("formalized", True)) and int(village.get("stability_ticks", 120)) >= 80
     surplus_ready = False
     if hasattr(world, "is_village_surplus_sustained"):
         try:
@@ -2021,7 +2022,14 @@ def _storage_maturity_snapshot(world: "World", village: Dict[str, Any]) -> Dict[
             )
         except Exception:
             surplus_ready = False
-    mature_ready = bool(house_cluster_ready and throughput_ready and pressure_ready and support_ready and surplus_ready)
+    mature_ready = bool(
+        formalized_ready
+        and house_cluster_ready
+        and throughput_ready
+        and pressure_ready
+        and support_ready
+        and surplus_ready
+    )
     return {
         "nearby_houses": int(nearby_houses),
         "nearby_population": int(nearby_population),
@@ -2031,12 +2039,15 @@ def _storage_maturity_snapshot(world: "World", village: Dict[str, Any]) -> Dict[
         "throughput_ready": bool(throughput_ready),
         "pressure_ready": bool(pressure_ready),
         "support_ready": bool(support_ready),
+        "formalized_ready": bool(formalized_ready),
         "surplus_ready": bool(surplus_ready),
         "mature_ready": bool(mature_ready),
     }
 
 
 def _storage_defer_reason_for_snapshot(snapshot: Dict[str, Any]) -> Optional[str]:
+    if bool(snapshot.get("formalized_ready", False)) is False:
+        return "storage_deferred_due_to_low_house_cluster"
     if bool(snapshot.get("house_cluster_ready", False)) is False:
         return "storage_deferred_due_to_low_house_cluster"
     if bool(snapshot.get("throughput_ready", False)) is False:

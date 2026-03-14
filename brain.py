@@ -562,6 +562,23 @@ class FoodBrain:
                 agent, getattr(world, "food", set()), "food", self.vision_radius + 4
             )
             if target is None:
+                age = max(
+                    0,
+                    int(getattr(world, "tick", 0)) - int(getattr(agent, "born_tick", int(getattr(world, "tick", 0)))),
+                )
+                first_food_relief_tick = int(getattr(agent, "first_food_relief_tick", -1))
+                hunger = float(getattr(agent, "hunger", 100.0))
+                if hunger <= 45.0 or (first_food_relief_tick < 0 and age <= 320):
+                    if hasattr(world, "record_food_search_fallback_activation"):
+                        world.record_food_search_fallback_activation(agent)
+                    radius = max(
+                        int(self.vision_radius + 8),
+                        int(max(getattr(world, "width", 0), getattr(world, "height", 0)) // 2),
+                    )
+                    target = self.find_nearest(agent, getattr(world, "food", set()), "food", radius)
+            if target is None:
+                if hasattr(world, "record_food_search_failure"):
+                    world.record_food_search_failure(agent, resource_type="food")
                 write_episodic_memory_event(
                     agent,
                     tick=int(getattr(world, "tick", 0)),
@@ -1470,6 +1487,15 @@ class FoodBrain:
             source_pos = tuple(anchor.get("source_pos", ())) if isinstance(anchor, dict) else ()
             if len(source_pos) == 2 and tuple(source_pos) in getattr(world, "food", set()):
                 return self.move_towards(agent, world, (int(source_pos[0]), int(source_pos[1])))
+            task_target = getattr(agent, "task_target", None)
+            if isinstance(task_target, tuple) and len(task_target) == 2:
+                if (int(task_target[0]), int(task_target[1])) in getattr(world, "food", set()):
+                    return self.move_towards(agent, world, (int(task_target[0]), int(task_target[1])))
+            if hasattr(world, "find_scarcity_adaptive_food_target"):
+                adaptive = world.find_scarcity_adaptive_food_target(agent, radius=self.vision_radius + 4)
+                if isinstance(adaptive, tuple) and len(adaptive) == 2:
+                    agent.task_target = (int(adaptive[0]), int(adaptive[1]))
+                    return self.move_towards(agent, world, (int(adaptive[0]), int(adaptive[1])))
             target = self.find_nearest(agent, world.food, "food", self.vision_radius + 3)
             if target is not None:
                 return self.move_towards(agent, world, target)

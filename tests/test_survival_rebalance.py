@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent import Agent
+from agent import Agent, EARLY_FOOD_RELIABILITY_TICKS
 from world import World
 
 
@@ -105,3 +105,136 @@ def test_critical_hunger_still_clears_proto_specialization() -> None:
     world.tick += 1
     world.update_agent_proto_specialization(a)
     assert str(a.proto_specialization) == "none"
+
+
+def test_early_food_priority_override_applies_before_first_food_relief() -> None:
+    world = _world()
+    world.tick = 40
+    world.food.add((11, 10))
+    a = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    a.role = "builder"
+    a.hunger = 40.0
+    a.born_tick = 0
+    a.first_food_relief_tick = -1
+
+    a.update_role_task(world)
+
+    assert str(a.task) == "gather_food_wild"
+    assert isinstance(a.task_target, tuple) and len(a.task_target) == 2
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("early_food_priority_overrides", 0)) >= 1
+
+
+def test_food_relief_latency_and_hunger_death_buckets_are_recorded() -> None:
+    world = _world()
+    a = Agent(x=5, y=5, brain=None, is_player=False, player_id=None)
+    a.born_tick = 0
+    a.high_hunger_enter_tick = 40
+    world.add_agent(a)
+
+    world.tick = 55
+    world.record_agent_food_relief(a, source="inventory")
+    snap = world.compute_settlement_progression_snapshot()
+    assert float(snap.get("avg_time_spawn_to_first_food_acquisition", 0.0)) >= 55.0
+    assert float(snap.get("avg_time_high_hunger_to_eat", 0.0)) >= 15.0
+
+    b = Agent(x=6, y=6, brain=None, is_player=False, player_id=None)
+    b.born_tick = 0
+    b.first_food_relief_tick = -1
+    world.add_agent(b)
+    world.tick = min(199, int(EARLY_FOOD_RELIABILITY_TICKS // 2))
+    world.set_agent_dead(b, reason="hunger")
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("hunger_deaths_before_first_food_acquisition", 0)) >= 1
+    assert int(snap.get("population_deaths_hunger_age_0_199_count", 0)) >= 1
+
+
+def test_medium_term_food_continuity_override_with_existing_village() -> None:
+    world = _world()
+    world.tick = 420
+    world.food.add((12, 10))
+    village = {
+        "id": 1,
+        "village_uid": "v-000001",
+        "center": {"x": 10, "y": 10},
+        "population": 4,
+        "houses": 1,
+        "storage": {"food": 0, "wood": 0, "stone": 0},
+        "needs": {},
+        "priority": "build_housing",
+        "formalized": False,
+    }
+    world.villages = [village]
+    a = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    a.village_id = 1
+    a.role = "builder"
+    a.first_food_relief_tick = 120
+    a.hunger = 38.0
+    a.inventory["food"] = 0
+    a.high_hunger_episode_count = 2
+
+    a.update_role_task(world)
+
+    assert str(a.task) == "gather_food_wild"
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("medium_term_food_priority_overrides", 0)) >= 1
+
+
+def test_food_continuity_intervals_and_relapse_are_recorded() -> None:
+    world = _world()
+    a = Agent(x=5, y=5, brain=None, is_player=False, player_id=None)
+    a.born_tick = 0
+    world.add_agent(a)
+
+    world.tick = 50
+    world.record_agent_food_inventory_acquired(a, amount=1, source="wild_direct")
+    world.tick = 70
+    world.record_agent_food_inventory_acquired(a, amount=1, source="wild_direct")
+    world.tick = 90
+    world.record_agent_food_relief(a, source="inventory")
+    world.tick = 105
+    a.high_hunger_enter_tick = 100
+    a.first_food_relief_tick = 90
+    world.record_settlement_progression_metric("agent_hunger_relapse_after_first_food_count")
+    world.record_agent_food_relief(a, source="camp")
+
+    snap = world.compute_settlement_progression_snapshot()
+    assert float(snap.get("avg_food_acquisition_interval_ticks", 0.0)) >= 20.0
+    assert float(snap.get("avg_food_consumption_interval_ticks", 0.0)) >= 15.0
+    assert int(snap.get("agent_hunger_relapse_after_first_food_count", 0)) >= 1
+
+
+def test_scarcity_adaptive_food_target_avoids_high_contention_when_possible() -> None:
+    world = _world()
+    world.food.update({(9, 8), (14, 8)})
+    world.camps["camp-001"] = _camp(x=8, y=8, food_cache=0)
+
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    world.add_agent(agent)
+
+    competitor = Agent(x=9, y=7, brain=None, is_player=False, player_id=None)
+    competitor.task = "gather_food_wild"
+    competitor.task_target = (9, 8)
+    world.add_agent(competitor)
+
+    target = world.find_scarcity_adaptive_food_target(agent, radius=10)
+
+    assert target == (14, 8)
+
+
+def test_local_food_basin_metrics_are_exposed_in_snapshot() -> None:
+    world = _world()
+    world.camps["camp-001"] = _camp(x=8, y=8, food_cache=0)
+    world.food.add((8, 9))
+    a = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    a.task = "gather_food_wild"
+    world.add_agent(a)
+
+    world.update_settlement_progression_metrics()
+    snap = world.compute_settlement_progression_snapshot()
+
+    assert "avg_local_food_basin_accessible" in snap
+    assert "avg_local_food_pressure_ratio" in snap
+    assert "avg_distance_to_viable_food_from_proto" in snap
+    assert "food_scarcity_adaptive_retarget_events" in snap

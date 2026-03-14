@@ -784,3 +784,35 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
     assert float(agg["avg_secondary_nucleus_persistence_ticks"]) == 70.0
     assert float(agg["avg_secondary_nucleus_village_attempts"]) == 3.5
     assert float(agg["avg_secondary_nucleus_village_successes"]) == 0.5
+    assert "avg_population_deaths_hunger_age_0_199_count" in agg
+    assert "avg_hunger_deaths_before_first_food_acquisition" in agg
+    assert "avg_time_spawn_to_first_food_acquisition" in agg
+    assert "avg_time_high_hunger_to_eat" in agg
+    assert "avg_failed_food_seeking_attempts" in agg
+    assert "avg_fallback_food_search_activations" in agg
+    assert "avg_early_life_food_inventory_acquisition_count" in agg
+    assert "avg_early_food_priority_overrides" in agg
+    assert "avg_food_acquisition_interval_ticks" in agg
+    assert "avg_food_acquisition_distance" in agg
+    assert "avg_food_consumption_interval_ticks" in agg
+    assert "avg_agent_hunger_relapse_after_first_food_count" in agg
+    assert "avg_medium_term_food_priority_overrides" in agg
+    assert "avg_local_food_inventory_per_agent" in agg
+    assert "avg_food_seeking_time_ratio" in agg
+    assert "avg_food_source_contention_events" in agg
+    assert "avg_food_source_depletion_events" in agg
+    assert "avg_food_respawned_total_observed" in agg
+    assert "avg_foraging_yield_per_trip" in agg
+    assert "avg_farming_yield_per_cycle" in agg
+    assert "avg_food_move_time_ratio" in agg
+    assert "avg_food_harvest_time_ratio" in agg
+    assert "avg_local_food_basin_accessible" in agg
+    assert "avg_local_food_pressure_ratio" in agg
+    assert "avg_local_food_basin_competing_agents" in agg
+    assert "avg_distance_to_viable_food_from_proto" in agg
+    assert "avg_local_food_basin_severe_pressure_ticks" in agg
+    assert "avg_local_food_basin_collapse_events" in agg
+    assert "avg_proto_settlement_abandoned_due_to_food_pressure_count" in agg
+    assert "avg_food_scarcity_adaptive_retarget_events" in agg
+    assert "avg_food_gathered_total_observed" in agg
+    assert "avg_food_consumed_total_observed" in agg

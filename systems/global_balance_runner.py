@@ -724,6 +724,132 @@ def aggregate_global_balance_results(
     )
     secondary_nucleus_with_house_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "secondary_nucleus_with_house_count"))
     secondary_nucleus_house_growth_events = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "secondary_nucleus_house_growth_events"))
+    population_alive = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_alive"))
+    population_births_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_births_count"))
+    population_deaths_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_count"))
+    population_deaths_hunger_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_hunger_count"))
+    population_deaths_exhaustion_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_exhaustion_count"))
+    population_deaths_other_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_other_count"))
+    population_deaths_hunger_age_0_199_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_hunger_age_0_199_count")
+    )
+    population_deaths_hunger_age_200_599_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_hunger_age_200_599_count")
+    )
+    population_deaths_hunger_age_600_plus_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_hunger_age_600_plus_count")
+    )
+    hunger_deaths_before_first_food_acquisition = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "hunger_deaths_before_first_food_acquisition")
+    )
+    agent_average_age = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "agent_average_age"))
+    agent_median_age_at_death = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "agent_median_age_at_death"))
+    agent_average_lifespan_at_death = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "agent_average_lifespan_at_death"))
+    avg_time_spawn_to_first_food_acquisition = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_time_spawn_to_first_food_acquisition")
+    )
+    avg_time_high_hunger_to_eat = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_time_high_hunger_to_eat")
+    )
+    avg_food_acquisition_interval_ticks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_food_acquisition_interval_ticks")
+    )
+    avg_food_acquisition_distance = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_food_acquisition_distance")
+    )
+    avg_food_consumption_interval_ticks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_food_consumption_interval_ticks")
+    )
+    failed_food_seeking_attempts = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "failed_food_seeking_attempts")
+    )
+    fallback_food_search_activations = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "fallback_food_search_activations")
+    )
+    early_life_food_inventory_acquisition_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "early_life_food_inventory_acquisition_count")
+    )
+    high_hunger_to_eat_events_started = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "high_hunger_to_eat_events_started")
+    )
+    agent_hunger_relapse_after_first_food_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agent_hunger_relapse_after_first_food_count")
+    )
+    early_food_priority_overrides = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "early_food_priority_overrides")
+    )
+    medium_term_food_priority_overrides = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "medium_term_food_priority_overrides")
+    )
+    avg_local_food_inventory_per_agent = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_local_food_inventory_per_agent")
+    )
+    food_seeking_time_ratio = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_seeking_time_ratio")
+    )
+    food_source_contention_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_source_contention_events")
+    )
+    food_source_depletion_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_source_depletion_events")
+    )
+    food_respawned_total_observed = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_respawned_total_observed")
+    )
+    avg_foraging_yield_per_trip = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_yield_per_trip")
+    )
+    avg_farming_yield_per_cycle = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_farming_yield_per_cycle")
+    )
+    food_move_time_ratio = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_move_time_ratio")
+    )
+    food_harvest_time_ratio = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_harvest_time_ratio")
+    )
+    avg_local_food_basin_accessible = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_local_food_basin_accessible")
+    )
+    avg_local_food_pressure_ratio = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_local_food_pressure_ratio")
+    )
+    avg_local_food_basin_competing_agents = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_local_food_basin_competing_agents")
+    )
+    avg_distance_to_viable_food_from_proto = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_distance_to_viable_food_from_proto")
+    )
+    local_food_basin_severe_pressure_ticks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "local_food_basin_severe_pressure_ticks")
+    )
+    local_food_basin_collapse_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "local_food_basin_collapse_events")
+    )
+    proto_settlement_abandoned_due_to_food_pressure_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "proto_settlement_abandoned_due_to_food_pressure_count")
+    )
+    food_scarcity_adaptive_retarget_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_scarcity_adaptive_retarget_events")
+    )
+    food_gathered_total_observed = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_gathered_total_observed")
+    )
+    food_consumed_total_observed = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_consumed_total_observed")
+    )
+    deaths_before_first_house_completed = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "deaths_before_first_house_completed"))
+    deaths_before_settlement_stability_threshold = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "deaths_before_settlement_stability_threshold"))
+    population_collapse_events = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_collapse_events"))
+    settlement_proto_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "settlement_proto_count"))
+    settlement_stable_village_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "settlement_stable_village_count"))
+    settlement_abandoned_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "settlement_abandoned_count"))
+    first_house_completion_tick = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "first_house_completion_tick"))
+    first_storage_completion_tick = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "first_storage_completion_tick"))
+    first_road_completion_tick = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "first_road_completion_tick"))
+    first_village_formalization_tick = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "first_village_formalization_tick"))
+    storage_built_before_house_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "storage_built_before_house_count"))
+    road_built_before_house_threshold_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "road_built_before_house_threshold_count"))
     wood_available_world_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_available_world_total"))
     wood_available_on_map = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_available_on_map"))
     wood_in_agent_inventories = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_in_agent_inventories"))
@@ -1218,6 +1344,120 @@ def aggregate_global_balance_results(
             "avg_surplus_storage_abandoned": float(mean(surplus_storage_abandoned)) if surplus_storage_abandoned else 0.0,
             "avg_secondary_nucleus_with_house_count": float(mean(secondary_nucleus_with_house_count)) if secondary_nucleus_with_house_count else 0.0,
             "avg_secondary_nucleus_house_growth_events": float(mean(secondary_nucleus_house_growth_events)) if secondary_nucleus_house_growth_events else 0.0,
+            "avg_population_alive": float(mean(population_alive)) if population_alive else 0.0,
+            "avg_population_births_count": float(mean(population_births_count)) if population_births_count else 0.0,
+            "avg_population_deaths_count": float(mean(population_deaths_count)) if population_deaths_count else 0.0,
+            "avg_population_deaths_hunger_count": float(mean(population_deaths_hunger_count)) if population_deaths_hunger_count else 0.0,
+            "avg_population_deaths_exhaustion_count": float(mean(population_deaths_exhaustion_count)) if population_deaths_exhaustion_count else 0.0,
+            "avg_population_deaths_other_count": float(mean(population_deaths_other_count)) if population_deaths_other_count else 0.0,
+            "avg_population_deaths_hunger_age_0_199_count": float(
+                mean(population_deaths_hunger_age_0_199_count)
+            ) if population_deaths_hunger_age_0_199_count else 0.0,
+            "avg_population_deaths_hunger_age_200_599_count": float(
+                mean(population_deaths_hunger_age_200_599_count)
+            ) if population_deaths_hunger_age_200_599_count else 0.0,
+            "avg_population_deaths_hunger_age_600_plus_count": float(
+                mean(population_deaths_hunger_age_600_plus_count)
+            ) if population_deaths_hunger_age_600_plus_count else 0.0,
+            "avg_hunger_deaths_before_first_food_acquisition": float(
+                mean(hunger_deaths_before_first_food_acquisition)
+            ) if hunger_deaths_before_first_food_acquisition else 0.0,
+            "avg_agent_average_age": float(mean(agent_average_age)) if agent_average_age else 0.0,
+            "avg_agent_median_age_at_death": float(mean(agent_median_age_at_death)) if agent_median_age_at_death else 0.0,
+            "avg_agent_average_lifespan_at_death": float(mean(agent_average_lifespan_at_death)) if agent_average_lifespan_at_death else 0.0,
+            "avg_time_spawn_to_first_food_acquisition": float(
+                mean(avg_time_spawn_to_first_food_acquisition)
+            ) if avg_time_spawn_to_first_food_acquisition else 0.0,
+            "avg_time_high_hunger_to_eat": float(mean(avg_time_high_hunger_to_eat)) if avg_time_high_hunger_to_eat else 0.0,
+            "avg_food_acquisition_interval_ticks": float(
+                mean(avg_food_acquisition_interval_ticks)
+            ) if avg_food_acquisition_interval_ticks else 0.0,
+            "avg_food_acquisition_distance": float(
+                mean(avg_food_acquisition_distance)
+            ) if avg_food_acquisition_distance else 0.0,
+            "avg_food_consumption_interval_ticks": float(
+                mean(avg_food_consumption_interval_ticks)
+            ) if avg_food_consumption_interval_ticks else 0.0,
+            "avg_failed_food_seeking_attempts": float(mean(failed_food_seeking_attempts)) if failed_food_seeking_attempts else 0.0,
+            "avg_fallback_food_search_activations": float(
+                mean(fallback_food_search_activations)
+            ) if fallback_food_search_activations else 0.0,
+            "avg_early_life_food_inventory_acquisition_count": float(
+                mean(early_life_food_inventory_acquisition_count)
+            ) if early_life_food_inventory_acquisition_count else 0.0,
+            "avg_high_hunger_to_eat_events_started": float(
+                mean(high_hunger_to_eat_events_started)
+            ) if high_hunger_to_eat_events_started else 0.0,
+            "avg_agent_hunger_relapse_after_first_food_count": float(
+                mean(agent_hunger_relapse_after_first_food_count)
+            ) if agent_hunger_relapse_after_first_food_count else 0.0,
+            "avg_early_food_priority_overrides": float(mean(early_food_priority_overrides)) if early_food_priority_overrides else 0.0,
+            "avg_medium_term_food_priority_overrides": float(
+                mean(medium_term_food_priority_overrides)
+            ) if medium_term_food_priority_overrides else 0.0,
+            "avg_local_food_inventory_per_agent": float(
+                mean(avg_local_food_inventory_per_agent)
+            ) if avg_local_food_inventory_per_agent else 0.0,
+            "avg_food_seeking_time_ratio": float(mean(food_seeking_time_ratio)) if food_seeking_time_ratio else 0.0,
+            "avg_food_source_contention_events": float(
+                mean(food_source_contention_events)
+            ) if food_source_contention_events else 0.0,
+            "avg_food_source_depletion_events": float(
+                mean(food_source_depletion_events)
+            ) if food_source_depletion_events else 0.0,
+            "avg_food_respawned_total_observed": float(
+                mean(food_respawned_total_observed)
+            ) if food_respawned_total_observed else 0.0,
+            "avg_foraging_yield_per_trip": float(
+                mean(avg_foraging_yield_per_trip)
+            ) if avg_foraging_yield_per_trip else 0.0,
+            "avg_farming_yield_per_cycle": float(
+                mean(avg_farming_yield_per_cycle)
+            ) if avg_farming_yield_per_cycle else 0.0,
+            "avg_food_move_time_ratio": float(
+                mean(food_move_time_ratio)
+            ) if food_move_time_ratio else 0.0,
+            "avg_food_harvest_time_ratio": float(
+                mean(food_harvest_time_ratio)
+            ) if food_harvest_time_ratio else 0.0,
+            "avg_local_food_basin_accessible": float(
+                mean(avg_local_food_basin_accessible)
+            ) if avg_local_food_basin_accessible else 0.0,
+            "avg_local_food_pressure_ratio": float(
+                mean(avg_local_food_pressure_ratio)
+            ) if avg_local_food_pressure_ratio else 0.0,
+            "avg_local_food_basin_competing_agents": float(
+                mean(avg_local_food_basin_competing_agents)
+            ) if avg_local_food_basin_competing_agents else 0.0,
+            "avg_distance_to_viable_food_from_proto": float(
+                mean(avg_distance_to_viable_food_from_proto)
+            ) if avg_distance_to_viable_food_from_proto else 0.0,
+            "avg_local_food_basin_severe_pressure_ticks": float(
+                mean(local_food_basin_severe_pressure_ticks)
+            ) if local_food_basin_severe_pressure_ticks else 0.0,
+            "avg_local_food_basin_collapse_events": float(
+                mean(local_food_basin_collapse_events)
+            ) if local_food_basin_collapse_events else 0.0,
+            "avg_proto_settlement_abandoned_due_to_food_pressure_count": float(
+                mean(proto_settlement_abandoned_due_to_food_pressure_count)
+            ) if proto_settlement_abandoned_due_to_food_pressure_count else 0.0,
+            "avg_food_scarcity_adaptive_retarget_events": float(
+                mean(food_scarcity_adaptive_retarget_events)
+            ) if food_scarcity_adaptive_retarget_events else 0.0,
+            "avg_food_gathered_total_observed": float(mean(food_gathered_total_observed)) if food_gathered_total_observed else 0.0,
+            "avg_food_consumed_total_observed": float(mean(food_consumed_total_observed)) if food_consumed_total_observed else 0.0,
+            "avg_deaths_before_first_house_completed": float(mean(deaths_before_first_house_completed)) if deaths_before_first_house_completed else 0.0,
+            "avg_deaths_before_settlement_stability_threshold": float(mean(deaths_before_settlement_stability_threshold)) if deaths_before_settlement_stability_threshold else 0.0,
+            "avg_population_collapse_events": float(mean(population_collapse_events)) if population_collapse_events else 0.0,
+            "avg_settlement_proto_count": float(mean(settlement_proto_count)) if settlement_proto_count else 0.0,
+            "avg_settlement_stable_village_count": float(mean(settlement_stable_village_count)) if settlement_stable_village_count else 0.0,
+            "avg_settlement_abandoned_count": float(mean(settlement_abandoned_count)) if settlement_abandoned_count else 0.0,
+            "avg_first_house_completion_tick": float(mean(first_house_completion_tick)) if first_house_completion_tick else 0.0,
+            "avg_first_storage_completion_tick": float(mean(first_storage_completion_tick)) if first_storage_completion_tick else 0.0,
+            "avg_first_road_completion_tick": float(mean(first_road_completion_tick)) if first_road_completion_tick else 0.0,
+            "avg_first_village_formalization_tick": float(mean(first_village_formalization_tick)) if first_village_formalization_tick else 0.0,
+            "avg_storage_built_before_house_count": float(mean(storage_built_before_house_count)) if storage_built_before_house_count else 0.0,
+            "avg_road_built_before_house_threshold_count": float(mean(road_built_before_house_threshold_count)) if road_built_before_house_threshold_count else 0.0,
             "avg_wood_available_world_total": float(mean(wood_available_world_total)) if wood_available_world_total else 0.0,
             "avg_wood_available_on_map": float(mean(wood_available_on_map)) if wood_available_on_map else 0.0,
             "avg_wood_in_agent_inventories": float(mean(wood_in_agent_inventories)) if wood_in_agent_inventories else 0.0,

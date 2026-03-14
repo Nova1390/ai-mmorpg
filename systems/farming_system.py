@@ -545,6 +545,8 @@ def work_farm(world, agent) -> bool:
             return False
         gathered = min(harvest_amount, space)
         agent.inventory["food"] = agent.inventory.get("food", 0) + gathered
+        if hasattr(world, "record_agent_food_inventory_acquired"):
+            world.record_agent_food_inventory_acquired(agent, amount=int(gathered), source="farm_harvest")
         building_system.record_village_resource_gather(village, "food", amount=gathered)
         if hasattr(world, "record_resource_production"):
             world.record_resource_production("food", gathered)
@@ -562,6 +564,7 @@ def work_farm(world, agent) -> bool:
         if hasattr(world, "record_settlement_progression_metric"):
             world.record_settlement_progression_metric("farm_work_events")
             world.record_settlement_progression_metric("farm_yield_events")
+            world.record_settlement_progression_metric("farm_yield_units_total", int(gathered))
             if first_harvest:
                 world.record_settlement_progression_metric("first_harvest_after_farm_creation_count")
             if _is_early_productive_farm(plot, int(getattr(world, "tick", 0))):
@@ -638,6 +641,8 @@ def haul_harvest(world, agent) -> bool:
         return False
     gathered = min(harvest_amount, space)
     agent.inventory["food"] = agent.inventory.get("food", 0) + gathered
+    if hasattr(world, "record_agent_food_inventory_acquired"):
+        world.record_agent_food_inventory_acquired(agent, amount=int(gathered), source="farm_haul_harvest")
     building_system.record_village_resource_gather(village, "food", amount=gathered)
     if hasattr(world, "record_resource_production"):
         world.record_resource_production("food", gathered)

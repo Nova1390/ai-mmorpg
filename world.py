@@ -82,6 +82,9 @@ CULTURAL_MEMORY_MIN_CONFIDENCE = 0.18
 CAMP_FOOD_DECAY_INTERVAL_TICKS = 50
 LOCAL_FOOD_PRESSURE_RADIUS = 10
 LOCAL_FOOD_PRESSURE_NEEDY_HUNGER = 50.0
+EARLY_SURVIVAL_RELIEF_TICKS = 320
+EARLY_SURVIVAL_RELIEF_HUNGER_DECAY_MULTIPLIER = 0.9
+SETTLEMENT_STABILITY_TICK_THRESHOLD = 120
 FOOD_PATCH_MIN_COUNT = 3
 FOOD_PATCH_MAX_COUNT = 6
 FOOD_PATCH_MIN_RADIUS = 5
@@ -644,10 +647,82 @@ def _default_settlement_bottleneck_stats() -> Dict[str, Any]:
 
 def _default_settlement_progression_stats() -> Dict[str, Any]:
     return {
+        "population_alive": 0,
+        "population_births_count": 0,
+        "population_deaths_count": 0,
+        "population_deaths_hunger_count": 0,
+        "population_deaths_exhaustion_count": 0,
+        "population_deaths_other_count": 0,
+        "population_deaths_hunger_age_0_199_count": 0,
+        "population_deaths_hunger_age_200_599_count": 0,
+        "population_deaths_hunger_age_600_plus_count": 0,
+        "hunger_deaths_before_first_food_acquisition": 0,
+        "population_net_change": 0,
+        "agent_average_age": 0.0,
+        "agent_median_age_at_death": 0.0,
+        "agent_average_lifespan_at_death": 0.0,
+        "time_spawn_to_first_food_acquisition_total": 0,
+        "time_spawn_to_first_food_acquisition_samples": 0,
+        "time_high_hunger_to_eat_total": 0,
+        "time_high_hunger_to_eat_samples": 0,
+        "high_hunger_to_eat_events_started": 0,
+        "agent_hunger_relapse_after_first_food_count": 0,
+        "failed_food_seeking_attempts": 0,
+        "fallback_food_search_activations": 0,
+        "early_life_food_inventory_acquisition_count": 0,
+        "early_food_priority_overrides": 0,
+        "medium_term_food_priority_overrides": 0,
+        "food_acquisition_interval_ticks_total": 0,
+        "food_acquisition_interval_ticks_samples": 0,
+        "food_acquisition_events_total": 0,
+        "food_acquisition_distance_total": 0,
+        "food_acquisition_distance_samples": 0,
+        "food_consumption_interval_ticks_total": 0,
+        "food_consumption_interval_ticks_samples": 0,
+        "food_source_contention_events": 0,
+        "food_source_depletion_events": 0,
+        "food_respawned_total_observed": 0,
+        "food_seeking_ticks_total": 0,
+        "agent_ticks_total": 0,
+        "agent_food_inventory_total": 0,
+        "agent_food_inventory_samples": 0,
+        "food_harvest_ticks_total": 0,
+        "food_move_ticks_total": 0,
+        "local_food_basin_accessible_total": 0,
+        "local_food_basin_accessible_samples": 0,
+        "local_food_basin_pressure_ratio_total": 0.0,
+        "local_food_basin_pressure_ratio_samples": 0,
+        "local_food_basin_competing_agents_total": 0,
+        "local_food_basin_competing_agents_samples": 0,
+        "local_food_basin_nearest_food_distance_total": 0,
+        "local_food_basin_nearest_food_distance_samples": 0,
+        "local_food_basin_severe_pressure_ticks": 0,
+        "local_food_basin_collapse_events": 0,
+        "proto_settlement_abandoned_due_to_food_pressure_count": 0,
+        "food_scarcity_adaptive_retarget_events": 0,
+        "deaths_before_first_house_completed": 0,
+        "deaths_before_settlement_stability_threshold": 0,
+        "population_collapse_events": 0,
+        "first_house_completion_tick": -1,
+        "first_storage_completion_tick": -1,
+        "first_road_completion_tick": -1,
+        "first_village_formalization_tick": -1,
+        "settlement_proto_count": 0,
+        "settlement_stable_village_count": 0,
+        "settlement_abandoned_count": 0,
+        "storage_built_before_house_count": 0,
+        "road_built_before_house_threshold_count": 0,
+        "startup_survival_relief_ticks": 0,
+        "_dead_agent_ages_sum": 0,
+        "_dead_agent_ages_count": 0,
+        "_dead_agent_ages_sorted": [],
+        "_population_peak_alive": 0,
+        "_population_collapse_active": False,
         "farm_sites_created": 0,
         "farm_work_events": 0,
         "farm_abandoned": 0,
         "farm_yield_events": 0,
+        "farm_yield_units_total": 0,
         "farm_productivity_score_avg": 0.0,
         "agents_farming_count": 0,
         "farm_candidate_detected_count": 0,
@@ -1266,6 +1341,7 @@ class World:
         self.MAX_NEW_VILLAGE_SEEDS = MAX_NEW_VILLAGE_SEEDS
         self.MIN_HOUSES_FOR_VILLAGE = MIN_HOUSES_FOR_VILLAGE
         self.MIN_HOUSES_FOR_LEADER = MIN_HOUSES_FOR_LEADER
+        self.EARLY_SURVIVAL_RELIEF_TICKS = EARLY_SURVIVAL_RELIEF_TICKS
         self.INITIAL_FOUNDER_QUOTA = INITIAL_FOUNDER_QUOTA
         self.founders_assigned = 0
         self.founding_hub: Optional[Coord] = None
@@ -5101,7 +5177,91 @@ class World:
             stats["food_consumed_from_wild_direct"] = int(stats.get("food_consumed_from_wild_direct", 0)) + qty
         self.camp_food_stats = stats
         if isinstance(agent, Agent):
+            self.record_agent_food_relief(agent, source=src)
             self.record_behavior_activity("consume_food", x=int(agent.x), y=int(agent.y), agent=agent, count=qty)
+
+    def record_food_search_failure(self, agent: Optional[Agent], *, resource_type: str = "food") -> None:
+        if str(resource_type or "") != "food":
+            return
+        self.record_settlement_progression_metric("failed_food_seeking_attempts")
+        if isinstance(agent, Agent):
+            setattr(agent, "last_failed_food_search_tick", int(getattr(self, "tick", 0)))
+
+    def record_food_search_fallback_activation(self, agent: Optional[Agent]) -> None:
+        self.record_settlement_progression_metric("fallback_food_search_activations")
+        if isinstance(agent, Agent):
+            setattr(agent, "last_food_search_fallback_tick", int(getattr(self, "tick", 0)))
+
+    def record_agent_food_inventory_acquired(self, agent: Optional[Agent], *, amount: int = 1, source: str = "") -> None:
+        qty = max(0, int(amount))
+        if qty <= 0 or not isinstance(agent, Agent):
+            return
+        tick_now = int(getattr(self, "tick", 0))
+        progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
+        last_acq_tick = int(getattr(agent, "last_food_acquisition_tick", -1))
+        if last_acq_tick >= 0:
+            progression["food_acquisition_interval_ticks_total"] = int(
+                progression.get("food_acquisition_interval_ticks_total", 0)
+            ) + max(0, tick_now - last_acq_tick)
+            progression["food_acquisition_interval_ticks_samples"] = int(
+                progression.get("food_acquisition_interval_ticks_samples", 0)
+            ) + 1
+        progression["food_acquisition_events_total"] = int(
+            progression.get("food_acquisition_events_total", 0)
+        ) + 1
+        last_pos = getattr(agent, "last_food_acquisition_pos", None)
+        if isinstance(last_pos, tuple) and len(last_pos) == 2:
+            dist = abs(int(last_pos[0]) - int(getattr(agent, "x", 0))) + abs(
+                int(last_pos[1]) - int(getattr(agent, "y", 0))
+            )
+            progression["food_acquisition_distance_total"] = int(
+                progression.get("food_acquisition_distance_total", 0)
+            ) + int(max(0, dist))
+            progression["food_acquisition_distance_samples"] = int(
+                progression.get("food_acquisition_distance_samples", 0)
+            ) + 1
+        born_tick = int(getattr(agent, "born_tick", tick_now))
+        age = max(0, tick_now - born_tick)
+        if age <= 320:
+            self.record_settlement_progression_metric("early_life_food_inventory_acquisition_count", qty)
+        setattr(agent, "last_food_acquisition_tick", tick_now)
+        setattr(agent, "last_food_acquisition_pos", (int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0))))
+        if str(source or "") == "wild_direct":
+            setattr(agent, "last_wild_food_acquired_tick", tick_now)
+        self.settlement_progression_stats = progression
+
+    def record_agent_food_relief(self, agent: Optional[Agent], *, source: str = "") -> None:
+        if not isinstance(agent, Agent):
+            return
+        tick_now = int(getattr(self, "tick", 0))
+        progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
+        first_tick = int(getattr(agent, "first_food_relief_tick", -1))
+        if first_tick < 0:
+            setattr(agent, "first_food_relief_tick", tick_now)
+            born_tick = int(getattr(agent, "born_tick", tick_now))
+            latency = max(0, tick_now - born_tick)
+            progression["time_spawn_to_first_food_acquisition_total"] = int(
+                progression.get("time_spawn_to_first_food_acquisition_total", 0)
+            ) + int(latency)
+            progression["time_spawn_to_first_food_acquisition_samples"] = int(
+                progression.get("time_spawn_to_first_food_acquisition_samples", 0)
+            ) + 1
+        last_consume_tick = int(getattr(agent, "last_food_consumption_tick", -1))
+        if last_consume_tick >= 0:
+            progression["food_consumption_interval_ticks_total"] = int(
+                progression.get("food_consumption_interval_ticks_total", 0)
+            ) + max(0, tick_now - last_consume_tick)
+            progression["food_consumption_interval_ticks_samples"] = int(
+                progression.get("food_consumption_interval_ticks_samples", 0)
+            ) + 1
+        setattr(agent, "last_food_consumption_tick", tick_now)
+        high_hunger_enter_tick = int(getattr(agent, "high_hunger_enter_tick", -1))
+        if high_hunger_enter_tick >= 0:
+            latency = max(0, tick_now - high_hunger_enter_tick)
+            progression["time_high_hunger_to_eat_total"] = int(progression.get("time_high_hunger_to_eat_total", 0)) + int(latency)
+            progression["time_high_hunger_to_eat_samples"] = int(progression.get("time_high_hunger_to_eat_samples", 0)) + 1
+            setattr(agent, "high_hunger_enter_tick", -1)
+        self.settlement_progression_stats = progression
 
     def update_camp_food_decay(self) -> None:
         if int(getattr(self, "tick", 0)) % int(CAMP_FOOD_DECAY_INTERVAL_TICKS) != 0:
@@ -5306,6 +5466,76 @@ class World:
             return None
         candidates.sort(key=lambda item: (item[0], item[1], item[2]))
         return (int(candidates[0][1]), int(candidates[0][2]))
+
+    def find_scarcity_adaptive_food_target(
+        self,
+        agent: Agent,
+        *,
+        radius: int = 12,
+    ) -> Optional[Coord]:
+        origin_x = int(getattr(agent, "x", 0))
+        origin_y = int(getattr(agent, "y", 0))
+        pressure = self.compute_local_food_pressure_for_agent(agent, max_distance=LOCAL_FOOD_PRESSURE_RADIUS)
+        severe_pressure = bool(
+            isinstance(pressure, dict)
+            and bool(pressure.get("pressure_active", False))
+            and int(pressure.get("near_food_sources", 0)) <= 0
+            and int(pressure.get("camp_food", 0)) <= 1
+            and int(pressure.get("house_food_nearby", 0)) <= 1
+        )
+        if severe_pressure and bool(pressure.get("has_camp", False)):
+            camp = self.nearest_active_camp_for_agent(agent, max_distance=LOCAL_FOOD_PRESSURE_RADIUS)
+            if isinstance(camp, dict):
+                origin_x = int(camp.get("x", origin_x))
+                origin_y = int(camp.get("y", origin_y))
+
+        search_radius = max(8, int(radius) + (8 if severe_pressure else 0))
+        candidate_rows: List[Tuple[float, int, int, int, int]] = []
+        for fx, fy in self.food:
+            dist_origin = abs(int(fx) - origin_x) + abs(int(fy) - origin_y)
+            if dist_origin > search_radius:
+                continue
+            dist_agent = abs(int(fx) - int(getattr(agent, "x", 0))) + abs(int(fy) - int(getattr(agent, "y", 0)))
+            local_food_cluster = 0
+            for ox, oy in self.food:
+                if abs(int(ox) - int(fx)) + abs(int(oy) - int(fy)) <= 2:
+                    local_food_cluster += 1
+                    if local_food_cluster >= 6:
+                        break
+            contention = 0
+            for other in self.agents:
+                if not getattr(other, "alive", False):
+                    continue
+                if str(getattr(other, "agent_id", "")) == str(getattr(agent, "agent_id", "")):
+                    continue
+                if str(getattr(other, "task", "")) not in {"gather_food_wild", "farm_cycle"}:
+                    continue
+                target = getattr(other, "task_target", None)
+                if isinstance(target, tuple) and len(target) == 2:
+                    if abs(int(target[0]) - int(fx)) + abs(int(target[1]) - int(fy)) <= 1:
+                        contention += 1
+                elif abs(int(getattr(other, "x", 0)) - int(fx)) + abs(int(getattr(other, "y", 0)) - int(fy)) <= 1:
+                    contention += 1
+            patch_activity = float(self._patch_activity_score_at(int(fx), int(fy)))
+            score = (
+                float(local_food_cluster) * 1.8
+                + float(patch_activity) * 0.18
+                - float(dist_agent) * 0.22
+                - float(contention) * 1.35
+            )
+            if severe_pressure:
+                score += float(local_food_cluster) * 0.85
+                score -= float(dist_origin) * 0.08
+            candidate_rows.append((float(score), int(dist_agent), int(contention), int(fx), int(fy)))
+
+        if not candidate_rows:
+            return self._find_nearest_food_to(int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0)), radius=search_radius)
+
+        candidate_rows.sort(key=lambda row: (-float(row[0]), int(row[1]), int(row[2]), int(row[3]), int(row[4])))
+        best = candidate_rows[0]
+        if severe_pressure and hasattr(self, "record_settlement_progression_metric"):
+            self.record_settlement_progression_metric("food_scarcity_adaptive_retarget_events")
+        return (int(best[3]), int(best[4]))
 
     def _find_proto_builder_target(self, camp_pos: Coord) -> Optional[Coord]:
         cx, cy = int(camp_pos[0]), int(camp_pos[1])
@@ -5815,6 +6045,11 @@ class World:
     def record_settlement_progression_build_event(self, building_type: str, building: Optional[Dict[str, Any]]) -> None:
         stats = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
         btype = str(building_type or "").strip().lower()
+        if btype == "house":
+            if int(stats.get("first_house_completion_tick", -1)) < 0:
+                stats["first_house_completion_tick"] = int(getattr(self, "tick", 0))
+            self.settlement_progression_stats = stats
+            return
         if btype != "storage":
             self.settlement_progression_stats = stats
             return
@@ -5830,8 +6065,12 @@ class World:
             return
         seen.add(bid)
         stats["_seen_storage_ids"] = seen
+        if int(stats.get("first_storage_completion_tick", -1)) < 0:
+            stats["first_storage_completion_tick"] = int(getattr(self, "tick", 0))
         stats["storage_emergence_successes"] = int(stats.get("storage_emergence_successes", 0)) + 1
         stats["storage_construction_completed_count"] = int(stats.get("storage_construction_completed_count", 0)) + 1
+        if int(stats.get("first_house_completion_tick", -1)) < 0:
+            stats["storage_built_before_house_count"] = int(stats.get("storage_built_before_house_count", 0)) + 1
         village = self.get_village_by_id(building.get("village_id"))
         if village is not None and self.is_village_surplus_sustained(village):
             stats["surplus_storage_construction_completed"] = int(stats.get("surplus_storage_construction_completed", 0)) + 1
@@ -6210,6 +6449,8 @@ class World:
 
     def update_settlement_progression_metrics(self) -> None:
         stats = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
+        respawn = self.resource_respawn_stats if isinstance(self.resource_respawn_stats, dict) else _default_resource_respawn_stats()
+        stats["food_respawned_total_observed"] = int(respawn.get("food_respawned_total", 0))
         farm_scores: List[float] = []
         for plot in (self.farm_plots or {}).values():
             if not isinstance(plot, dict):
@@ -6229,6 +6470,131 @@ class World:
                 ]
             )
         )
+        alive_agents = [a for a in (self.agents or []) if getattr(a, "alive", False)]
+        alive_count = int(len(alive_agents))
+        stats["population_alive"] = int(alive_count)
+        food_inventory_total_tick = int(
+            sum(
+                int(getattr(a, "inventory", {}).get("food", 0))
+                for a in alive_agents
+                if isinstance(getattr(a, "inventory", {}), dict)
+            )
+        )
+        stats["agent_food_inventory_total"] = int(stats.get("agent_food_inventory_total", 0)) + int(food_inventory_total_tick)
+        stats["agent_food_inventory_samples"] = int(stats.get("agent_food_inventory_samples", 0)) + int(max(1, alive_count))
+        food_tasks = {"gather_food_wild", "farm_cycle", "camp_supply_food", "food_logistics"}
+        food_seekers_tick = int(sum(1 for a in alive_agents if str(getattr(a, "task", "")) in food_tasks))
+        stats["food_seeking_ticks_total"] = int(stats.get("food_seeking_ticks_total", 0)) + int(food_seekers_tick)
+        stats["agent_ticks_total"] = int(stats.get("agent_ticks_total", 0)) + int(max(1, alive_count))
+        moving_for_food = 0
+        for a in alive_agents:
+            if str(getattr(a, "task", "")) not in {"gather_food_wild", "farm_cycle"}:
+                continue
+            apos = (int(getattr(a, "x", 0)), int(getattr(a, "y", 0)))
+            if apos in self.food:
+                continue
+            moving_for_food += 1
+        stats["food_move_ticks_total"] = int(stats.get("food_move_ticks_total", 0)) + int(moving_for_food)
+        target_counts: Dict[Tuple[int, int], int] = {}
+        for a in alive_agents:
+            if str(getattr(a, "task", "")) not in {"gather_food_wild", "farm_cycle"}:
+                continue
+            target = getattr(a, "task_target", None)
+            if not (isinstance(target, tuple) and len(target) == 2):
+                continue
+            key = (int(target[0]), int(target[1]))
+            target_counts[key] = int(target_counts.get(key, 0)) + 1
+        contention_events = int(sum(max(0, c - 1) for c in target_counts.values() if int(c) > 1))
+        if contention_events > 0:
+            stats["food_source_contention_events"] = int(stats.get("food_source_contention_events", 0)) + int(contention_events)
+        active_camps = [c for c in (self.camps or {}).values() if isinstance(c, dict) and bool(c.get("active", False))]
+        prev_accessible = stats.get("_food_basin_prev_accessible_by_camp", {})
+        if not isinstance(prev_accessible, dict):
+            prev_accessible = {}
+        next_accessible: Dict[str, int] = {}
+        severe_pressure_ticks = 0
+        for camp in active_camps:
+            camp_id = str(camp.get("camp_id", ""))
+            cx = int(camp.get("x", 0))
+            cy = int(camp.get("y", 0))
+            basin_radius = 8
+            accessible = int(self._count_food_near(cx, cy, radius=basin_radius))
+            competing = int(
+                sum(
+                    1
+                    for a in alive_agents
+                    if abs(int(getattr(a, "x", 0)) - cx) + abs(int(getattr(a, "y", 0)) - cy) <= basin_radius
+                    and str(getattr(a, "task", "")) in {"gather_food_wild", "farm_cycle", "camp_supply_food", "food_logistics"}
+                )
+            )
+            demand = max(1, int(competing))
+            ratio = float(demand) / float(max(1, accessible))
+            nearest = self._find_nearest_food_to(cx, cy, radius=16)
+            nearest_dist = int(abs(int(nearest[0]) - cx) + abs(int(nearest[1]) - cy)) if isinstance(nearest, tuple) else 17
+            stats["local_food_basin_accessible_total"] = int(stats.get("local_food_basin_accessible_total", 0)) + int(accessible)
+            stats["local_food_basin_accessible_samples"] = int(stats.get("local_food_basin_accessible_samples", 0)) + 1
+            stats["local_food_basin_pressure_ratio_total"] = float(stats.get("local_food_basin_pressure_ratio_total", 0.0)) + float(ratio)
+            stats["local_food_basin_pressure_ratio_samples"] = int(stats.get("local_food_basin_pressure_ratio_samples", 0)) + 1
+            stats["local_food_basin_competing_agents_total"] = int(stats.get("local_food_basin_competing_agents_total", 0)) + int(competing)
+            stats["local_food_basin_competing_agents_samples"] = int(stats.get("local_food_basin_competing_agents_samples", 0)) + 1
+            stats["local_food_basin_nearest_food_distance_total"] = int(
+                stats.get("local_food_basin_nearest_food_distance_total", 0)
+            ) + int(nearest_dist)
+            stats["local_food_basin_nearest_food_distance_samples"] = int(
+                stats.get("local_food_basin_nearest_food_distance_samples", 0)
+            ) + 1
+            severe = bool((accessible <= 0 and competing >= 2) or ratio >= 1.8)
+            if severe:
+                severe_pressure_ticks += 1
+            prev_val = int(prev_accessible.get(camp_id, accessible))
+            if prev_val > 0 and accessible <= 0:
+                stats["local_food_basin_collapse_events"] = int(stats.get("local_food_basin_collapse_events", 0)) + 1
+            next_accessible[camp_id] = int(accessible)
+        if severe_pressure_ticks > 0:
+            stats["local_food_basin_severe_pressure_ticks"] = int(
+                stats.get("local_food_basin_severe_pressure_ticks", 0)
+            ) + int(severe_pressure_ticks)
+        stats["_food_basin_prev_accessible_by_camp"] = next_accessible
+        dead_count = int(stats.get("population_deaths_count", 0))
+        birth_count = int(stats.get("population_births_count", 0))
+        stats["population_net_change"] = int(birth_count - dead_count)
+        alive_ages: List[int] = []
+        for agent in alive_agents:
+            born_tick = int(getattr(agent, "born_tick", int(getattr(self, "tick", 0))))
+            alive_ages.append(max(0, int(getattr(self, "tick", 0)) - born_tick))
+        stats["agent_average_age"] = round(float(sum(alive_ages)) / float(max(1, len(alive_ages))), 4) if alive_ages else 0.0
+        peak_alive = max(int(stats.get("_population_peak_alive", 0)), alive_count)
+        stats["_population_peak_alive"] = int(peak_alive)
+        collapse_trigger = int(round(float(peak_alive) * 0.6))
+        collapse_active = bool(stats.get("_population_collapse_active", False))
+        if peak_alive >= 8 and alive_count <= max(3, collapse_trigger):
+            if not collapse_active:
+                stats["population_collapse_events"] = int(stats.get("population_collapse_events", 0)) + 1
+                stats["_population_collapse_active"] = True
+        elif collapse_active and alive_count >= max(4, int(round(float(peak_alive) * 0.75))):
+            stats["_population_collapse_active"] = False
+        formalized_villages = [
+            v for v in (self.villages or [])
+            if isinstance(v, dict) and bool(v.get("formalized", False))
+        ]
+        proto_villages = [
+            v for v in (self.villages or [])
+            if isinstance(v, dict) and not bool(v.get("formalized", False))
+        ]
+        stats["settlement_proto_count"] = int(len(proto_villages))
+        stats["settlement_stable_village_count"] = int(
+            len([v for v in formalized_villages if int(v.get("stability_ticks", 0)) >= int(SETTLEMENT_STABILITY_TICK_THRESHOLD)])
+        )
+        abandoned_due_food = 0
+        for v in (self.villages or []):
+            if not isinstance(v, dict):
+                continue
+            if not bool(v.get("abandoned", False)):
+                continue
+            needs = v.get("needs", {})
+            if isinstance(needs, dict) and bool(needs.get("food_urgent", False) or needs.get("food_low", False)):
+                abandoned_due_food += 1
+        stats["proto_settlement_abandoned_due_to_food_pressure_count"] = int(abandoned_due_food)
         food_rate_sum_scaled = 0
         resource_rate_sum_scaled = 0
         rate_samples = 0
@@ -6476,11 +6842,152 @@ class World:
         work_ticks_per_builder_samples = int(stats.get("construction_site_work_ticks_per_builder_samples", 0))
         delivery_to_work_gap_samples = int(stats.get("construction_site_delivery_to_work_gap_samples", 0))
         active_age_ticks_samples = int(stats.get("construction_site_active_age_ticks_samples", 0))
+        first_food_latency_samples = int(stats.get("time_spawn_to_first_food_acquisition_samples", 0))
+        high_hunger_latency_samples = int(stats.get("time_high_hunger_to_eat_samples", 0))
+        acquisition_interval_samples = int(stats.get("food_acquisition_interval_ticks_samples", 0))
+        acquisition_distance_samples = int(stats.get("food_acquisition_distance_samples", 0))
+        consumption_interval_samples = int(stats.get("food_consumption_interval_ticks_samples", 0))
+        food_inventory_samples = int(stats.get("agent_food_inventory_samples", 0))
+        agent_tick_samples = int(stats.get("agent_ticks_total", 0))
+        basin_access_samples = int(stats.get("local_food_basin_accessible_samples", 0))
+        basin_ratio_samples = int(stats.get("local_food_basin_pressure_ratio_samples", 0))
+        basin_compete_samples = int(stats.get("local_food_basin_competing_agents_samples", 0))
+        basin_distance_samples = int(stats.get("local_food_basin_nearest_food_distance_samples", 0))
+        dead_age_list = stats.get("_dead_agent_ages_sorted", [])
+        if not isinstance(dead_age_list, list):
+            dead_age_list = []
+        dead_age_sorted = sorted(int(max(0, a)) for a in dead_age_list)
+        dead_age_count = int(len(dead_age_sorted))
+        dead_age_median = 0.0
+        if dead_age_count > 0:
+            mid = dead_age_count // 2
+            if dead_age_count % 2 == 1:
+                dead_age_median = float(dead_age_sorted[mid])
+            else:
+                dead_age_median = (float(dead_age_sorted[mid - 1]) + float(dead_age_sorted[mid])) / 2.0
+        dead_age_avg = float(stats.get("_dead_agent_ages_sum", 0)) / float(max(1, int(stats.get("_dead_agent_ages_count", 0))))
         return {
+            "population_alive": int(stats.get("population_alive", 0)),
+            "population_births_count": int(stats.get("population_births_count", 0)),
+            "population_deaths_count": int(stats.get("population_deaths_count", 0)),
+            "population_deaths_hunger_count": int(stats.get("population_deaths_hunger_count", 0)),
+            "population_deaths_exhaustion_count": int(stats.get("population_deaths_exhaustion_count", 0)),
+            "population_deaths_other_count": int(stats.get("population_deaths_other_count", 0)),
+            "population_deaths_hunger_age_0_199_count": int(stats.get("population_deaths_hunger_age_0_199_count", 0)),
+            "population_deaths_hunger_age_200_599_count": int(stats.get("population_deaths_hunger_age_200_599_count", 0)),
+            "population_deaths_hunger_age_600_plus_count": int(stats.get("population_deaths_hunger_age_600_plus_count", 0)),
+            "hunger_deaths_before_first_food_acquisition": int(
+                stats.get("hunger_deaths_before_first_food_acquisition", 0)
+            ),
+            "population_net_change": int(stats.get("population_net_change", 0)),
+            "agent_average_age": float(stats.get("agent_average_age", 0.0)),
+            "agent_median_age_at_death": round(float(dead_age_median), 4),
+            "agent_average_lifespan_at_death": round(float(dead_age_avg), 4),
+            "avg_time_spawn_to_first_food_acquisition": round(
+                float(stats.get("time_spawn_to_first_food_acquisition_total", 0))
+                / float(max(1, first_food_latency_samples)),
+                4,
+            ),
+            "avg_time_high_hunger_to_eat": round(
+                float(stats.get("time_high_hunger_to_eat_total", 0))
+                / float(max(1, high_hunger_latency_samples)),
+                4,
+            ),
+            "avg_food_acquisition_interval_ticks": round(
+                float(stats.get("food_acquisition_interval_ticks_total", 0))
+                / float(max(1, acquisition_interval_samples)),
+                4,
+            ),
+            "avg_food_acquisition_distance": round(
+                float(stats.get("food_acquisition_distance_total", 0))
+                / float(max(1, acquisition_distance_samples)),
+                4,
+            ),
+            "avg_food_consumption_interval_ticks": round(
+                float(stats.get("food_consumption_interval_ticks_total", 0))
+                / float(max(1, consumption_interval_samples)),
+                4,
+            ),
+            "failed_food_seeking_attempts": int(stats.get("failed_food_seeking_attempts", 0)),
+            "fallback_food_search_activations": int(stats.get("fallback_food_search_activations", 0)),
+            "early_life_food_inventory_acquisition_count": int(
+                stats.get("early_life_food_inventory_acquisition_count", 0)
+            ),
+            "high_hunger_to_eat_events_started": int(stats.get("high_hunger_to_eat_events_started", 0)),
+            "agent_hunger_relapse_after_first_food_count": int(
+                stats.get("agent_hunger_relapse_after_first_food_count", 0)
+            ),
+            "early_food_priority_overrides": int(stats.get("early_food_priority_overrides", 0)),
+            "medium_term_food_priority_overrides": int(stats.get("medium_term_food_priority_overrides", 0)),
+            "avg_local_food_inventory_per_agent": round(
+                float(stats.get("agent_food_inventory_total", 0)) / float(max(1, food_inventory_samples)),
+                4,
+            ),
+            "food_seeking_time_ratio": round(
+                float(stats.get("food_seeking_ticks_total", 0)) / float(max(1, agent_tick_samples)),
+                4,
+            ),
+            "food_source_contention_events": int(stats.get("food_source_contention_events", 0)),
+            "food_source_depletion_events": int(stats.get("food_source_depletion_events", 0)),
+            "food_respawned_total_observed": int(stats.get("food_respawned_total_observed", 0)),
+            "food_acquisition_events_total": int(stats.get("food_acquisition_events_total", 0)),
+            "avg_foraging_yield_per_trip": round(
+                float((self.production_metrics if isinstance(self.production_metrics, dict) else {}).get("total_food_gathered", 0))
+                / float(max(1, int(stats.get("food_acquisition_events_total", 0)))),
+                4,
+            ),
+            "food_move_time_ratio": round(
+                float(stats.get("food_move_ticks_total", 0)) / float(max(1, agent_tick_samples)),
+                4,
+            ),
+            "food_harvest_time_ratio": round(
+                float(stats.get("food_harvest_ticks_total", 0)) / float(max(1, agent_tick_samples)),
+                4,
+            ),
+            "avg_local_food_basin_accessible": round(
+                float(stats.get("local_food_basin_accessible_total", 0)) / float(max(1, basin_access_samples)),
+                4,
+            ),
+            "avg_local_food_pressure_ratio": round(
+                float(stats.get("local_food_basin_pressure_ratio_total", 0.0)) / float(max(1, basin_ratio_samples)),
+                4,
+            ),
+            "avg_local_food_basin_competing_agents": round(
+                float(stats.get("local_food_basin_competing_agents_total", 0)) / float(max(1, basin_compete_samples)),
+                4,
+            ),
+            "avg_distance_to_viable_food_from_proto": round(
+                float(stats.get("local_food_basin_nearest_food_distance_total", 0)) / float(max(1, basin_distance_samples)),
+                4,
+            ),
+            "local_food_basin_severe_pressure_ticks": int(stats.get("local_food_basin_severe_pressure_ticks", 0)),
+            "local_food_basin_collapse_events": int(stats.get("local_food_basin_collapse_events", 0)),
+            "proto_settlement_abandoned_due_to_food_pressure_count": int(
+                stats.get("proto_settlement_abandoned_due_to_food_pressure_count", 0)
+            ),
+            "food_scarcity_adaptive_retarget_events": int(stats.get("food_scarcity_adaptive_retarget_events", 0)),
+            "deaths_before_first_house_completed": int(stats.get("deaths_before_first_house_completed", 0)),
+            "deaths_before_settlement_stability_threshold": int(stats.get("deaths_before_settlement_stability_threshold", 0)),
+            "population_collapse_events": int(stats.get("population_collapse_events", 0)),
+            "first_house_completion_tick": int(stats.get("first_house_completion_tick", -1)),
+            "first_storage_completion_tick": int(stats.get("first_storage_completion_tick", -1)),
+            "first_road_completion_tick": int(stats.get("first_road_completion_tick", -1)),
+            "first_village_formalization_tick": int(stats.get("first_village_formalization_tick", -1)),
+            "settlement_proto_count": int(stats.get("settlement_proto_count", 0)),
+            "settlement_stable_village_count": int(stats.get("settlement_stable_village_count", 0)),
+            "settlement_abandoned_count": int(stats.get("settlement_abandoned_count", 0)),
+            "storage_built_before_house_count": int(stats.get("storage_built_before_house_count", 0)),
+            "road_built_before_house_threshold_count": int(stats.get("road_built_before_house_threshold_count", 0)),
+            "startup_survival_relief_ticks": int(stats.get("startup_survival_relief_ticks", 0)),
             "farm_sites_created": int(stats.get("farm_sites_created", 0)),
             "farm_work_events": int(stats.get("farm_work_events", 0)),
             "farm_abandoned": int(stats.get("farm_abandoned", 0)),
             "farm_yield_events": int(stats.get("farm_yield_events", 0)),
+            "farm_yield_units_total": int(stats.get("farm_yield_units_total", 0)),
+            "avg_farming_yield_per_cycle": round(
+                float(stats.get("farm_yield_units_total", 0)) / float(max(1, int(stats.get("farm_yield_events", 0)))),
+                4,
+            ),
             "farm_productivity_score_avg": float(stats.get("farm_productivity_score_avg", 0.0)),
             "agents_farming_count": int(stats.get("agents_farming_count", 0)),
             "farm_candidate_detected_count": int(stats.get("farm_candidate_detected_count", 0)),
@@ -6721,6 +7228,16 @@ class World:
             "storage_attempts": int(storage_attempts),
             "storage_completed_count": int(storage_completions),
             "storage_completion_rate": round(float(storage_completion_rate), 4),
+            "food_gathered_total_observed": int(
+                (self.production_metrics if isinstance(self.production_metrics, dict) else {}).get("total_food_gathered", 0)
+            ),
+            "food_consumed_total_observed": int(
+                int((self.camp_food_stats if isinstance(self.camp_food_stats, dict) else {}).get("food_consumed_from_inventory", 0))
+                + int((self.camp_food_stats if isinstance(self.camp_food_stats, dict) else {}).get("food_consumed_from_camp", 0))
+                + int((self.camp_food_stats if isinstance(self.camp_food_stats, dict) else {}).get("food_consumed_from_domestic", 0))
+                + int((self.camp_food_stats if isinstance(self.camp_food_stats, dict) else {}).get("food_consumed_from_storage", 0))
+                + int((self.camp_food_stats if isinstance(self.camp_food_stats, dict) else {}).get("food_consumed_from_wild_direct", 0))
+            ),
             "local_food_surplus_rate": round(float(food_rate / float(max(1, rate_samples))), 4),
             "local_resource_surplus_rate": round(float(resource_rate / float(max(1, rate_samples))), 4),
             "buffer_saturation_events": int(stats.get("buffer_saturation_events", 0)),
@@ -7147,10 +7664,17 @@ class World:
 
     def record_road_purpose_decision(self, *, village_uid: Optional[str], built: bool, reason: str) -> None:
         stats = self.progression_stats if isinstance(self.progression_stats, dict) else _default_progression_stats()
+        progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
         uid = str(village_uid or "")
         reason_key = str(reason or "unknown")
         if built:
             stats["road_built_with_purpose_count"] = int(stats.get("road_built_with_purpose_count", 0)) + 1
+            if int(progression.get("first_road_completion_tick", -1)) < 0:
+                progression["first_road_completion_tick"] = int(getattr(self, "tick", 0))
+            if int(progression.get("first_house_completion_tick", -1)) < 0:
+                progression["road_built_before_house_threshold_count"] = int(
+                    progression.get("road_built_before_house_threshold_count", 0)
+                ) + 1
         else:
             stats["road_build_suppressed_no_purpose"] = int(stats.get("road_build_suppressed_no_purpose", 0)) + 1
             global_reasons = stats.setdefault("road_build_suppressed_reasons", {})
@@ -7176,6 +7700,7 @@ class World:
                 vreasons = entry.setdefault("road_build_suppressed_reasons", {})
                 vreasons[reason_key] = int(vreasons.get(reason_key, 0)) + 1
         self.progression_stats = stats
+        self.settlement_progression_stats = progression
 
     def should_defer_road_growth_for_village(self, village: Dict[str, Any]) -> Tuple[bool, str]:
         if not isinstance(village, dict):
@@ -7185,14 +7710,20 @@ class World:
         metrics = village.get("metrics", {}) if isinstance(village.get("metrics"), dict) else {}
         pop = int(metrics.get("population", village.get("population", 0)))
         houses = int(village.get("houses", 0))
+        formalized = bool(village.get("formalized", True))
+        stability_ticks = int(village.get("stability_ticks", int(SETTLEMENT_STABILITY_TICK_THRESHOLD)))
         food_stock = int(metrics.get("food_stock", (village.get("storage", {}) or {}).get("food", 0)))
         food_buffer_critical = bool(needs.get("food_buffer_critical", False))
         camps = self.compute_progression_snapshot().get("active_camps_by_village", {})
         camp_count = int(camps.get(uid, 0)) if isinstance(camps, dict) else 0
         reason = ""
-        if pop < 5:
+        if not formalized:
+            reason = "village_not_formalized"
+        elif stability_ticks < int(SETTLEMENT_STABILITY_TICK_THRESHOLD):
+            reason = "village_not_stable_yet"
+        elif pop < 5:
             reason = "population_too_low"
-        elif houses < 2 and camp_count <= 0:
+        elif houses < 3 and camp_count <= 0:
             reason = "no_settlement_anchor"
         elif food_buffer_critical or food_stock < max(3, pop // 2):
             reason = "food_crisis_active"
@@ -7936,6 +8467,51 @@ class World:
     def set_agent_dead(self, agent: Agent, reason: str = "unknown") -> None:
         if not agent.alive:
             return
+        progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
+        progression["population_deaths_count"] = int(progression.get("population_deaths_count", 0)) + 1
+        reason_key = str(reason or "unknown").strip().lower()
+        if reason_key == "hunger":
+            progression["population_deaths_hunger_count"] = int(progression.get("population_deaths_hunger_count", 0)) + 1
+            first_food_relief_tick = int(getattr(agent, "first_food_relief_tick", -1))
+            if first_food_relief_tick < 0:
+                progression["hunger_deaths_before_first_food_acquisition"] = int(
+                    progression.get("hunger_deaths_before_first_food_acquisition", 0)
+                ) + 1
+        elif reason_key in {"exhaustion", "fatigue", "sleep_failure"}:
+            progression["population_deaths_exhaustion_count"] = int(progression.get("population_deaths_exhaustion_count", 0)) + 1
+        else:
+            progression["population_deaths_other_count"] = int(progression.get("population_deaths_other_count", 0)) + 1
+        if int(progression.get("first_house_completion_tick", -1)) < 0:
+            progression["deaths_before_first_house_completed"] = int(
+                progression.get("deaths_before_first_house_completed", 0)
+            ) + 1
+        if int(progression.get("first_village_formalization_tick", -1)) < 0:
+            progression["deaths_before_settlement_stability_threshold"] = int(
+                progression.get("deaths_before_settlement_stability_threshold", 0)
+            ) + 1
+        born_tick = int(getattr(agent, "born_tick", int(getattr(self, "tick", 0))))
+        age = max(0, int(getattr(self, "tick", 0)) - born_tick)
+        if reason_key == "hunger":
+            if age <= 199:
+                progression["population_deaths_hunger_age_0_199_count"] = int(
+                    progression.get("population_deaths_hunger_age_0_199_count", 0)
+                ) + 1
+            elif age <= 599:
+                progression["population_deaths_hunger_age_200_599_count"] = int(
+                    progression.get("population_deaths_hunger_age_200_599_count", 0)
+                ) + 1
+            else:
+                progression["population_deaths_hunger_age_600_plus_count"] = int(
+                    progression.get("population_deaths_hunger_age_600_plus_count", 0)
+                ) + 1
+        progression["_dead_agent_ages_sum"] = int(progression.get("_dead_agent_ages_sum", 0)) + int(age)
+        progression["_dead_agent_ages_count"] = int(progression.get("_dead_agent_ages_count", 0)) + 1
+        dead_ages = progression.get("_dead_agent_ages_sorted", [])
+        if not isinstance(dead_ages, list):
+            dead_ages = []
+        dead_ages.append(int(age))
+        progression["_dead_agent_ages_sorted"] = dead_ages
+        self.settlement_progression_stats = progression
         agent.alive = False
         self.emit_event(
             "agent_died",
@@ -8094,6 +8670,10 @@ class World:
             agent.inventory["stone"] = max(agent.inventory.get("stone", 0), HOUSE_STONE_COST)
 
         self.agents.append(agent)
+        progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
+        if str(getattr(agent, "spawn_origin", "")).strip().lower() == "reproduction":
+            progression["population_births_count"] = int(progression.get("population_births_count", 0)) + 1
+        self.settlement_progression_stats = progression
         self.emit_event(
             "agent_born",
             {
@@ -8621,8 +9201,12 @@ class World:
         if pos in self.food:
             hunger_before = float(getattr(agent, "hunger", 100.0))
             self.food.remove(pos)
+            if hasattr(self, "record_settlement_progression_metric"):
+                self.record_settlement_progression_metric("food_source_depletion_events")
+                self.record_settlement_progression_metric("food_harvest_ticks_total")
             if agent.inventory_space() > 0:
                 agent.inventory["food"] = agent.inventory.get("food", 0) + 1
+                self.record_agent_food_inventory_acquired(agent, amount=1, source="wild_direct")
             agent.hunger += FOOD_EAT_GAIN
             if agent.hunger > 100:
                 agent.hunger = 100
