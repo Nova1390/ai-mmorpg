@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import types
+
 from agent import Agent, EARLY_FOOD_RELIABILITY_TICKS
 from world import World
 
@@ -204,6 +206,175 @@ def test_food_continuity_intervals_and_relapse_are_recorded() -> None:
     assert int(snap.get("agent_hunger_relapse_after_first_food_count", 0)) >= 1
 
 
+def test_local_food_handoff_transfers_food_between_nearby_agents() -> None:
+    world = _world()
+    donor = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    donor.hunger = 70.0
+    donor.inventory["food"] = 3
+    receiver = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    receiver.hunger = 19.0
+    receiver.inventory["food"] = 0
+    world.agents = [donor, receiver]
+    world.tick = 120
+
+    world.run_local_food_handoff_pass()
+
+    assert int(donor.inventory.get("food", 0)) == 2
+    assert int(receiver.inventory.get("food", 0)) == 1
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("local_food_handoff_events", 0)) >= 1
+    assert int(snap.get("local_food_handoff_units", 0)) >= 1
+
+
+def test_hunger_relief_after_local_handoff_records_on_inventory_consumption() -> None:
+    world = _world()
+    donor = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    donor.hunger = 70.0
+    donor.inventory["food"] = 3
+    receiver = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    receiver.hunger = 19.0
+    receiver.inventory["food"] = 0
+    world.agents = [donor, receiver]
+    world.tick = 140
+
+    world.run_local_food_handoff_pass()
+    receiver.eat_if_needed(world)
+
+    snap = world.compute_settlement_progression_snapshot()
+    assert float(snap.get("hunger_relief_after_local_handoff", 0.0)) > 0.0
+
+
+def test_local_food_handoff_cooldown_blocks_immediate_repeat() -> None:
+    world = _world()
+    donor = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    donor.hunger = 80.0
+    donor.inventory["food"] = 3
+    receiver = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    receiver.hunger = 19.0
+    receiver.inventory["food"] = 0
+    world.agents = [donor, receiver]
+    world.tick = 200
+
+    world.run_local_food_handoff_pass()
+    first_donor_food = int(donor.inventory.get("food", 0))
+    receiver.inventory["food"] = 0
+    world.tick = 201
+    world.run_local_food_handoff_pass()
+
+    assert int(donor.inventory.get("food", 0)) == first_donor_food
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("handoff_blocked_by_cooldown_count", 0)) >= 1
+
+
+def test_local_food_handoff_blocked_by_group_priority_under_crisis_pressure() -> None:
+    world = _world()
+    donor = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    donor.hunger = 80.0
+    donor.inventory["food"] = 3
+    receiver = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    receiver.hunger = 19.0
+    receiver.inventory["food"] = 0
+    world.agents = [donor, receiver]
+    world.tick = 250
+
+    def _mock_pressure(self, agent, max_distance=8):
+        return {
+            "pressure_active": True,
+            "unmet_pressure": True,
+            "camp_food": 0,
+            "nearby_needy_agents": 3,
+        }
+
+    world.compute_local_food_pressure_for_agent = types.MethodType(_mock_pressure, world)
+    world.run_local_food_handoff_pass()
+
+    assert int(donor.inventory.get("food", 0)) == 3
+    assert int(receiver.inventory.get("food", 0)) == 0
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("handoff_blocked_by_group_priority_count", 0)) >= 1
+
+
+def test_local_food_handoff_blocked_by_receiver_viability_when_adjacent_food_exists() -> None:
+    world = _world()
+    donor = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    donor.hunger = 80.0
+    donor.inventory["food"] = 3
+    receiver = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    receiver.hunger = 19.0
+    receiver.inventory["food"] = 0
+    world.food.add((11, 11))
+    world.agents = [donor, receiver]
+    world.tick = 300
+
+    world.run_local_food_handoff_pass()
+
+    assert int(donor.inventory.get("food", 0)) == 3
+    assert int(receiver.inventory.get("food", 0)) == 0
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("handoff_blocked_by_receiver_viability", 0)) >= 1
+
+
+def test_local_food_handoff_allows_critical_receiver_despite_adjacent_food() -> None:
+    world = _world()
+    donor = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    donor.hunger = 80.0
+    donor.inventory["food"] = 3
+    receiver = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    receiver.hunger = 10.0
+    receiver.inventory["food"] = 0
+    world.food.add((11, 11))
+    world.agents = [donor, receiver]
+    world.tick = 305
+
+    world.run_local_food_handoff_pass()
+
+    assert int(donor.inventory.get("food", 0)) == 2
+    assert int(receiver.inventory.get("food", 0)) == 1
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("local_food_handoff_events", 0)) >= 1
+
+
+def test_local_food_handoff_blocked_by_camp_fragility() -> None:
+    world = _world()
+    world.camps["camp-001"] = _camp(x=10, y=10, food_cache=1)
+    donor = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    donor.hunger = 80.0
+    donor.inventory["food"] = 3
+    receiver = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    receiver.hunger = 19.0
+    receiver.inventory["food"] = 0
+    world.agents = [donor, receiver]
+    world.tick = 320
+
+    world.run_local_food_handoff_pass()
+
+    assert int(donor.inventory.get("food", 0)) == 3
+    assert int(receiver.inventory.get("food", 0)) == 0
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("handoff_blocked_by_camp_fragility", 0)) >= 1
+
+
+def test_camp_fragility_diagnostics_capture_block_context() -> None:
+    world = _world()
+    world.camps["camp-001"] = _camp(x=10, y=10, food_cache=1)
+    donor = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    donor.hunger = 85.0
+    donor.inventory["food"] = 4
+    receiver = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    receiver.hunger = 10.0
+    receiver.inventory["food"] = 0
+    world.agents = [donor, receiver]
+    world.tick = 340
+
+    world.run_local_food_handoff_pass()
+
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("handoff_blocked_by_camp_fragility_when_receiver_critical_count", 0)) >= 1
+    assert int(snap.get("handoff_blocked_by_camp_fragility_when_donor_safe_count", 0)) >= 1
+    assert float(snap.get("avg_handoff_blocked_by_camp_fragility_donor_food", 0.0)) >= 4.0
+    assert float(snap.get("avg_handoff_blocked_by_camp_fragility_receiver_hunger", 0.0)) <= 10.0
+
+
 def test_scarcity_adaptive_food_target_avoids_high_contention_when_possible() -> None:
     world = _world()
     world.food.update({(9, 8), (14, 8)})
@@ -238,3 +409,358 @@ def test_local_food_basin_metrics_are_exposed_in_snapshot() -> None:
     assert "avg_local_food_pressure_ratio" in snap
     assert "avg_distance_to_viable_food_from_proto" in snap
     assert "food_scarcity_adaptive_retarget_events" in snap
+
+
+def test_foraging_trip_harvest_updates_trip_efficiency_metrics() -> None:
+    world = _world()
+    world.food.add((8, 8))
+    a = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    a.task = "gather_food_wild"
+    a.foraging_trip_active = True
+    a.foraging_trip_move_ticks = 5
+    world.add_agent(a)
+
+    world.autopickup(a)
+    world.record_settlement_progression_metric("foraging_trip_completed_count")
+    world.record_settlement_progression_metric("foraging_trip_movement_ticks_total", int(a.foraging_trip_move_ticks))
+    world.record_settlement_progression_metric("foraging_trip_food_gained_total", int(a.foraging_trip_harvest_units))
+    world.record_settlement_progression_metric("foraging_trip_harvest_actions_total", int(a.foraging_trip_harvest_actions))
+    world.settlement_progression_stats["foraging_trip_efficiency_ratio_sum"] = (
+        float(a.foraging_trip_harvest_units) / float(max(1, a.foraging_trip_move_ticks))
+    )
+    world.settlement_progression_stats["foraging_trip_efficiency_ratio_samples"] = 1
+
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("foraging_trip_completed_count", 0)) >= 1
+    assert int(snap.get("foraging_source_visit_count", 0)) >= 0
+    assert float(snap.get("avg_foraging_trip_move_before_first_harvest", 0.0)) >= 5.0
+    assert float(snap.get("avg_foraging_trip_efficiency_ratio", 0.0)) > 0.0
+
+
+def test_foraging_commitment_hold_applies_in_high_pressure() -> None:
+    world = _world()
+    world.tick = 300
+    world.food.add((9, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 46.0
+    agent.inventory["food"] = 1
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 1
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 1,
+            "camp_food": 0,
+            "house_food_nearby": 0,
+            "nearby_needy_agents": 2,
+            "pressure_active": True,
+        }
+
+    def _role_update(self, _world):
+        self.task = "gather_materials"
+
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+
+    assert str(agent.task) == "gather_food_wild"
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("foraging_commitment_hold_overrides", 0)) >= 1
+
+
+def test_foraging_commitment_hold_stays_fluid_in_low_pressure() -> None:
+    world = _world()
+    world.tick = 300
+    world.food.add((9, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 46.0
+    agent.inventory["food"] = 6
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 2
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 4,
+            "camp_food": 1,
+            "house_food_nearby": 1,
+            "nearby_needy_agents": 1,
+            "pressure_active": False,
+        }
+
+    def _role_update(self, _world):
+        self.task = "gather_materials"
+
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+
+    assert str(agent.task) == "gather_materials"
+
+
+def test_foraging_high_pressure_hysteresis_keeps_regime_stable() -> None:
+    world = _world()
+    world.tick = 320
+    world.food.add((9, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 44.0
+    agent.inventory["food"] = 1
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 1
+    agent.foraging_pressure_regime = "high"
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 2,
+            "camp_food": 1,
+            "house_food_nearby": 0,
+            "nearby_needy_agents": 4,  # ratio=1.33 (below high-enter, above high-exit)
+            "pressure_active": True,
+        }
+
+    def _role_update(self, _world):
+        self.task = "gather_materials"
+
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+
+    assert str(agent.foraging_pressure_regime) == "high"
+    assert str(agent.task) == "gather_food_wild"
+
+
+def test_foraging_high_pressure_hysteresis_can_exit_to_medium() -> None:
+    world = _world()
+    world.tick = 320
+    world.food.add((9, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 44.0
+    agent.inventory["food"] = 1
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 1
+    agent.foraging_pressure_regime = "high"
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 2,
+            "camp_food": 1,
+            "house_food_nearby": 1,
+            "nearby_needy_agents": 2,  # ratio=0.5
+            "pressure_active": False,
+        }
+
+    def _role_update(self, _world):
+        self.task = "gather_materials"
+
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+
+    assert str(agent.foraging_pressure_regime) in {"low", "medium"}
+    assert str(agent.task) == "gather_materials"
+
+
+def test_post_first_harvest_patch_persistence_holds_trip_in_medium_pressure() -> None:
+    world = _world()
+    world.tick = 480
+    world.food.add((8, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 46.0
+    agent.inventory["food"] = 1
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 1
+    agent.foraging_trip_first_harvest_tick = 478
+    agent.task_target = (8, 8)
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 2,
+            "camp_food": 1,
+            "house_food_nearby": 0,
+            "nearby_needy_agents": 3,  # ratio = 1.0 -> medium
+            "pressure_active": False,
+        }
+
+    def _role_update(self, _world):
+        self.task = "gather_materials"
+
+    agent.foraging_pressure_regime = "medium"
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+
+    assert str(agent.task) == "gather_food_wild"
+
+
+def test_post_first_harvest_hold_can_handoff_to_nearby_patch() -> None:
+    world = _world()
+    world.tick = 500
+    world.food.add((9, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 48.0
+    agent.inventory["food"] = 6
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 1
+    agent.foraging_trip_first_harvest_tick = 498
+    agent.task_target = (8, 8)  # depleted target
+    agent.foraging_trip_target = (8, 8)
+    agent.foraging_pressure_regime = "high"
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 1,
+            "camp_food": 0,
+            "house_food_nearby": 0,
+            "nearby_needy_agents": 2,
+            "pressure_active": True,
+        }
+
+    def _role_update(self, _world):
+        self.task = "gather_materials"
+
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+
+    assert str(agent.task) == "gather_food_wild"
+    assert tuple(agent.task_target or ()) == (9, 8)
+
+
+def test_post_first_harvest_hold_blocks_camp_supply_food_switch() -> None:
+    world = _world()
+    world.tick = 540
+    world.food.add((8, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 42.0
+    agent.inventory["food"] = 1
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 1
+    agent.foraging_trip_first_harvest_tick = 538
+    agent.foraging_patch_exploit_until_tick = 552
+    agent.foraging_patch_exploit_target_harvest_actions = 4
+    agent.task_target = (8, 8)
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 1,
+            "camp_food": 0,
+            "house_food_nearby": 0,
+            "nearby_needy_agents": 1,
+            "pressure_active": False,
+        }
+
+    def _role_update(self, _world):
+        self.task = "camp_supply_food"
+
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+    assert str(agent.task) == "gather_food_wild"
+
+
+def test_post_first_harvest_narrow_guard_does_not_block_when_food_not_nearby() -> None:
+    world = _world()
+    world.tick = 560
+    world.food.add((20, 20))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 42.0
+    agent.inventory["food"] = 1
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 1
+    agent.foraging_trip_harvest_actions = 1
+    agent.foraging_trip_first_harvest_tick = 520
+    agent.foraging_patch_exploit_until_tick = 530
+    agent.foraging_patch_exploit_target_harvest_actions = 4
+    agent.task_target = (8, 8)
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 0,
+            "camp_food": 0,
+            "house_food_nearby": 0,
+            "nearby_needy_agents": 2,
+            "pressure_active": True,
+        }
+
+    def _role_update(self, _world):
+        self.task = "camp_supply_food"
+
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+    assert str(agent.task) == "camp_supply_food"
+
+
+def test_patch_exploitation_window_is_bounded_by_target_harvest_actions() -> None:
+    world = _world()
+    world.tick = 520
+    world.food.add((9, 8))
+    agent = Agent(x=8, y=8, brain=None, is_player=False, player_id=None)
+    agent.task = "gather_food_wild"
+    agent.hunger = 48.0
+    agent.inventory["food"] = 6
+    agent.foraging_trip_active = True
+    agent.foraging_trip_harvest_units = 2
+    agent.foraging_trip_harvest_actions = 4
+    agent.foraging_trip_first_harvest_tick = 480
+    agent.foraging_patch_exploit_until_tick = 540
+    agent.foraging_patch_exploit_target_harvest_actions = 4
+    agent.task_target = (8, 8)
+    world.add_agent(agent)
+
+    def _pressure(*_args, **_kwargs):
+        return {
+            "near_food_sources": 1,
+            "camp_food": 0,
+            "house_food_nearby": 0,
+            "nearby_needy_agents": 2,
+            "pressure_active": True,
+        }
+
+    def _role_update(self, _world):
+        self.task = "gather_materials"
+
+    world.compute_local_food_pressure_for_agent = _pressure  # type: ignore[attr-defined]
+    agent.update_role_task = types.MethodType(_role_update, agent)
+    agent.update(world)
+
+    assert str(agent.task) == "gather_materials"
+
+def test_material_feasibility_snapshot_exposes_resource_stock_flow_basics() -> None:
+    world = _world()
+    world.food.update({(1, 1), (2, 2)})
+    world.wood.update({(3, 3)})
+    world.stone.update({(4, 4)})
+    world.initial_resource_stock = {"food": 10, "wood": 8, "stone": 6}
+    a = Agent(x=5, y=5, brain=None, is_player=False, player_id=None)
+    a.inventory["wood"] = 2
+    a.inventory["stone"] = 1
+    a.inventory["food"] = 1
+    world.agents = [a]
+
+    snap = world.compute_material_feasibility_snapshot()
+
+    assert int(snap.get("resource_conservation_raw_material_fabrication_detected", 1)) == 0
+    assert int(snap.get("wood_initial_world_stock_estimate", 0)) == 8
+    assert int(snap.get("stone_initial_world_stock_estimate", 0)) == 6
+    assert int(snap.get("food_initial_world_stock_estimate", 0)) == 10
+    assert int(snap.get("wood_available_world_total", 0)) >= 3
+    assert int(snap.get("stone_available_world_total", 0)) >= 2
+    assert int(snap.get("food_available_world_total", 0)) >= 3
+    assert "construction_site_nearest_wood_distance_avg" in snap
+    assert "construction_delivery_failure_no_source_available" in snap

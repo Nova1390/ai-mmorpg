@@ -24,6 +24,8 @@ def _family_configs(
     debug_construction_trace: bool,
     debug_construction_trace_max_agents: int,
     debug_construction_trace_max_sites: int,
+    debug_foraging_switch_trace: bool,
+    debug_foraging_switch_trace_max_agents: int,
 ) -> List[GlobalBalanceScenarioConfig]:
     family_name = str(family_name)
     cfgs: List[GlobalBalanceScenarioConfig] = []
@@ -45,6 +47,9 @@ def _family_configs(
                     debug_construction_trace_path=str(Path(out_dir) / f"construction_trace_baseline_seed_{seed}.jsonl"),
                     debug_construction_trace_max_agents=max(1, int(debug_construction_trace_max_agents)),
                     debug_construction_trace_max_sites=max(1, int(debug_construction_trace_max_sites)),
+                    debug_foraging_switch_trace=bool(debug_foraging_switch_trace),
+                    debug_foraging_switch_trace_path=str(Path(out_dir) / f"foraging_switch_trace_baseline_seed_{seed}.jsonl"),
+                    debug_foraging_switch_trace_max_agents=max(1, int(debug_foraging_switch_trace_max_agents)),
                 )
             )
         elif family_name == "food_stress":
@@ -64,6 +69,9 @@ def _family_configs(
                     debug_construction_trace_path=str(Path(out_dir) / f"construction_trace_food_stress_seed_{seed}.jsonl"),
                     debug_construction_trace_max_agents=max(1, int(debug_construction_trace_max_agents)),
                     debug_construction_trace_max_sites=max(1, int(debug_construction_trace_max_sites)),
+                    debug_foraging_switch_trace=bool(debug_foraging_switch_trace),
+                    debug_foraging_switch_trace_path=str(Path(out_dir) / f"foraging_switch_trace_food_stress_seed_{seed}.jsonl"),
+                    debug_foraging_switch_trace_max_agents=max(1, int(debug_foraging_switch_trace_max_agents)),
                 )
             )
         elif family_name == "population_variant":
@@ -83,6 +91,9 @@ def _family_configs(
                     debug_construction_trace_path=str(Path(out_dir) / f"construction_trace_population_variant_seed_{seed}.jsonl"),
                     debug_construction_trace_max_agents=max(1, int(debug_construction_trace_max_agents)),
                     debug_construction_trace_max_sites=max(1, int(debug_construction_trace_max_sites)),
+                    debug_foraging_switch_trace=bool(debug_foraging_switch_trace),
+                    debug_foraging_switch_trace_path=str(Path(out_dir) / f"foraging_switch_trace_population_variant_seed_{seed}.jsonl"),
+                    debug_foraging_switch_trace_max_agents=max(1, int(debug_foraging_switch_trace_max_agents)),
                 )
             )
         elif family_name == "reduced_pressure":
@@ -102,6 +113,9 @@ def _family_configs(
                     debug_construction_trace_path=str(Path(out_dir) / f"construction_trace_reduced_pressure_seed_{seed}.jsonl"),
                     debug_construction_trace_max_agents=max(1, int(debug_construction_trace_max_agents)),
                     debug_construction_trace_max_sites=max(1, int(debug_construction_trace_max_sites)),
+                    debug_foraging_switch_trace=bool(debug_foraging_switch_trace),
+                    debug_foraging_switch_trace_path=str(Path(out_dir) / f"foraging_switch_trace_reduced_pressure_seed_{seed}.jsonl"),
+                    debug_foraging_switch_trace_max_agents=max(1, int(debug_foraging_switch_trace_max_agents)),
                 )
             )
         else:
@@ -125,6 +139,8 @@ def main() -> None:
     parser.add_argument("--debug-construction-trace", action="store_true")
     parser.add_argument("--debug-construction-trace-max-agents", type=int, default=3)
     parser.add_argument("--debug-construction-trace-max-sites", type=int, default=2)
+    parser.add_argument("--debug-foraging-switch-trace", action="store_true")
+    parser.add_argument("--debug-foraging-switch-trace-max-agents", type=int, default=4)
     parser.add_argument("--min-legit-village-population", type=int, default=2)
     parser.add_argument("--min-legit-leader-village-population", type=int, default=3)
     parser.add_argument("--early-extinction-threshold-tick", type=int, default=200)
@@ -157,6 +173,8 @@ def main() -> None:
             debug_construction_trace=bool(args.debug_construction_trace),
             debug_construction_trace_max_agents=max(1, int(args.debug_construction_trace_max_agents)),
             debug_construction_trace_max_sites=max(1, int(args.debug_construction_trace_max_sites)),
+            debug_foraging_switch_trace=bool(args.debug_foraging_switch_trace),
+            debug_foraging_switch_trace_max_agents=max(1, int(args.debug_foraging_switch_trace_max_agents)),
         ):
             run_payload = run_global_balance_scenario(cfg, thresholds=thresholds)
             runs.append(run_payload)

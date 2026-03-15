@@ -252,6 +252,24 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
                         "construction_cluster_practices": 2,
                     },
                     "material_feasibility_metrics": {
+                        "resource_conservation_raw_material_fabrication_detected": 0,
+                        "food_initial_world_stock_estimate": 120,
+                        "wood_initial_world_stock_estimate": 110,
+                        "stone_initial_world_stock_estimate": 90,
+                        "food_available_world_total": 52,
+                        "food_available_on_map": 24,
+                        "food_in_agent_inventories": 7,
+                        "food_in_storage_buildings": 13,
+                        "food_in_camp_buffers": 8,
+                        "food_in_construction_buffers": 0,
+                        "food_gathered_total": 120,
+                        "food_respawned_total": 44,
+                        "food_consumed_total_observed": 106,
+                        "food_transported_to_camp_total": 26,
+                        "food_transported_to_storage_total": 5,
+                        "food_transported_to_construction_total": 1,
+                        "food_deposited_total": 32,
+                        "food_reserve_buffered_total": 21,
                         "wood_available_world_total": 120,
                         "wood_available_on_map": 40,
                         "wood_in_agent_inventories": 18,
@@ -262,6 +280,38 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
                         "wood_consumed_for_construction_total": 48,
                         "wood_shortage_events": 7,
                         "avg_local_wood_pressure": 0.22,
+                        "wood_outstanding_construction_demand_units": 23,
+                        "wood_supply_demand_gap_units": 97,
+                        "wood_respawn_to_extraction_ratio": 0.6111,
+                        "wood_extraction_to_initial_stock_ratio": 0.8182,
+                        "wood_transported_to_storage_total": 14,
+                        "wood_transported_to_construction_total": 12,
+                        "wood_deposited_total": 26,
+                        "wood_reserve_buffered_total": 45,
+                        "stone_available_world_total": 68,
+                        "stone_available_on_map": 26,
+                        "stone_in_agent_inventories": 9,
+                        "stone_in_storage_buildings": 24,
+                        "stone_in_construction_buffers": 9,
+                        "stone_gathered_total": 54,
+                        "stone_respawned_total": 18,
+                        "stone_consumed_for_construction_total": 30,
+                        "avg_local_stone_pressure": 0.19,
+                        "stone_outstanding_construction_demand_units": 13,
+                        "stone_supply_demand_gap_units": 55,
+                        "stone_respawn_to_extraction_ratio": 0.3333,
+                        "stone_extraction_to_initial_stock_ratio": 0.6,
+                        "stone_transported_to_storage_total": 10,
+                        "stone_transported_to_construction_total": 8,
+                        "stone_deposited_total": 18,
+                        "stone_reserve_buffered_total": 24,
+                        "material_transport_observed_total": 63,
+                        "construction_material_delivery_wood_units": 12,
+                        "construction_material_delivery_stone_units": 8,
+                        "construction_material_delivery_food_units": 1,
+                        "storage_deposit_food_units": 5,
+                        "storage_deposit_wood_units": 14,
+                        "storage_deposit_stone_units": 10,
                         "construction_sites_created": 14,
                         "construction_sites_created_house": 10,
                         "construction_sites_created_storage": 4,
@@ -494,6 +544,24 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
                         "construction_cluster_practices": 1,
                     },
                     "material_feasibility_metrics": {
+                        "resource_conservation_raw_material_fabrication_detected": 0,
+                        "food_initial_world_stock_estimate": 110,
+                        "wood_initial_world_stock_estimate": 95,
+                        "stone_initial_world_stock_estimate": 75,
+                        "food_available_world_total": 38,
+                        "food_available_on_map": 19,
+                        "food_in_agent_inventories": 5,
+                        "food_in_storage_buildings": 9,
+                        "food_in_camp_buffers": 5,
+                        "food_in_construction_buffers": 0,
+                        "food_gathered_total": 82,
+                        "food_respawned_total": 28,
+                        "food_consumed_total_observed": 73,
+                        "food_transported_to_camp_total": 18,
+                        "food_transported_to_storage_total": 3,
+                        "food_transported_to_construction_total": 0,
+                        "food_deposited_total": 21,
+                        "food_reserve_buffered_total": 14,
                         "wood_available_world_total": 80,
                         "wood_available_on_map": 28,
                         "wood_in_agent_inventories": 10,
@@ -504,6 +572,38 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
                         "wood_consumed_for_construction_total": 30,
                         "wood_shortage_events": 14,
                         "avg_local_wood_pressure": 0.44,
+                        "wood_outstanding_construction_demand_units": 31,
+                        "wood_supply_demand_gap_units": 49,
+                        "wood_respawn_to_extraction_ratio": 0.5161,
+                        "wood_extraction_to_initial_stock_ratio": 0.6526,
+                        "wood_transported_to_storage_total": 8,
+                        "wood_transported_to_construction_total": 9,
+                        "wood_deposited_total": 17,
+                        "wood_reserve_buffered_total": 30,
+                        "stone_available_world_total": 50,
+                        "stone_available_on_map": 20,
+                        "stone_in_agent_inventories": 6,
+                        "stone_in_storage_buildings": 18,
+                        "stone_in_construction_buffers": 6,
+                        "stone_gathered_total": 42,
+                        "stone_respawned_total": 12,
+                        "stone_consumed_for_construction_total": 21,
+                        "avg_local_stone_pressure": 0.28,
+                        "stone_outstanding_construction_demand_units": 14,
+                        "stone_supply_demand_gap_units": 36,
+                        "stone_respawn_to_extraction_ratio": 0.2857,
+                        "stone_extraction_to_initial_stock_ratio": 0.56,
+                        "stone_transported_to_storage_total": 7,
+                        "stone_transported_to_construction_total": 5,
+                        "stone_deposited_total": 12,
+                        "stone_reserve_buffered_total": 18,
+                        "material_transport_observed_total": 50,
+                        "construction_material_delivery_wood_units": 9,
+                        "construction_material_delivery_stone_units": 5,
+                        "construction_material_delivery_food_units": 0,
+                        "storage_deposit_food_units": 3,
+                        "storage_deposit_wood_units": 8,
+                        "storage_deposit_stone_units": 7,
                         "construction_sites_created": 10,
                         "construction_sites_created_house": 7,
                         "construction_sites_created_storage": 3,
@@ -708,6 +808,12 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
     assert float(agg["avg_exploration_shift_due_to_low_density"]) == 15.0
     assert float(agg["avg_secondary_cluster_nonzero_count"]) == 1.5
     assert float(agg["avg_secondary_nucleus_structure_count"]) == 50.0
+    assert float(agg["avg_resource_conservation_raw_material_fabrication_detected"]) == 0.0
+    assert float(agg["avg_food_initial_world_stock_estimate"]) == 115.0
+    assert float(agg["avg_food_available_world_total"]) == 45.0
+    assert float(agg["avg_food_transported_to_camp_total"]) == 22.0
+    assert float(agg["avg_food_deposited_total"]) == 26.5
+    assert float(agg["avg_food_reserve_buffered_total"]) == 17.5
     assert float(agg["avg_wood_available_world_total"]) == 100.0
     assert float(agg["avg_wood_available_on_map"]) == 34.0
     assert float(agg["avg_wood_in_agent_inventories"]) == 14.0
@@ -718,6 +824,16 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
     assert float(agg["avg_wood_consumed_for_construction_total"]) == 39.0
     assert float(agg["avg_wood_shortage_events"]) == 10.5
     assert float(agg["avg_local_wood_pressure"]) == pytest.approx(0.33)
+    assert float(agg["avg_wood_outstanding_construction_demand_units"]) == 27.0
+    assert float(agg["avg_wood_supply_demand_gap_units"]) == 73.0
+    assert float(agg["avg_wood_transported_to_storage_total"]) == 11.0
+    assert float(agg["avg_wood_transported_to_construction_total"]) == 10.5
+    assert float(agg["avg_stone_available_world_total"]) == 59.0
+    assert float(agg["avg_stone_gathered_total"]) == 48.0
+    assert float(agg["avg_local_stone_pressure"]) == pytest.approx(0.235)
+    assert float(agg["avg_material_transport_observed_total"]) == 56.5
+    assert float(agg["avg_construction_material_delivery_wood_units"]) == 10.5
+    assert float(agg["avg_storage_deposit_stone_units"]) == 8.5
     assert float(agg["avg_construction_sites_created"]) == 12.0
     assert float(agg["avg_construction_sites_created_house"]) == 8.5
     assert float(agg["avg_construction_sites_created_storage"]) == 3.5
@@ -734,6 +850,34 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
     assert float(agg["avg_construction_delivery_failures"]) == 5.0
     assert float(agg["avg_construction_delivery_to_site_events"]) == 7.5
     assert float(agg["avg_construction_delivery_to_wrong_target_or_drift"]) == 2.5
+    assert "avg_delivery_commitment_hold_invoked_count" in agg
+    assert "avg_delivery_commitment_hold_completed_count" in agg
+    assert "avg_delivery_commitment_hold_broken_by_survival_count" in agg
+    assert "avg_delivery_commitment_hold_broken_by_invalid_site_count" in agg
+    assert "avg_delivery_commitment_hold_broken_by_invalid_source_count" in agg
+    assert "avg_construction_delivery_source_binding_selected_count" in agg
+    assert "avg_construction_delivery_source_binding_refreshed_count" in agg
+    assert "avg_construction_delivery_source_binding_unavailable_count" in agg
+    assert "avg_construction_delivery_source_binding_lost_missing_source_count" in agg
+    assert "avg_construction_delivery_prepickup_checks_count" in agg
+    assert "avg_construction_delivery_prepickup_site_exists_count" in agg
+    assert "avg_construction_delivery_prepickup_site_unreachable_count" in agg
+    assert "avg_construction_delivery_prepickup_site_demand_matches_material_count" in agg
+    assert "avg_construction_delivery_source_persistence_window_invoked_count" in agg
+    assert "avg_construction_delivery_source_persistence_window_completed_count" in agg
+    assert "avg_construction_delivery_source_persistence_window_broken_by_source_invalidity_count" in agg
+    assert "avg_construction_delivery_source_persistence_window_broken_by_demand_mismatch_count" in agg
+    assert "avg_construction_delivery_reservation_alignment_pass_count" in agg
+    assert "avg_construction_delivery_reservation_alignment_fail_count" in agg
+    assert "avg_construction_delivery_reservation_alignment_fail_material_wood_count" in agg
+    assert "avg_construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count" in agg
+    assert "avg_construction_delivery_invalid_site_missing_site_count" in agg
+    assert "avg_construction_delivery_invalid_source_no_source_available_count" in agg
+    assert "avg_construction_delivery_invalid_source_linkage_mismatch_count" in agg
+    assert "avg_construction_delivery_invalid_source_before_pickup_count" in agg
+    assert "avg_construction_delivery_ticks_reservation_to_invalid_source_avg" in agg
+    assert "avg_construction_delivery_ticks_pickup_to_invalid_source_avg" in agg
+    assert "avg_construction_delivery_invalid_source_committed_source_missing_count" in agg
     assert float(agg["avg_construction_delivery_avg_distance_to_site"]) == 0.9
     assert float(agg["avg_construction_delivery_avg_distance_to_source"]) == 3.0
     assert float(agg["avg_storage_delivery_failures"]) == 3.5
@@ -767,6 +911,20 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
     assert float(agg["avg_construction_time_first_progress_to_completion_avg"]) == 15.0
     assert float(agg["avg_construction_completed_after_first_delivery_count"]) == 1.5
     assert float(agg["avg_construction_completed_after_started_progress_count"]) == 1.5
+    assert "avg_construction_delivery_failure_no_source_available" in agg
+    assert "avg_construction_delivery_failure_source_depleted" in agg
+    assert "avg_construction_delivery_failure_reservation_invalidated" in agg
+    assert "avg_construction_delivery_failure_no_path_to_source" in agg
+    assert "avg_construction_delivery_failure_no_path_to_site" in agg
+    assert "avg_construction_delivery_failure_retargeted_before_delivery" in agg
+    assert "avg_construction_site_nearest_wood_distance_avg" in agg
+    assert "avg_construction_site_nearest_stone_distance_avg" in agg
+    assert "avg_construction_site_viable_wood_sources_within_radius_avg" in agg
+    assert "avg_construction_site_viable_stone_sources_within_radius_avg" in agg
+    assert "avg_construction_site_ticks_since_last_delivery_avg" in agg
+    assert "avg_construction_site_material_inflow_rate_avg" in agg
+    assert "avg_active_builders_nearest_wood_distance_avg" in agg
+    assert "avg_active_haulers_nearest_wood_distance_avg" in agg
     assert float(agg["avg_house_completion_time_avg"]) == 39.5
     assert float(agg["avg_storage_completion_time_avg"]) == 58.5
     assert float(agg["avg_houses_completed_count"]) == 4.0
@@ -804,6 +962,216 @@ def test_aggregate_global_balance_includes_comm002_metrics() -> None:
     assert "avg_food_respawned_total_observed" in agg
     assert "avg_foraging_yield_per_trip" in agg
     assert "avg_farming_yield_per_cycle" in agg
+    assert "avg_foraging_trip_started_count" in agg
+    assert "avg_foraging_trip_completed_count" in agg
+    assert "avg_foraging_trip_zero_harvest_count" in agg
+    assert "avg_foraging_trip_terminated_by_hunger_count" in agg
+    assert "avg_foraging_trip_food_gained" in agg
+    assert "avg_foraging_trip_move_before_first_harvest" in agg
+    assert "avg_foraging_trip_harvest_actions" in agg
+    assert "avg_foraging_zero_harvest_trip_ratio" in agg
+    assert "avg_foraging_trip_retarget_count" in agg
+    assert "avg_foraging_target_lock_duration" in agg
+    assert "avg_foraging_commit_before_retarget_ticks" in agg
+    assert "avg_foraging_trip_efficiency_ratio" in agg
+    assert "avg_foraging_source_visit_count" in agg
+    assert "avg_harvest_actions_per_visited_source" in agg
+    assert "avg_visits_per_source_before_depletion" in agg
+    assert "avg_foraging_trip_wasted_arrival_count" in agg
+    assert "avg_foraging_arrival_depleted_source_count" in agg
+    assert "avg_foraging_arrival_overcontested_count" in agg
+    assert "avg_foraging_retarget_events" in agg
+    assert "avg_foraging_retarget_events_pressure_low" in agg
+    assert "avg_foraging_retarget_events_pressure_medium" in agg
+    assert "avg_foraging_retarget_events_pressure_high" in agg
+    assert "avg_foraging_trip_aborted_before_first_harvest_count" in agg
+    assert "avg_foraging_trip_aborted_after_first_harvest_count" in agg
+    assert "avg_foraging_trip_successful_count" in agg
+    assert "avg_foraging_trip_food_gained_after_first_harvest" in agg
+    assert "avg_foraging_trip_single_harvest_action_count" in agg
+    assert "avg_foraging_trip_single_harvest_action_ratio" in agg
+    assert "avg_foraging_trip_consecutive_harvest_actions_on_patch" in agg
+    assert "avg_foraging_trip_patch_dwell_after_first_harvest_ticks" in agg
+    assert "avg_foraging_trip_ended_soon_after_first_harvest_count" in agg
+    assert "avg_foraging_trip_ended_soon_after_first_harvest_ratio" in agg
+    assert "avg_foraging_trip_end_after_first_harvest_completed" in agg
+    assert "avg_foraging_trip_end_after_first_harvest_task_switched" in agg
+    assert "avg_foraging_trip_end_after_first_harvest_hunger_death" in agg
+    assert "avg_foraging_trip_end_after_first_harvest_other" in agg
+    assert "avg_post_first_harvest_task_switch_attempt_count" in agg
+    assert "avg_post_first_harvest_task_switch_committed_count" in agg
+    assert "avg_post_first_harvest_task_switch_blocked_count" in agg
+    assert "avg_post_first_harvest_task_switch_attempt_source_survival_override" in agg
+    assert "avg_post_first_harvest_task_switch_attempt_source_role_task_update" in agg
+    assert "avg_post_first_harvest_task_switch_attempt_source_inventory_logic" in agg
+    assert "avg_post_first_harvest_task_switch_attempt_source_target_invalidated" in agg
+    assert "avg_post_first_harvest_task_switch_attempt_source_wander_fallback" in agg
+    assert "avg_post_first_harvest_task_switch_attempt_source_unknown" in agg
+    assert "avg_post_first_harvest_task_switch_committed_source_role_task_update" in agg
+    assert "avg_post_first_harvest_task_switch_committed_source_inventory_logic" in agg
+    assert "avg_post_first_harvest_task_switch_committed_source_target_invalidated" in agg
+    assert "avg_post_first_harvest_task_switch_committed_source_unknown" in agg
+    assert "avg_foraging_trip_end_reason_task_switched" in agg
+    assert "avg_foraging_trip_end_reason_hunger_death" in agg
+    assert "avg_foraging_trip_end_reason_other" in agg
+    assert "avg_foraging_trip_success_rate_pressure_low" in agg
+    assert "avg_foraging_trip_success_rate_pressure_medium" in agg
+    assert "avg_foraging_trip_success_rate_pressure_high" in agg
+    assert "avg_foraging_trip_efficiency_pressure_low" in agg
+    assert "avg_foraging_trip_efficiency_pressure_medium" in agg
+    assert "avg_foraging_trip_efficiency_pressure_high" in agg
+    assert "avg_food_self_feeding_events" in agg
+    assert "avg_food_self_feeding_units" in agg
+    assert "avg_food_group_feeding_events" in agg
+    assert "avg_food_group_feeding_units" in agg
+    assert "avg_food_reserve_accumulation_events" in agg
+    assert "avg_food_reserve_accumulation_units" in agg
+    assert "avg_food_reserve_draw_events" in agg
+    assert "avg_food_reserve_draw_units" in agg
+    assert "avg_food_reserve_balance_units" in agg
+    assert "avg_total_food_in_reserves" in agg
+    assert "avg_avg_food_in_reserves" in agg
+    assert "avg_max_food_in_reserves" in agg
+    assert "avg_reserve_fill_events" in agg
+    assert "avg_reserve_depletion_events" in agg
+    assert "avg_ticks_reserve_above_threshold" in agg
+    assert "avg_ticks_reserve_empty" in agg
+    assert "avg_reserve_recovery_cycles" in agg
+    assert "avg_reserve_partial_recovery_cycles" in agg
+    assert "avg_reserve_full_recovery_cycles" in agg
+    assert "avg_reserve_failed_recovery_attempts" in agg
+    assert "avg_reserve_refill_attempts" in agg
+    assert "avg_reserve_refill_success" in agg
+    assert "avg_avg_food_added_per_refill" in agg
+    assert "avg_ticks_between_reserve_refills" in agg
+    assert "avg_avg_food_draw_per_event" in agg
+    assert "avg_ticks_between_reserve_draws" in agg
+    assert "avg_hunger_deaths_with_reserve_available" in agg
+    assert "avg_hunger_deaths_without_reserve" in agg
+    assert "avg_avg_agent_hunger_when_reserve_used" in agg
+    assert "avg_reserve_draw_events_during_food_stress" in agg
+    assert "avg_reserve_draw_events_during_normal_conditions" in agg
+    assert "avg_reserve_draw_under_pressure" in agg
+    assert "avg_reserve_draw_under_normal_conditions" in agg
+    assert "avg_reserve_refill_blocked_by_pressure" in agg
+    assert "avg_reserve_refill_blocked_by_no_surplus" in agg
+    assert "avg_reserve_refill_blocked_by_unstable_context" in agg
+    assert "avg_local_food_handoff_events" in agg
+    assert "avg_local_food_handoff_units" in agg
+    assert "avg_handoff_allowed_by_context_count" in agg
+    assert "avg_handoff_blocked_by_group_priority_count" in agg
+    assert "avg_handoff_blocked_by_cooldown_count" in agg
+    assert "avg_handoff_blocked_by_same_unit_recently_count" in agg
+    assert "avg_handoff_blocked_by_receiver_viability" in agg
+    assert "avg_handoff_blocked_by_camp_fragility" in agg
+    assert "avg_handoff_blocked_by_recent_rescue" in agg
+    assert "avg_handoff_blocked_by_camp_fragility_when_receiver_critical_count" in agg
+    assert "avg_handoff_blocked_by_camp_fragility_when_donor_safe_count" in agg
+    assert "avg_handoff_blocked_by_camp_fragility_with_local_surplus_count" in agg
+    assert "avg_handoff_blocked_by_camp_fragility_context_pressure_count" in agg
+    assert "avg_handoff_blocked_by_camp_fragility_context_nonpressure_count" in agg
+    assert "avg_avg_handoff_blocked_by_camp_fragility_donor_food" in agg
+    assert "avg_avg_handoff_blocked_by_camp_fragility_receiver_hunger" in agg
+    assert "avg_avg_handoff_blocked_by_camp_fragility_camp_food" in agg
+    assert "avg_local_food_handoff_prevented_by_low_surplus" in agg
+    assert "avg_local_food_handoff_prevented_by_distance" in agg
+    assert "avg_local_food_handoff_prevented_by_donor_risk" in agg
+    assert "avg_hunger_relief_after_local_handoff" in agg
+    assert "avg_reserve_partial_recovery_cycles" in agg
+    assert "avg_reserve_full_recovery_cycles" in agg
+    assert "avg_reserve_failed_recovery_attempts" in agg
+    assert "avg_reserve_refill_attempts" in agg
+    assert "avg_reserve_refill_success" in agg
+    assert "avg_avg_food_added_per_refill" in agg
+    assert "avg_ticks_between_reserve_refills" in agg
+    assert "avg_avg_food_draw_per_event" in agg
+    assert "avg_ticks_between_reserve_draws" in agg
+    assert "avg_reserve_draw_after_failed_foraging_trip" in agg
+    assert "avg_average_settlement_food_buffer" in agg
+    assert "avg_longest_reserve_continuity_window" in agg
+    assert "avg_settlement_food_shortage_events" in agg
+    assert "avg_reserve_usage_after_failed_foraging_trip" in agg
+    assert "avg_reserve_draw_after_failed_foraging_trip" in agg
+    assert "avg_ratio_food_security_layer_self_feeding" in agg
+    assert "avg_ratio_food_security_layer_group_feeding" in agg
+    assert "avg_ratio_food_security_layer_reserve_accumulation" in agg
+    assert "avg_ratio_food_security_layer_none" in agg
+    assert "avg_food_security_layer_transition_count" in agg
+    assert "avg_food_security_layer_transition_none_to_self_feeding" in agg
+    assert "avg_food_security_layer_transition_self_feeding_to_group_feeding" in agg
+    assert "avg_food_security_layer_transition_group_feeding_to_reserve_accumulation" in agg
+    assert "avg_food_security_layer_transition_reserve_accumulation_to_none" in agg
+    assert "avg_food_security_reserve_entry_checks" in agg
+    assert "avg_food_security_reserve_entry_condition_met_count" in agg
+    assert "avg_food_security_reserve_entry_activated_count" in agg
+    assert "avg_food_security_reserve_entry_blocked_no_surplus" in agg
+    assert "avg_food_security_reserve_entry_blocked_no_qualifying_task" in agg
+    assert "avg_food_security_reserve_entry_blocked_unstable_context" in agg
+    assert "avg_food_security_reserve_entry_blocked_group_feeding_dominance" in agg
+    assert "avg_food_security_reserve_prepolicy_candidate_count" in agg
+    assert "avg_food_security_reserve_postpolicy_candidate_count" in agg
+    assert "avg_food_security_reserve_final_activation_count" in agg
+    assert "avg_food_security_reserve_selection_considered_count" in agg
+    assert "avg_food_security_reserve_selection_chosen_count" in agg
+    assert "avg_food_security_reserve_selection_rejected_count" in agg
+    assert "avg_food_security_reserve_selection_rejected_by_group_feeding_count" in agg
+    assert "avg_food_security_reserve_selection_rejected_by_unstable_context_count" in agg
+    assert "avg_food_security_reserve_selection_rejected_by_no_surplus_count" in agg
+    assert "avg_food_security_reserve_selection_rejected_by_other_count" in agg
+    assert "avg_food_security_reserve_final_selection_lost_to_self_feeding_count" in agg
+    assert "avg_food_security_reserve_final_selection_lost_to_group_feeding_count" in agg
+    assert "avg_food_security_reserve_final_selection_lost_to_unstable_context_count" in agg
+    assert "avg_food_security_reserve_final_selection_lost_to_no_surplus_count" in agg
+    assert "avg_food_security_reserve_final_selection_lost_to_other_count" in agg
+    assert "avg_food_security_reserve_final_selection_winner_self_feeding_count" in agg
+    assert "avg_food_security_reserve_final_selection_winner_group_feeding_count" in agg
+    assert "avg_food_security_reserve_final_selection_winner_other_count" in agg
+    assert "avg_food_security_reserve_loss_stage_policy_ranking_count" in agg
+    assert "avg_food_security_reserve_loss_stage_final_gate_count" in agg
+    assert "avg_food_security_reserve_loss_stage_final_override_count" in agg
+    assert "avg_food_security_reserve_final_decision_observed_count" in agg
+    assert "avg_food_security_reserve_final_decision_candidate_count" in agg
+    assert "avg_food_security_reserve_final_decision_candidate_survived_prepolicy_count" in agg
+    assert "avg_food_security_reserve_final_decision_candidate_survived_postpolicy_count" in agg
+    assert "avg_food_security_reserve_final_decision_candidate_lost_count" in agg
+    assert "avg_food_security_reserve_final_decision_candidate_chosen_count" in agg
+    assert "avg_food_security_reserve_final_selected_task_food_logistics_count" in agg
+    assert "avg_food_security_reserve_final_selected_task_village_logistics_count" in agg
+    assert "avg_food_security_reserve_final_selected_task_camp_supply_food_count" in agg
+    assert "avg_food_security_reserve_final_selected_task_other_count" in agg
+    assert "avg_food_security_reserve_final_selected_layer_reserve_accumulation_count" in agg
+    assert "avg_food_security_reserve_final_selected_layer_group_feeding_count" in agg
+    assert "avg_food_security_reserve_final_selected_layer_self_feeding_count" in agg
+    assert "avg_food_security_reserve_final_selected_layer_none_count" in agg
+    assert "avg_food_security_reserve_final_winner_subsystem_policy_ranking_count" in agg
+    assert "avg_food_security_reserve_final_winner_subsystem_role_task_update_count" in agg
+    assert "avg_food_security_reserve_final_winner_subsystem_final_gate_count" in agg
+    assert "avg_food_security_reserve_final_winner_subsystem_final_override_count" in agg
+    assert "avg_food_security_reserve_final_winner_subsystem_task_layer_routing_count" in agg
+    assert "avg_food_security_reserve_final_winner_subsystem_contextual_override_count" in agg
+    assert "avg_food_security_reserve_final_winner_subsystem_unknown_count" in agg
+    assert "avg_food_security_reserve_final_override_reason_group_feeding_pressure_override_count" in agg
+    assert "avg_food_security_reserve_final_override_reason_village_logistics_group_routing_count" in agg
+    assert "avg_food_security_reserve_final_override_reason_camp_supply_group_routing_count" in agg
+    assert "avg_food_security_reserve_final_override_reason_unstable_context_count" in agg
+    assert "avg_food_security_reserve_final_override_reason_no_surplus_count" in agg
+    assert "avg_food_security_reserve_final_override_reason_other_count" in agg
+    assert "avg_reserve_final_tiebreak_invoked_count" in agg
+    assert "avg_reserve_final_tiebreak_won_count" in agg
+    assert "avg_reserve_final_tiebreak_lost_count" in agg
+    assert "avg_reserve_final_tiebreak_blocked_by_pressure_count" in agg
+    assert "avg_reserve_final_tiebreak_blocked_by_unstable_context_count" in agg
+    assert "avg_reserve_final_tiebreak_blocked_by_no_surplus_count" in agg
+    assert "avg_agents_in_food_security_layer_self_feeding" in agg
+    assert "avg_agents_in_food_security_layer_group_feeding" in agg
+    assert "avg_agents_in_food_security_layer_reserve_accumulation" in agg
+    assert "avg_agents_in_food_security_layer_none" in agg
+    assert "avg_foraging_trip_efficiency_contention_low" in agg
+    assert "avg_foraging_trip_efficiency_contention_medium" in agg
+    assert "avg_foraging_trip_efficiency_contention_high" in agg
+    assert "avg_foraging_micro_retarget_events" in agg
+    assert "avg_foraging_commitment_hold_overrides" in agg
+    assert "avg_foraging_bonus_yield_units_total" in agg
     assert "avg_food_move_time_ratio" in agg
     assert "avg_food_harvest_time_ratio" in agg
     assert "avg_local_food_basin_accessible" in agg

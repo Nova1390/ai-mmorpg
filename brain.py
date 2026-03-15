@@ -57,6 +57,22 @@ ALLOWED_PRIORITIES = {
     "stabilize",
 }
 
+FORAGING_PRESSURE_HIGH_STAY_RATIO = 1.15
+FORAGING_PRESSURE_HIGH_ENTER_RATIO = 1.45
+FORAGING_PRESSURE_LOW_ENTER_RATIO = 0.72
+FORAGING_PRESSURE_LOW_STAY_RATIO = 0.90
+FORAGING_LOCK_HIGH_BASE = 10
+FORAGING_LOCK_HIGH_AFTER_HARVEST = 16
+FORAGING_LOCK_MEDIUM_MICRO_RETARGET = 6
+FORAGING_LOCK_HIGH_MICRO_RETARGET = 12
+FORAGING_LOCK_ADAPTIVE_BASE = 4
+FORAGING_LOCK_ADAPTIVE_MEDIUM_AFTER_HARVEST = 6
+FORAGING_LOCK_ADAPTIVE_HIGH = 10
+FORAGING_LOCK_ADAPTIVE_HIGH_AFTER_HARVEST = 16
+SELF_FEEDING_TASKS = {"gather_food_wild", "eat_food", "survive"}
+GROUP_FEEDING_TASKS = {"camp_supply_food", "food_logistics", "village_logistics"}
+RESERVE_SUPPORT_TASKS = {"food_logistics"}
+
 
 def _manhattan(a: Coord, b: Coord) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -400,8 +416,23 @@ class FoodBrain:
     def _clear_intention(self, agent) -> None:
         setattr(agent, "current_intention", None)
 
+    def _food_security_layer_for_task(self, task: str) -> str:
+        task_name = str(task or "").lower()
+        if task_name in RESERVE_SUPPORT_TASKS:
+            return "reserve_accumulation"
+        if task_name in SELF_FEEDING_TASKS:
+            return "self_feeding"
+        if task_name in GROUP_FEEDING_TASKS:
+            return "group_feeding"
+        return "none"
+
+    def _set_food_security_layer_context(self, agent, task: str) -> None:
+        # Architectural context marker: this does not alter behavior directly.
+        setattr(agent, "food_security_layer", self._food_security_layer_for_task(task))
+
     def select_agent_intention(self, world, agent) -> Optional[Dict[str, Any]]:
         task = str(getattr(agent, "task", "idle")).lower()
+        self._set_food_security_layer_context(agent, task)
         role = str(getattr(agent, "role", "npc")).lower()
         hunger = float(getattr(agent, "hunger", 100.0))
         self_model = getattr(agent, "self_model", {}) if isinstance(getattr(agent, "self_model", {}), dict) else {}
@@ -810,8 +841,184 @@ class FoodBrain:
         action = self.progress_agent_intention(world, agent, current)
         return action
 
+    def _resolve_foraging_pressure_regime(self, agent, pressure: Dict[str, Any]) -> Tuple[str, float]:
+        pressure_ratio = float(getattr(agent, "foraging_pressure_ratio", 0.0) or 0.0)
+        pressure_regime = str(getattr(agent, "foraging_pressure_regime", "medium") or "medium")
+        if not isinstance(pressure, dict):
+            return pressure_regime, pressure_ratio
+        supply = max(
+            1,
+            int(pressure.get("near_food_sources", 0))
+            + int(pressure.get("camp_food", 0))
+            + int(pressure.get("house_food_nearby", 0)),
+        )
+        pressure_ratio = float(max(0, int(pressure.get("nearby_needy_agents", 0)))) / float(supply)
+        pressure_active = bool(pressure.get("pressure_active", False))
+        previous_regime = str(getattr(agent, "foraging_pressure_regime", "medium") or "medium")
+        if previous_regime == "high":
+            if pressure_active and pressure_ratio >= float(FORAGING_PRESSURE_HIGH_STAY_RATIO):
+                pressure_regime = "high"
+            elif pressure_ratio < float(FORAGING_PRESSURE_LOW_ENTER_RATIO):
+                pressure_regime = "low"
+            else:
+                pressure_regime = "medium"
+        elif previous_regime == "low":
+            if pressure_ratio <= float(FORAGING_PRESSURE_LOW_STAY_RATIO):
+                pressure_regime = "low"
+            elif pressure_active and pressure_ratio >= float(FORAGING_PRESSURE_HIGH_ENTER_RATIO):
+                pressure_regime = "high"
+            else:
+                pressure_regime = "medium"
+        else:
+            if pressure_active and pressure_ratio >= float(FORAGING_PRESSURE_HIGH_ENTER_RATIO):
+                pressure_regime = "high"
+            elif pressure_ratio < float(FORAGING_PRESSURE_LOW_ENTER_RATIO):
+                pressure_regime = "low"
+            else:
+                pressure_regime = "medium"
+        return str(pressure_regime), float(pressure_ratio)
+
+    def _record_foraging_lock_duration(self, world, lock_duration: int) -> None:
+        if hasattr(world, "settlement_progression_stats") and isinstance(world.settlement_progression_stats, dict):
+            world.settlement_progression_stats["foraging_target_lock_duration_total"] = int(
+                world.settlement_progression_stats.get("foraging_target_lock_duration_total", 0)
+            ) + int(lock_duration)
+            world.settlement_progression_stats["foraging_target_lock_duration_samples"] = int(
+                world.settlement_progression_stats.get("foraging_target_lock_duration_samples", 0)
+            ) + 1
+
+    def _attempt_food_micro_retarget(
+        self,
+        agent,
+        world,
+        *,
+        target_key: Coord,
+        tick_now: int,
+        pressure_regime: str,
+    ) -> Optional[Tuple[str, ...]]:
+        if not hasattr(world, "_find_nearest_food_to"):
+            return None
+        nearby = world._find_nearest_food_to(int(target_key[0]), int(target_key[1]), radius=3)
+        if not (isinstance(nearby, tuple) and len(nearby) == 2 and (int(nearby[0]), int(nearby[1])) != target_key):
+            return None
+        agent.task_target = (int(nearby[0]), int(nearby[1]))
+        agent.foraging_target_set_tick = int(tick_now)
+        lock_duration = int(FORAGING_LOCK_MEDIUM_MICRO_RETARGET)
+        if pressure_regime == "high":
+            lock_duration = int(FORAGING_LOCK_HIGH_MICRO_RETARGET)
+        setattr(agent, "foraging_target_lock_until_tick", int(tick_now) + int(lock_duration))
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("foraging_micro_retarget_events")
+        self._record_foraging_lock_duration(world, lock_duration)
+        return self.move_towards(agent, world, (int(nearby[0]), int(nearby[1])))
+
+    def _handle_self_feeding_wild_foraging(self, agent, world, social_target_resolver) -> Optional[Tuple[str, ...]]:
+        pressure = {}
+        if hasattr(world, "compute_local_food_pressure_for_agent"):
+            try:
+                pressure = world.compute_local_food_pressure_for_agent(agent, max_distance=10)
+            except Exception:
+                pressure = {}
+        pressure_regime, pressure_ratio = self._resolve_foraging_pressure_regime(agent, pressure)
+        agent.foraging_pressure_regime = str(pressure_regime)
+        agent.foraging_pressure_ratio = float(pressure_ratio)
+
+        anchor = getattr(agent, "proto_task_anchor", {})
+        source_pos = tuple(anchor.get("source_pos", ())) if isinstance(anchor, dict) else ()
+        if len(source_pos) == 2 and tuple(source_pos) in getattr(world, "food", set()):
+            return self.move_towards(agent, world, (int(source_pos[0]), int(source_pos[1])))
+
+        task_target = getattr(agent, "task_target", None)
+        if isinstance(task_target, tuple) and len(task_target) == 2:
+            target_key = (int(task_target[0]), int(task_target[1]))
+            target_has_food = target_key in getattr(world, "food", set())
+            tick_now = int(getattr(world, "tick", 0))
+            lock_until = int(getattr(agent, "foraging_target_lock_until_tick", -1))
+            at_or_near_target = _manhattan((int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0))), target_key) <= 1
+
+            if pressure_regime == "low" and target_has_food and not at_or_near_target:
+                return self.move_towards(agent, world, (int(task_target[0]), int(task_target[1])))
+            if pressure_regime == "medium" and target_has_food and not at_or_near_target and tick_now <= lock_until:
+                return self.move_towards(agent, world, (int(task_target[0]), int(task_target[1])))
+            if pressure_regime == "high" and target_has_food and not at_or_near_target:
+                if tick_now > lock_until:
+                    lock_duration = int(FORAGING_LOCK_HIGH_BASE)
+                    if int(getattr(agent, "foraging_trip_harvest_units", 0)) > 0:
+                        lock_duration = int(FORAGING_LOCK_HIGH_AFTER_HARVEST)
+                    setattr(agent, "foraging_target_lock_until_tick", int(tick_now) + int(lock_duration))
+                    self._record_foraging_lock_duration(world, lock_duration)
+                return self.move_towards(agent, world, (int(task_target[0]), int(task_target[1])))
+            if (
+                at_or_near_target
+                and not target_has_food
+                and int(getattr(agent, "foraging_trip_harvest_units", 0)) > 0
+            ):
+                micro_retarget = self._attempt_food_micro_retarget(
+                    agent,
+                    world,
+                    target_key=target_key,
+                    tick_now=tick_now,
+                    pressure_regime=pressure_regime,
+                )
+                if micro_retarget is not None:
+                    return micro_retarget
+            if target_has_food or (tick_now <= lock_until and not at_or_near_target):
+                return self.move_towards(agent, world, (int(task_target[0]), int(task_target[1])))
+
+        allow_adaptive = False
+        if pressure_regime == "high":
+            allow_adaptive = not (
+                isinstance(task_target, tuple)
+                and len(task_target) == 2
+                and tuple((int(task_target[0]), int(task_target[1]))) in getattr(world, "food", set())
+                and not (
+                    _manhattan(
+                        (int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0))),
+                        (int(task_target[0]), int(task_target[1])),
+                    )
+                    <= 1
+                )
+            )
+        elif pressure_regime == "medium":
+            if not isinstance(task_target, tuple) or len(task_target) != 2:
+                allow_adaptive = True
+            else:
+                tk = (int(task_target[0]), int(task_target[1]))
+                has_food = tk in getattr(world, "food", set())
+                if (not has_food) and int(getattr(world, "tick", 0)) > int(getattr(agent, "foraging_target_lock_until_tick", -1)):
+                    allow_adaptive = True
+        if allow_adaptive and hasattr(world, "find_scarcity_adaptive_food_target"):
+            adaptive = world.find_scarcity_adaptive_food_target(agent, radius=self.vision_radius + 4)
+            if isinstance(adaptive, tuple) and len(adaptive) == 2:
+                agent.task_target = (int(adaptive[0]), int(adaptive[1]))
+                tick_now = int(getattr(world, "tick", 0))
+                lock_duration = int(FORAGING_LOCK_ADAPTIVE_BASE)
+                if pressure_regime == "high":
+                    lock_duration = int(FORAGING_LOCK_ADAPTIVE_HIGH)
+                if pressure_regime == "high" and int(getattr(agent, "foraging_trip_harvest_units", 0)) > 0:
+                    lock_duration = int(FORAGING_LOCK_ADAPTIVE_HIGH_AFTER_HARVEST)
+                if pressure_regime == "medium" and int(getattr(agent, "foraging_trip_harvest_units", 0)) > 0:
+                    lock_duration = int(FORAGING_LOCK_ADAPTIVE_MEDIUM_AFTER_HARVEST)
+                setattr(agent, "foraging_target_lock_until_tick", int(tick_now) + int(lock_duration))
+                agent.foraging_target_set_tick = int(tick_now)
+                self._record_foraging_lock_duration(world, lock_duration)
+                return self.move_towards(agent, world, (int(adaptive[0]), int(adaptive[1])))
+
+        target = self.find_nearest(agent, world.food, "food", self.vision_radius + 3)
+        if target is not None:
+            return self.move_towards(agent, world, target)
+        social_target = social_target_resolver()
+        if social_target is not None:
+            target, event_key, uid = social_target
+            if hasattr(world, "record_social_gravity_event"):
+                world.record_social_gravity_event(event_key, village_uid=uid or None)
+            return self.move_towards(agent, world, target)
+        self._record_gap_block(world, agent, "no_resource_target")
+        return None
+
     def decide(self, agent, world) -> Tuple[str, ...]:
         task = str(getattr(agent, "task", "idle")).lower()
+        self._set_food_security_layer_context(agent, task)
 
         intention_action = self._evaluate_intention(world, agent)
         if intention_action is not None:
@@ -1483,29 +1690,9 @@ class FoodBrain:
                 return self.move_towards(agent, world, village_home)
 
         if task == "gather_food_wild":
-            anchor = getattr(agent, "proto_task_anchor", {})
-            source_pos = tuple(anchor.get("source_pos", ())) if isinstance(anchor, dict) else ()
-            if len(source_pos) == 2 and tuple(source_pos) in getattr(world, "food", set()):
-                return self.move_towards(agent, world, (int(source_pos[0]), int(source_pos[1])))
-            task_target = getattr(agent, "task_target", None)
-            if isinstance(task_target, tuple) and len(task_target) == 2:
-                if (int(task_target[0]), int(task_target[1])) in getattr(world, "food", set()):
-                    return self.move_towards(agent, world, (int(task_target[0]), int(task_target[1])))
-            if hasattr(world, "find_scarcity_adaptive_food_target"):
-                adaptive = world.find_scarcity_adaptive_food_target(agent, radius=self.vision_radius + 4)
-                if isinstance(adaptive, tuple) and len(adaptive) == 2:
-                    agent.task_target = (int(adaptive[0]), int(adaptive[1]))
-                    return self.move_towards(agent, world, (int(adaptive[0]), int(adaptive[1])))
-            target = self.find_nearest(agent, world.food, "food", self.vision_radius + 3)
-            if target is not None:
-                return self.move_towards(agent, world, target)
-            social_target = _social_gravity_return_target()
-            if social_target is not None:
-                target, event_key, uid = social_target
-                if hasattr(world, "record_social_gravity_event"):
-                    world.record_social_gravity_event(event_key, village_uid=uid or None)
-                return self.move_towards(agent, world, target)
-            self._record_gap_block(world, agent, "no_resource_target")
+            action = self._handle_self_feeding_wild_foraging(agent, world, _social_gravity_return_target)
+            if action is not None:
+                return action
 
         if task == "food_logistics":
             delivery_target = getattr(agent, "delivery_target_building_id", None)

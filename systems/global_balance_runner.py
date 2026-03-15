@@ -42,6 +42,9 @@ class GlobalBalanceScenarioConfig:
     debug_construction_trace_path: Optional[str] = None
     debug_construction_trace_max_agents: int = 3
     debug_construction_trace_max_sites: int = 2
+    debug_foraging_switch_trace: bool = False
+    debug_foraging_switch_trace_path: Optional[str] = None
+    debug_foraging_switch_trace_max_agents: int = 4
 
 
 def _scaled_int(base: Any, scale: float, *, min_value: int = 1) -> int:
@@ -237,6 +240,17 @@ def _setup_world(cfg: GlobalBalanceScenarioConfig) -> World:
         except Exception:
             world.debug_construction_trace_enabled = False
             world.debug_construction_trace_path = ""
+    world.debug_foraging_switch_trace_enabled = bool(cfg.debug_foraging_switch_trace)
+    world.debug_foraging_switch_trace_path = str(cfg.debug_foraging_switch_trace_path or "")
+    world.debug_foraging_switch_trace_max_agents = max(1, int(cfg.debug_foraging_switch_trace_max_agents))
+    if world.debug_foraging_switch_trace_enabled and world.debug_foraging_switch_trace_path:
+        try:
+            trace_path = Path(world.debug_foraging_switch_trace_path)
+            trace_path.parent.mkdir(parents=True, exist_ok=True)
+            trace_path.write_text("", encoding="utf-8")
+        except Exception:
+            world.debug_foraging_switch_trace_enabled = False
+            world.debug_foraging_switch_trace_path = ""
     _apply_food_multiplier(world, float(cfg.food_multiplier))
     return world
 
@@ -802,6 +816,198 @@ def aggregate_global_balance_results(
     avg_farming_yield_per_cycle = _collect(
         ("metrics", "camp_proto", "settlement_progression_metrics", "avg_farming_yield_per_cycle")
     )
+    foraging_trip_started_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_started_count")
+    )
+    foraging_trip_completed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_completed_count")
+    )
+    foraging_trip_zero_harvest_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_zero_harvest_count")
+    )
+    foraging_trip_terminated_by_hunger_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_terminated_by_hunger_count")
+    )
+    avg_foraging_trip_food_gained = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_food_gained")
+    )
+    avg_foraging_trip_move_before_first_harvest = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_move_before_first_harvest")
+    )
+    avg_foraging_trip_harvest_actions = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_harvest_actions")
+    )
+    foraging_zero_harvest_trip_ratio = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_zero_harvest_trip_ratio")
+    )
+    avg_foraging_trip_retarget_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_retarget_count")
+    )
+    avg_foraging_target_lock_duration = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_target_lock_duration")
+    )
+    avg_foraging_commit_before_retarget_ticks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_commit_before_retarget_ticks")
+    )
+    avg_foraging_trip_efficiency_ratio = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_efficiency_ratio")
+    )
+    foraging_source_visit_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_source_visit_count")
+    )
+    avg_harvest_actions_per_visited_source = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_harvest_actions_per_visited_source")
+    )
+    avg_visits_per_source_before_depletion = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_visits_per_source_before_depletion")
+    )
+    foraging_trip_wasted_arrival_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_wasted_arrival_count")
+    )
+    foraging_arrival_depleted_source_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_arrival_depleted_source_count")
+    )
+    foraging_arrival_overcontested_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_arrival_overcontested_count")
+    )
+    foraging_retarget_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_retarget_events")
+    )
+    foraging_retarget_events_pressure_low = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_retarget_events_pressure_low")
+    )
+    foraging_retarget_events_pressure_medium = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_retarget_events_pressure_medium")
+    )
+    foraging_retarget_events_pressure_high = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_retarget_events_pressure_high")
+    )
+    foraging_trip_aborted_before_first_harvest_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_aborted_before_first_harvest_count")
+    )
+    foraging_trip_aborted_after_first_harvest_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_aborted_after_first_harvest_count")
+    )
+    foraging_trip_successful_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_successful_count")
+    )
+    avg_foraging_trip_food_gained_after_first_harvest = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_food_gained_after_first_harvest")
+    )
+    foraging_trip_single_harvest_action_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_single_harvest_action_count")
+    )
+    foraging_trip_single_harvest_action_ratio = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_single_harvest_action_ratio")
+    )
+    avg_foraging_trip_consecutive_harvest_actions_on_patch = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_consecutive_harvest_actions_on_patch")
+    )
+    avg_foraging_trip_patch_dwell_after_first_harvest_ticks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_patch_dwell_after_first_harvest_ticks")
+    )
+    foraging_trip_ended_soon_after_first_harvest_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_ended_soon_after_first_harvest_count")
+    )
+    foraging_trip_ended_soon_after_first_harvest_ratio = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_ended_soon_after_first_harvest_ratio")
+    )
+    foraging_trip_end_after_first_harvest_completed = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_end_after_first_harvest_completed")
+    )
+    foraging_trip_end_after_first_harvest_task_switched = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_end_after_first_harvest_task_switched")
+    )
+    foraging_trip_end_after_first_harvest_hunger_death = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_end_after_first_harvest_hunger_death")
+    )
+    foraging_trip_end_after_first_harvest_other = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_end_after_first_harvest_other")
+    )
+    post_first_harvest_task_switch_attempt_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_attempt_count")
+    )
+    post_first_harvest_task_switch_committed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_committed_count")
+    )
+    post_first_harvest_task_switch_blocked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_blocked_count")
+    )
+    post_first_harvest_task_switch_attempt_source_survival_override = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_attempt_source_survival_override")
+    )
+    post_first_harvest_task_switch_attempt_source_role_task_update = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_attempt_source_role_task_update")
+    )
+    post_first_harvest_task_switch_attempt_source_inventory_logic = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_attempt_source_inventory_logic")
+    )
+    post_first_harvest_task_switch_attempt_source_target_invalidated = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_attempt_source_target_invalidated")
+    )
+    post_first_harvest_task_switch_attempt_source_wander_fallback = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_attempt_source_wander_fallback")
+    )
+    post_first_harvest_task_switch_attempt_source_unknown = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_attempt_source_unknown")
+    )
+    post_first_harvest_task_switch_committed_source_role_task_update = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_committed_source_role_task_update")
+    )
+    post_first_harvest_task_switch_committed_source_inventory_logic = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_committed_source_inventory_logic")
+    )
+    post_first_harvest_task_switch_committed_source_target_invalidated = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_committed_source_target_invalidated")
+    )
+    post_first_harvest_task_switch_committed_source_unknown = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "post_first_harvest_task_switch_committed_source_unknown")
+    )
+    foraging_trip_end_reason_task_switched = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_end_reason_task_switched")
+    )
+    foraging_trip_end_reason_hunger_death = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_end_reason_hunger_death")
+    )
+    foraging_trip_end_reason_other = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_end_reason_other")
+    )
+    foraging_trip_success_rate_pressure_low = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_success_rate_pressure_low")
+    )
+    foraging_trip_success_rate_pressure_medium = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_success_rate_pressure_medium")
+    )
+    foraging_trip_success_rate_pressure_high = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_trip_success_rate_pressure_high")
+    )
+    avg_foraging_trip_efficiency_pressure_low = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_efficiency_pressure_low")
+    )
+    avg_foraging_trip_efficiency_pressure_medium = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_efficiency_pressure_medium")
+    )
+    avg_foraging_trip_efficiency_pressure_high = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_efficiency_pressure_high")
+    )
+    avg_foraging_trip_efficiency_contention_low = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_efficiency_contention_low")
+    )
+    avg_foraging_trip_efficiency_contention_medium = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_efficiency_contention_medium")
+    )
+    avg_foraging_trip_efficiency_contention_high = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_foraging_trip_efficiency_contention_high")
+    )
+    foraging_micro_retarget_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_micro_retarget_events")
+    )
+    foraging_commitment_hold_overrides = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_commitment_hold_overrides")
+    )
+    foraging_bonus_yield_units_total = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "foraging_bonus_yield_units_total")
+    )
     food_move_time_ratio = _collect(
         ("metrics", "camp_proto", "settlement_progression_metrics", "food_move_time_ratio")
     )
@@ -838,6 +1044,414 @@ def aggregate_global_balance_results(
     food_consumed_total_observed = _collect(
         ("metrics", "camp_proto", "settlement_progression_metrics", "food_consumed_total_observed")
     )
+    food_self_feeding_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_self_feeding_events")
+    )
+    food_self_feeding_units = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_self_feeding_units")
+    )
+    food_group_feeding_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_group_feeding_events")
+    )
+    food_group_feeding_units = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_group_feeding_units")
+    )
+    food_reserve_accumulation_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_reserve_accumulation_events")
+    )
+    food_reserve_accumulation_units = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_reserve_accumulation_units")
+    )
+    food_reserve_draw_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_reserve_draw_events")
+    )
+    food_reserve_draw_units = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_reserve_draw_units")
+    )
+    food_reserve_balance_units = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_reserve_balance_units")
+    )
+    total_food_in_reserves = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "total_food_in_reserves")
+    )
+    avg_food_in_reserves = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_food_in_reserves")
+    )
+    max_food_in_reserves = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "max_food_in_reserves")
+    )
+    reserve_fill_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_fill_events")
+    )
+    reserve_depletion_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_depletion_events")
+    )
+    ticks_reserve_above_threshold = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "ticks_reserve_above_threshold")
+    )
+    ticks_reserve_empty = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "ticks_reserve_empty")
+    )
+    reserve_recovery_cycles = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_recovery_cycles")
+    )
+    hunger_deaths_with_reserve_available = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "hunger_deaths_with_reserve_available")
+    )
+    hunger_deaths_without_reserve = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "hunger_deaths_without_reserve")
+    )
+    avg_agent_hunger_when_reserve_used = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_agent_hunger_when_reserve_used")
+    )
+    reserve_draw_events_during_food_stress = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_draw_events_during_food_stress")
+    )
+    reserve_draw_events_during_normal_conditions = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_draw_events_during_normal_conditions")
+    )
+    average_settlement_food_buffer = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "average_settlement_food_buffer")
+    )
+    longest_reserve_continuity_window = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "longest_reserve_continuity_window")
+    )
+    settlement_food_shortage_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "settlement_food_shortage_events")
+    )
+    reserve_usage_after_failed_foraging_trip = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_usage_after_failed_foraging_trip")
+    )
+    reserve_partial_recovery_cycles = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_partial_recovery_cycles")
+    )
+    reserve_full_recovery_cycles = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_full_recovery_cycles")
+    )
+    reserve_failed_recovery_attempts = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_failed_recovery_attempts")
+    )
+    reserve_refill_attempts = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_refill_attempts")
+    )
+    reserve_refill_success = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_refill_success")
+    )
+    avg_food_added_per_refill = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_food_added_per_refill")
+    )
+    ticks_between_reserve_refills = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "ticks_between_reserve_refills")
+    )
+    avg_food_draw_per_event = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_food_draw_per_event")
+    )
+    ticks_between_reserve_draws = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "ticks_between_reserve_draws")
+    )
+    reserve_draw_after_failed_foraging_trip = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_draw_after_failed_foraging_trip")
+    )
+    reserve_draw_under_pressure = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_draw_under_pressure")
+    )
+    reserve_draw_under_normal_conditions = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_draw_under_normal_conditions")
+    )
+    reserve_refill_blocked_by_pressure = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_refill_blocked_by_pressure")
+    )
+    reserve_refill_blocked_by_no_surplus = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_refill_blocked_by_no_surplus")
+    )
+    reserve_refill_blocked_by_unstable_context = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_refill_blocked_by_unstable_context")
+    )
+    local_food_handoff_events = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "local_food_handoff_events")
+    )
+    local_food_handoff_units = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "local_food_handoff_units")
+    )
+    handoff_allowed_by_context_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_allowed_by_context_count")
+    )
+    handoff_blocked_by_group_priority_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_group_priority_count")
+    )
+    handoff_blocked_by_cooldown_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_cooldown_count")
+    )
+    handoff_blocked_by_same_unit_recently_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_same_unit_recently_count")
+    )
+    handoff_blocked_by_receiver_viability = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_receiver_viability")
+    )
+    handoff_blocked_by_camp_fragility = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_camp_fragility")
+    )
+    handoff_blocked_by_recent_rescue = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_recent_rescue")
+    )
+    handoff_blocked_by_camp_fragility_when_receiver_critical_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_camp_fragility_when_receiver_critical_count")
+    )
+    handoff_blocked_by_camp_fragility_when_donor_safe_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_camp_fragility_when_donor_safe_count")
+    )
+    handoff_blocked_by_camp_fragility_with_local_surplus_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_camp_fragility_with_local_surplus_count")
+    )
+    handoff_blocked_by_camp_fragility_context_pressure_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_camp_fragility_context_pressure_count")
+    )
+    handoff_blocked_by_camp_fragility_context_nonpressure_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "handoff_blocked_by_camp_fragility_context_nonpressure_count")
+    )
+    avg_handoff_blocked_by_camp_fragility_donor_food = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_handoff_blocked_by_camp_fragility_donor_food")
+    )
+    avg_handoff_blocked_by_camp_fragility_receiver_hunger = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_handoff_blocked_by_camp_fragility_receiver_hunger")
+    )
+    avg_handoff_blocked_by_camp_fragility_camp_food = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_handoff_blocked_by_camp_fragility_camp_food")
+    )
+    local_food_handoff_prevented_by_low_surplus = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "local_food_handoff_prevented_by_low_surplus")
+    )
+    local_food_handoff_prevented_by_distance = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "local_food_handoff_prevented_by_distance")
+    )
+    local_food_handoff_prevented_by_donor_risk = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "local_food_handoff_prevented_by_donor_risk")
+    )
+    hunger_relief_after_local_handoff = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "hunger_relief_after_local_handoff")
+    )
+    ratio_food_security_layer_self_feeding = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "ratio_food_security_layer_self_feeding")
+    )
+    ratio_food_security_layer_group_feeding = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "ratio_food_security_layer_group_feeding")
+    )
+    ratio_food_security_layer_reserve_accumulation = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "ratio_food_security_layer_reserve_accumulation")
+    )
+    ratio_food_security_layer_none = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "ratio_food_security_layer_none")
+    )
+    food_security_layer_transition_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_layer_transition_count")
+    )
+    food_security_layer_transition_none_to_self_feeding = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_layer_transition_none_to_self_feeding")
+    )
+    food_security_layer_transition_self_feeding_to_group_feeding = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_layer_transition_self_feeding_to_group_feeding")
+    )
+    food_security_layer_transition_group_feeding_to_reserve_accumulation = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_layer_transition_group_feeding_to_reserve_accumulation")
+    )
+    food_security_layer_transition_reserve_accumulation_to_none = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_layer_transition_reserve_accumulation_to_none")
+    )
+    food_security_reserve_entry_checks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_entry_checks")
+    )
+    food_security_reserve_entry_condition_met_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_entry_condition_met_count")
+    )
+    food_security_reserve_entry_activated_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_entry_activated_count")
+    )
+    food_security_reserve_entry_blocked_no_surplus = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_entry_blocked_no_surplus")
+    )
+    food_security_reserve_entry_blocked_no_qualifying_task = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_entry_blocked_no_qualifying_task")
+    )
+    food_security_reserve_entry_blocked_unstable_context = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_entry_blocked_unstable_context")
+    )
+    food_security_reserve_entry_blocked_group_feeding_dominance = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_entry_blocked_group_feeding_dominance")
+    )
+    food_security_reserve_prepolicy_candidate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_prepolicy_candidate_count")
+    )
+    food_security_reserve_postpolicy_candidate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_postpolicy_candidate_count")
+    )
+    food_security_reserve_final_activation_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_activation_count")
+    )
+    food_security_reserve_selection_considered_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_selection_considered_count")
+    )
+    food_security_reserve_selection_chosen_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_selection_chosen_count")
+    )
+    food_security_reserve_selection_rejected_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_selection_rejected_count")
+    )
+    food_security_reserve_selection_rejected_by_group_feeding_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_selection_rejected_by_group_feeding_count")
+    )
+    food_security_reserve_selection_rejected_by_unstable_context_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_selection_rejected_by_unstable_context_count")
+    )
+    food_security_reserve_selection_rejected_by_no_surplus_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_selection_rejected_by_no_surplus_count")
+    )
+    food_security_reserve_selection_rejected_by_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_selection_rejected_by_other_count")
+    )
+    food_security_reserve_final_selection_lost_to_self_feeding_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selection_lost_to_self_feeding_count")
+    )
+    food_security_reserve_final_selection_lost_to_group_feeding_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selection_lost_to_group_feeding_count")
+    )
+    food_security_reserve_final_selection_lost_to_unstable_context_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selection_lost_to_unstable_context_count")
+    )
+    food_security_reserve_final_selection_lost_to_no_surplus_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selection_lost_to_no_surplus_count")
+    )
+    food_security_reserve_final_selection_lost_to_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selection_lost_to_other_count")
+    )
+    food_security_reserve_final_selection_winner_self_feeding_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selection_winner_self_feeding_count")
+    )
+    food_security_reserve_final_selection_winner_group_feeding_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selection_winner_group_feeding_count")
+    )
+    food_security_reserve_final_selection_winner_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selection_winner_other_count")
+    )
+    food_security_reserve_loss_stage_policy_ranking_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_loss_stage_policy_ranking_count")
+    )
+    food_security_reserve_loss_stage_final_gate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_loss_stage_final_gate_count")
+    )
+    food_security_reserve_loss_stage_final_override_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_loss_stage_final_override_count")
+    )
+    food_security_reserve_final_decision_observed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_decision_observed_count")
+    )
+    food_security_reserve_final_decision_candidate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_decision_candidate_count")
+    )
+    food_security_reserve_final_decision_candidate_survived_prepolicy_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_decision_candidate_survived_prepolicy_count")
+    )
+    food_security_reserve_final_decision_candidate_survived_postpolicy_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_decision_candidate_survived_postpolicy_count")
+    )
+    food_security_reserve_final_decision_candidate_lost_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_decision_candidate_lost_count")
+    )
+    food_security_reserve_final_decision_candidate_chosen_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_decision_candidate_chosen_count")
+    )
+    food_security_reserve_final_selected_task_food_logistics_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selected_task_food_logistics_count")
+    )
+    food_security_reserve_final_selected_task_village_logistics_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selected_task_village_logistics_count")
+    )
+    food_security_reserve_final_selected_task_camp_supply_food_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selected_task_camp_supply_food_count")
+    )
+    food_security_reserve_final_selected_task_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selected_task_other_count")
+    )
+    food_security_reserve_final_selected_layer_reserve_accumulation_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selected_layer_reserve_accumulation_count")
+    )
+    food_security_reserve_final_selected_layer_group_feeding_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selected_layer_group_feeding_count")
+    )
+    food_security_reserve_final_selected_layer_self_feeding_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selected_layer_self_feeding_count")
+    )
+    food_security_reserve_final_selected_layer_none_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_selected_layer_none_count")
+    )
+    food_security_reserve_final_winner_subsystem_policy_ranking_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_winner_subsystem_policy_ranking_count")
+    )
+    food_security_reserve_final_winner_subsystem_role_task_update_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_winner_subsystem_role_task_update_count")
+    )
+    food_security_reserve_final_winner_subsystem_final_gate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_winner_subsystem_final_gate_count")
+    )
+    food_security_reserve_final_winner_subsystem_final_override_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_winner_subsystem_final_override_count")
+    )
+    food_security_reserve_final_winner_subsystem_task_layer_routing_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_winner_subsystem_task_layer_routing_count")
+    )
+    food_security_reserve_final_winner_subsystem_contextual_override_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_winner_subsystem_contextual_override_count")
+    )
+    food_security_reserve_final_winner_subsystem_unknown_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_winner_subsystem_unknown_count")
+    )
+    food_security_reserve_final_override_reason_group_feeding_pressure_override_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_override_reason_group_feeding_pressure_override_count")
+    )
+    food_security_reserve_final_override_reason_village_logistics_group_routing_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_override_reason_village_logistics_group_routing_count")
+    )
+    food_security_reserve_final_override_reason_camp_supply_group_routing_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_override_reason_camp_supply_group_routing_count")
+    )
+    food_security_reserve_final_override_reason_unstable_context_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_override_reason_unstable_context_count")
+    )
+    food_security_reserve_final_override_reason_no_surplus_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_override_reason_no_surplus_count")
+    )
+    food_security_reserve_final_override_reason_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "food_security_reserve_final_override_reason_other_count")
+    )
+    reserve_final_tiebreak_invoked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_final_tiebreak_invoked_count")
+    )
+    reserve_final_tiebreak_won_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_final_tiebreak_won_count")
+    )
+    reserve_final_tiebreak_lost_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_final_tiebreak_lost_count")
+    )
+    reserve_final_tiebreak_blocked_by_pressure_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_final_tiebreak_blocked_by_pressure_count")
+    )
+    reserve_final_tiebreak_blocked_by_unstable_context_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_final_tiebreak_blocked_by_unstable_context_count")
+    )
+    reserve_final_tiebreak_blocked_by_no_surplus_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reserve_final_tiebreak_blocked_by_no_surplus_count")
+    )
+    avg_agents_in_food_security_layer_self_feeding = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_agents_in_food_security_layer_self_feeding")
+    )
+    avg_agents_in_food_security_layer_group_feeding = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_agents_in_food_security_layer_group_feeding")
+    )
+    avg_agents_in_food_security_layer_reserve_accumulation = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_agents_in_food_security_layer_reserve_accumulation")
+    )
+    avg_agents_in_food_security_layer_none = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_agents_in_food_security_layer_none")
+    )
     deaths_before_first_house_completed = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "deaths_before_first_house_completed"))
     deaths_before_settlement_stability_threshold = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "deaths_before_settlement_stability_threshold"))
     population_collapse_events = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_collapse_events"))
@@ -850,6 +1464,38 @@ def aggregate_global_balance_results(
     first_village_formalization_tick = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "first_village_formalization_tick"))
     storage_built_before_house_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "storage_built_before_house_count"))
     road_built_before_house_threshold_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "road_built_before_house_threshold_count"))
+    resource_conservation_raw_material_fabrication_detected = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "resource_conservation_raw_material_fabrication_detected")
+    )
+    food_initial_world_stock_estimate = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_initial_world_stock_estimate"))
+    wood_initial_world_stock_estimate = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_initial_world_stock_estimate"))
+    stone_initial_world_stock_estimate = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_initial_world_stock_estimate"))
+    food_available_world_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_available_world_total"))
+    food_available_on_map = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_available_on_map"))
+    food_in_agent_inventories = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_in_agent_inventories"))
+    food_in_storage_buildings = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_in_storage_buildings"))
+    food_in_camp_buffers = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_in_camp_buffers"))
+    food_in_construction_buffers = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "food_in_construction_buffers")
+    )
+    food_gathered_total_material = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_gathered_total"))
+    food_respawned_total_material = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_respawned_total"))
+    food_consumed_total_observed_material = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "food_consumed_total_observed")
+    )
+    food_transported_to_camp_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "food_transported_to_camp_total")
+    )
+    food_transported_to_storage_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "food_transported_to_storage_total")
+    )
+    food_transported_to_construction_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "food_transported_to_construction_total")
+    )
+    food_deposited_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "food_deposited_total"))
+    food_reserve_buffered_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "food_reserve_buffered_total")
+    )
     wood_available_world_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_available_world_total"))
     wood_available_on_map = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_available_on_map"))
     wood_in_agent_inventories = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_in_agent_inventories"))
@@ -862,6 +1508,72 @@ def aggregate_global_balance_results(
     )
     wood_shortage_events = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_shortage_events"))
     avg_local_wood_pressure = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "avg_local_wood_pressure"))
+    wood_outstanding_construction_demand_units = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "wood_outstanding_construction_demand_units")
+    )
+    wood_supply_demand_gap_units = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_supply_demand_gap_units"))
+    wood_respawn_to_extraction_ratio = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "wood_respawn_to_extraction_ratio")
+    )
+    wood_extraction_to_initial_stock_ratio = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "wood_extraction_to_initial_stock_ratio")
+    )
+    wood_transported_to_storage_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "wood_transported_to_storage_total")
+    )
+    wood_transported_to_construction_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "wood_transported_to_construction_total")
+    )
+    wood_deposited_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_deposited_total"))
+    wood_reserve_buffered_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "wood_reserve_buffered_total"))
+    stone_available_world_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_available_world_total"))
+    stone_available_on_map = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_available_on_map"))
+    stone_in_agent_inventories = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_in_agent_inventories"))
+    stone_in_storage_buildings = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_in_storage_buildings"))
+    stone_in_construction_buffers = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "stone_in_construction_buffers")
+    )
+    stone_gathered_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_gathered_total"))
+    stone_respawned_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_respawned_total"))
+    stone_consumed_for_construction_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "stone_consumed_for_construction_total")
+    )
+    avg_local_stone_pressure = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "avg_local_stone_pressure"))
+    stone_outstanding_construction_demand_units = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "stone_outstanding_construction_demand_units")
+    )
+    stone_supply_demand_gap_units = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "stone_supply_demand_gap_units")
+    )
+    stone_respawn_to_extraction_ratio = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "stone_respawn_to_extraction_ratio")
+    )
+    stone_extraction_to_initial_stock_ratio = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "stone_extraction_to_initial_stock_ratio")
+    )
+    stone_transported_to_storage_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "stone_transported_to_storage_total")
+    )
+    stone_transported_to_construction_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "stone_transported_to_construction_total")
+    )
+    stone_deposited_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_deposited_total"))
+    stone_reserve_buffered_total = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "stone_reserve_buffered_total"))
+    material_transport_observed_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "material_transport_observed_total")
+    )
+    construction_material_delivery_wood_units = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_material_delivery_wood_units")
+    )
+    construction_material_delivery_stone_units = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_material_delivery_stone_units")
+    )
+    construction_material_delivery_food_units = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_material_delivery_food_units")
+    )
+    storage_deposit_food_units = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "storage_deposit_food_units"))
+    storage_deposit_wood_units = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "storage_deposit_wood_units"))
+    storage_deposit_stone_units = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "storage_deposit_stone_units"))
     construction_sites_created = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "construction_sites_created"))
     construction_sites_created_house = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_sites_created_house")
@@ -910,11 +1622,239 @@ def aggregate_global_balance_results(
     construction_delivery_to_wrong_target_or_drift = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_to_wrong_target_or_drift")
     )
+    construction_delivery_source_binding_selected_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_binding_selected_count")
+    )
+    construction_delivery_source_binding_persisted_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_binding_persisted_count")
+    )
+    construction_delivery_source_binding_refreshed_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_binding_refreshed_count")
+    )
+    construction_delivery_source_binding_missing_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_binding_missing_count")
+    )
+    construction_delivery_source_binding_unavailable_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_binding_unavailable_count")
+    )
+    construction_delivery_source_binding_lost_missing_source_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_binding_lost_missing_source_count")
+    )
+    construction_delivery_source_binding_lost_ineligible_source_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_binding_lost_ineligible_source_count")
+    )
+    construction_delivery_source_binding_lost_not_refreshed_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_binding_lost_not_refreshed_count")
+    )
+    construction_delivery_prepickup_checks_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_checks_count")
+    )
+    construction_delivery_prepickup_site_exists_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_site_exists_count")
+    )
+    construction_delivery_prepickup_site_missing_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_site_missing_count")
+    )
+    construction_delivery_prepickup_site_under_construction_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_site_under_construction_count")
+    )
+    construction_delivery_prepickup_site_not_under_construction_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_site_not_under_construction_count")
+    )
+    construction_delivery_prepickup_site_reachable_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_site_reachable_count")
+    )
+    construction_delivery_prepickup_site_unreachable_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_site_unreachable_count")
+    )
+    construction_delivery_prepickup_site_demand_matches_material_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_site_demand_matches_material_count")
+    )
+    construction_delivery_prepickup_site_demand_mismatch_material_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_prepickup_site_demand_mismatch_material_count")
+    )
+    construction_delivery_source_persistence_window_invoked_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_persistence_window_invoked_count")
+    )
+    construction_delivery_source_persistence_window_completed_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_persistence_window_completed_count")
+    )
+    construction_delivery_source_persistence_window_broken_by_source_invalidity_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_persistence_window_broken_by_source_invalidity_count")
+    )
+    construction_delivery_source_persistence_window_broken_by_demand_mismatch_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_source_persistence_window_broken_by_demand_mismatch_count")
+    )
+    construction_delivery_reservation_alignment_pass_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_pass_count")
+    )
+    construction_delivery_reservation_alignment_fail_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_count")
+    )
+    construction_delivery_reservation_alignment_fail_material_wood_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_material_wood_count")
+    )
+    construction_delivery_reservation_alignment_fail_material_stone_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_material_stone_count")
+    )
+    construction_delivery_reservation_alignment_fail_material_food_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_material_food_count")
+    )
+    construction_delivery_reservation_alignment_fail_reason_site_missing_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_reason_site_missing_count")
+    )
+    construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count")
+    )
+    construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count")
+    )
+    construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count")
+    )
+    construction_delivery_reservation_alignment_fail_reason_source_ineligible_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_reason_source_ineligible_count")
+    )
+    construction_delivery_reservation_alignment_fail_reason_source_empty_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_reason_source_empty_count")
+    )
+    delivery_commitment_hold_invoked_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "delivery_commitment_hold_invoked_count")
+    )
+    delivery_commitment_hold_completed_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "delivery_commitment_hold_completed_count")
+    )
+    delivery_commitment_hold_broken_by_survival_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "delivery_commitment_hold_broken_by_survival_count")
+    )
+    delivery_commitment_hold_broken_by_invalid_site_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "delivery_commitment_hold_broken_by_invalid_site_count")
+    )
+    delivery_commitment_hold_broken_by_invalid_source_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "delivery_commitment_hold_broken_by_invalid_source_count")
+    )
+    construction_delivery_invalid_site_missing_site_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_missing_site_count")
+    )
+    construction_delivery_invalid_site_not_under_construction_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_not_under_construction_count")
+    )
+    construction_delivery_invalid_site_village_mismatch_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_village_mismatch_count")
+    )
+    construction_delivery_invalid_site_construction_completed_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_construction_completed_count")
+    )
+    construction_delivery_invalid_site_no_path_to_site_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_no_path_to_site_count")
+    )
+    construction_delivery_invalid_site_demand_mismatch_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_demand_mismatch_count")
+    )
+    construction_delivery_invalid_site_other_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_other_count")
+    )
+    construction_delivery_invalid_source_no_source_available_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_no_source_available_count")
+    )
+    construction_delivery_invalid_source_source_depleted_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_source_depleted_count")
+    )
+    construction_delivery_invalid_source_reservation_invalidated_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_reservation_invalidated_count")
+    )
+    construction_delivery_invalid_source_source_reassigned_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_source_reassigned_count")
+    )
+    construction_delivery_invalid_source_linkage_mismatch_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_linkage_mismatch_count")
+    )
+    construction_delivery_invalid_source_no_path_to_source_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_no_path_to_source_count")
+    )
+    construction_delivery_invalid_source_other_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_other_count")
+    )
+    construction_delivery_invalid_site_before_pickup_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_before_pickup_count")
+    )
+    construction_delivery_invalid_site_after_pickup_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_after_pickup_count")
+    )
+    construction_delivery_invalid_source_before_pickup_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_before_pickup_count")
+    )
+    construction_delivery_invalid_source_after_pickup_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_after_pickup_count")
+    )
+    construction_delivery_ticks_reservation_to_invalid_site_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_ticks_reservation_to_invalid_site_avg")
+    )
+    construction_delivery_ticks_reservation_to_invalid_source_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_ticks_reservation_to_invalid_source_avg")
+    )
+    construction_delivery_ticks_pickup_to_invalid_site_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_ticks_pickup_to_invalid_site_avg")
+    )
+    construction_delivery_ticks_pickup_to_invalid_source_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_ticks_pickup_to_invalid_source_avg")
+    )
+    construction_delivery_invalid_site_material_wood_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_material_wood_count")
+    )
+    construction_delivery_invalid_site_material_stone_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_material_stone_count")
+    )
+    construction_delivery_invalid_site_material_food_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_material_food_count")
+    )
+    construction_delivery_invalid_source_material_wood_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_material_wood_count")
+    )
+    construction_delivery_invalid_source_material_stone_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_material_stone_count")
+    )
+    construction_delivery_invalid_source_material_food_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_material_food_count")
+    )
+    construction_delivery_invalid_site_committed_site_mismatch_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_site_committed_site_mismatch_count")
+    )
+    construction_delivery_invalid_source_committed_source_missing_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_invalid_source_committed_source_missing_count")
+    )
     construction_delivery_avg_distance_to_site = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_avg_distance_to_site")
     )
     construction_delivery_avg_distance_to_source = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_avg_distance_to_source")
+    )
+    construction_delivery_failure_no_source_available = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_no_source_available")
+    )
+    construction_delivery_failure_source_depleted = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_source_depleted")
+    )
+    construction_delivery_failure_reservation_invalidated = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_reservation_invalidated")
+    )
+    construction_delivery_failure_no_path_to_source = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_no_path_to_source")
+    )
+    construction_delivery_failure_no_path_to_site = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_no_path_to_site")
+    )
+    construction_delivery_failure_arrival_failed = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_arrival_failed")
+    )
+    construction_delivery_failure_retargeted_before_delivery = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_retargeted_before_delivery")
+    )
+    construction_delivery_failure_interrupted_by_other_priority = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_interrupted_by_other_priority")
+    )
+    construction_delivery_failure_unknown = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_failure_unknown")
     )
     storage_delivery_failures = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "storage_delivery_failures"))
     house_delivery_failures = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "house_delivery_failures"))
@@ -1075,6 +2015,68 @@ def aggregate_global_balance_results(
     )
     construction_site_active_age_ticks_avg = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_active_age_ticks_avg")
+    )
+    construction_site_nearest_wood_distance_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_nearest_wood_distance_avg")
+    )
+    construction_site_nearest_stone_distance_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_nearest_stone_distance_avg")
+    )
+    construction_site_viable_wood_sources_within_radius_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_viable_wood_sources_within_radius_avg")
+    )
+    construction_site_viable_stone_sources_within_radius_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_viable_stone_sources_within_radius_avg")
+    )
+    construction_site_zero_wood_sources_within_radius_ticks = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_zero_wood_sources_within_radius_ticks")
+    )
+    construction_site_zero_stone_sources_within_radius_ticks = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_zero_stone_sources_within_radius_ticks")
+    )
+    construction_site_local_wood_source_contention_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_local_wood_source_contention_avg")
+    )
+    construction_site_local_stone_source_contention_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_local_stone_source_contention_avg")
+    )
+    construction_site_ticks_since_last_delivery_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_ticks_since_last_delivery_avg")
+    )
+    construction_site_waiting_with_positive_wood_stock_ticks = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_waiting_with_positive_wood_stock_ticks")
+    )
+    construction_site_waiting_with_positive_stone_stock_ticks = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_waiting_with_positive_stone_stock_ticks")
+    )
+    construction_site_first_demand_to_first_delivery_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_first_demand_to_first_delivery_avg")
+    )
+    construction_site_material_inflow_rate_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_material_inflow_rate_avg")
+    )
+    construction_site_delivered_wood_units_total_live = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_delivered_wood_units_total_live")
+    )
+    construction_site_delivered_stone_units_total_live = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_delivered_stone_units_total_live")
+    )
+    construction_site_delivered_food_units_total_live = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_delivered_food_units_total_live")
+    )
+    active_builders_count_material = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "active_builders_count"))
+    active_haulers_count_material = _collect(("metrics", "camp_proto", "material_feasibility_metrics", "active_haulers_count"))
+    active_builders_nearest_wood_distance_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "active_builders_nearest_wood_distance_avg")
+    )
+    active_builders_nearest_stone_distance_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "active_builders_nearest_stone_distance_avg")
+    )
+    active_haulers_nearest_wood_distance_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "active_haulers_nearest_wood_distance_avg")
+    )
+    active_haulers_nearest_stone_distance_avg = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "active_haulers_nearest_stone_distance_avg")
     )
     construction_site_first_builder_arrival_delay_avg = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_site_first_builder_arrival_delay_avg")
@@ -1414,6 +2416,198 @@ def aggregate_global_balance_results(
             "avg_farming_yield_per_cycle": float(
                 mean(avg_farming_yield_per_cycle)
             ) if avg_farming_yield_per_cycle else 0.0,
+            "avg_foraging_trip_started_count": float(
+                mean(foraging_trip_started_count)
+            ) if foraging_trip_started_count else 0.0,
+            "avg_foraging_trip_completed_count": float(
+                mean(foraging_trip_completed_count)
+            ) if foraging_trip_completed_count else 0.0,
+            "avg_foraging_trip_zero_harvest_count": float(
+                mean(foraging_trip_zero_harvest_count)
+            ) if foraging_trip_zero_harvest_count else 0.0,
+            "avg_foraging_trip_terminated_by_hunger_count": float(
+                mean(foraging_trip_terminated_by_hunger_count)
+            ) if foraging_trip_terminated_by_hunger_count else 0.0,
+            "avg_foraging_trip_food_gained": float(
+                mean(avg_foraging_trip_food_gained)
+            ) if avg_foraging_trip_food_gained else 0.0,
+            "avg_foraging_trip_move_before_first_harvest": float(
+                mean(avg_foraging_trip_move_before_first_harvest)
+            ) if avg_foraging_trip_move_before_first_harvest else 0.0,
+            "avg_foraging_trip_harvest_actions": float(
+                mean(avg_foraging_trip_harvest_actions)
+            ) if avg_foraging_trip_harvest_actions else 0.0,
+            "avg_foraging_zero_harvest_trip_ratio": float(
+                mean(foraging_zero_harvest_trip_ratio)
+            ) if foraging_zero_harvest_trip_ratio else 0.0,
+            "avg_foraging_trip_retarget_count": float(
+                mean(avg_foraging_trip_retarget_count)
+            ) if avg_foraging_trip_retarget_count else 0.0,
+            "avg_foraging_target_lock_duration": float(
+                mean(avg_foraging_target_lock_duration)
+            ) if avg_foraging_target_lock_duration else 0.0,
+            "avg_foraging_commit_before_retarget_ticks": float(
+                mean(avg_foraging_commit_before_retarget_ticks)
+            ) if avg_foraging_commit_before_retarget_ticks else 0.0,
+            "avg_foraging_trip_efficiency_ratio": float(
+                mean(avg_foraging_trip_efficiency_ratio)
+            ) if avg_foraging_trip_efficiency_ratio else 0.0,
+            "avg_foraging_source_visit_count": float(
+                mean(foraging_source_visit_count)
+            ) if foraging_source_visit_count else 0.0,
+            "avg_harvest_actions_per_visited_source": float(
+                mean(avg_harvest_actions_per_visited_source)
+            ) if avg_harvest_actions_per_visited_source else 0.0,
+            "avg_visits_per_source_before_depletion": float(
+                mean(avg_visits_per_source_before_depletion)
+            ) if avg_visits_per_source_before_depletion else 0.0,
+            "avg_foraging_trip_wasted_arrival_count": float(
+                mean(foraging_trip_wasted_arrival_count)
+            ) if foraging_trip_wasted_arrival_count else 0.0,
+            "avg_foraging_arrival_depleted_source_count": float(
+                mean(foraging_arrival_depleted_source_count)
+            ) if foraging_arrival_depleted_source_count else 0.0,
+            "avg_foraging_arrival_overcontested_count": float(
+                mean(foraging_arrival_overcontested_count)
+            ) if foraging_arrival_overcontested_count else 0.0,
+            "avg_foraging_retarget_events": float(
+                mean(foraging_retarget_events)
+            ) if foraging_retarget_events else 0.0,
+            "avg_foraging_retarget_events_pressure_low": float(
+                mean(foraging_retarget_events_pressure_low)
+            ) if foraging_retarget_events_pressure_low else 0.0,
+            "avg_foraging_retarget_events_pressure_medium": float(
+                mean(foraging_retarget_events_pressure_medium)
+            ) if foraging_retarget_events_pressure_medium else 0.0,
+            "avg_foraging_retarget_events_pressure_high": float(
+                mean(foraging_retarget_events_pressure_high)
+            ) if foraging_retarget_events_pressure_high else 0.0,
+            "avg_foraging_trip_aborted_before_first_harvest_count": float(
+                mean(foraging_trip_aborted_before_first_harvest_count)
+            ) if foraging_trip_aborted_before_first_harvest_count else 0.0,
+            "avg_foraging_trip_aborted_after_first_harvest_count": float(
+                mean(foraging_trip_aborted_after_first_harvest_count)
+            ) if foraging_trip_aborted_after_first_harvest_count else 0.0,
+            "avg_foraging_trip_successful_count": float(
+                mean(foraging_trip_successful_count)
+            ) if foraging_trip_successful_count else 0.0,
+            "avg_foraging_trip_food_gained_after_first_harvest": float(
+                mean(avg_foraging_trip_food_gained_after_first_harvest)
+            ) if avg_foraging_trip_food_gained_after_first_harvest else 0.0,
+            "avg_foraging_trip_single_harvest_action_count": float(
+                mean(foraging_trip_single_harvest_action_count)
+            ) if foraging_trip_single_harvest_action_count else 0.0,
+            "avg_foraging_trip_single_harvest_action_ratio": float(
+                mean(foraging_trip_single_harvest_action_ratio)
+            ) if foraging_trip_single_harvest_action_ratio else 0.0,
+            "avg_foraging_trip_consecutive_harvest_actions_on_patch": float(
+                mean(avg_foraging_trip_consecutive_harvest_actions_on_patch)
+            ) if avg_foraging_trip_consecutive_harvest_actions_on_patch else 0.0,
+            "avg_foraging_trip_patch_dwell_after_first_harvest_ticks": float(
+                mean(avg_foraging_trip_patch_dwell_after_first_harvest_ticks)
+            ) if avg_foraging_trip_patch_dwell_after_first_harvest_ticks else 0.0,
+            "avg_foraging_trip_ended_soon_after_first_harvest_count": float(
+                mean(foraging_trip_ended_soon_after_first_harvest_count)
+            ) if foraging_trip_ended_soon_after_first_harvest_count else 0.0,
+            "avg_foraging_trip_ended_soon_after_first_harvest_ratio": float(
+                mean(foraging_trip_ended_soon_after_first_harvest_ratio)
+            ) if foraging_trip_ended_soon_after_first_harvest_ratio else 0.0,
+            "avg_foraging_trip_end_after_first_harvest_completed": float(
+                mean(foraging_trip_end_after_first_harvest_completed)
+            ) if foraging_trip_end_after_first_harvest_completed else 0.0,
+            "avg_foraging_trip_end_after_first_harvest_task_switched": float(
+                mean(foraging_trip_end_after_first_harvest_task_switched)
+            ) if foraging_trip_end_after_first_harvest_task_switched else 0.0,
+            "avg_foraging_trip_end_after_first_harvest_hunger_death": float(
+                mean(foraging_trip_end_after_first_harvest_hunger_death)
+            ) if foraging_trip_end_after_first_harvest_hunger_death else 0.0,
+            "avg_foraging_trip_end_after_first_harvest_other": float(
+                mean(foraging_trip_end_after_first_harvest_other)
+            ) if foraging_trip_end_after_first_harvest_other else 0.0,
+            "avg_post_first_harvest_task_switch_attempt_count": float(
+                mean(post_first_harvest_task_switch_attempt_count)
+            ) if post_first_harvest_task_switch_attempt_count else 0.0,
+            "avg_post_first_harvest_task_switch_committed_count": float(
+                mean(post_first_harvest_task_switch_committed_count)
+            ) if post_first_harvest_task_switch_committed_count else 0.0,
+            "avg_post_first_harvest_task_switch_blocked_count": float(
+                mean(post_first_harvest_task_switch_blocked_count)
+            ) if post_first_harvest_task_switch_blocked_count else 0.0,
+            "avg_post_first_harvest_task_switch_attempt_source_survival_override": float(
+                mean(post_first_harvest_task_switch_attempt_source_survival_override)
+            ) if post_first_harvest_task_switch_attempt_source_survival_override else 0.0,
+            "avg_post_first_harvest_task_switch_attempt_source_role_task_update": float(
+                mean(post_first_harvest_task_switch_attempt_source_role_task_update)
+            ) if post_first_harvest_task_switch_attempt_source_role_task_update else 0.0,
+            "avg_post_first_harvest_task_switch_attempt_source_inventory_logic": float(
+                mean(post_first_harvest_task_switch_attempt_source_inventory_logic)
+            ) if post_first_harvest_task_switch_attempt_source_inventory_logic else 0.0,
+            "avg_post_first_harvest_task_switch_attempt_source_target_invalidated": float(
+                mean(post_first_harvest_task_switch_attempt_source_target_invalidated)
+            ) if post_first_harvest_task_switch_attempt_source_target_invalidated else 0.0,
+            "avg_post_first_harvest_task_switch_attempt_source_wander_fallback": float(
+                mean(post_first_harvest_task_switch_attempt_source_wander_fallback)
+            ) if post_first_harvest_task_switch_attempt_source_wander_fallback else 0.0,
+            "avg_post_first_harvest_task_switch_attempt_source_unknown": float(
+                mean(post_first_harvest_task_switch_attempt_source_unknown)
+            ) if post_first_harvest_task_switch_attempt_source_unknown else 0.0,
+            "avg_post_first_harvest_task_switch_committed_source_role_task_update": float(
+                mean(post_first_harvest_task_switch_committed_source_role_task_update)
+            ) if post_first_harvest_task_switch_committed_source_role_task_update else 0.0,
+            "avg_post_first_harvest_task_switch_committed_source_inventory_logic": float(
+                mean(post_first_harvest_task_switch_committed_source_inventory_logic)
+            ) if post_first_harvest_task_switch_committed_source_inventory_logic else 0.0,
+            "avg_post_first_harvest_task_switch_committed_source_target_invalidated": float(
+                mean(post_first_harvest_task_switch_committed_source_target_invalidated)
+            ) if post_first_harvest_task_switch_committed_source_target_invalidated else 0.0,
+            "avg_post_first_harvest_task_switch_committed_source_unknown": float(
+                mean(post_first_harvest_task_switch_committed_source_unknown)
+            ) if post_first_harvest_task_switch_committed_source_unknown else 0.0,
+            "avg_foraging_trip_end_reason_task_switched": float(
+                mean(foraging_trip_end_reason_task_switched)
+            ) if foraging_trip_end_reason_task_switched else 0.0,
+            "avg_foraging_trip_end_reason_hunger_death": float(
+                mean(foraging_trip_end_reason_hunger_death)
+            ) if foraging_trip_end_reason_hunger_death else 0.0,
+            "avg_foraging_trip_end_reason_other": float(
+                mean(foraging_trip_end_reason_other)
+            ) if foraging_trip_end_reason_other else 0.0,
+            "avg_foraging_trip_success_rate_pressure_low": float(
+                mean(foraging_trip_success_rate_pressure_low)
+            ) if foraging_trip_success_rate_pressure_low else 0.0,
+            "avg_foraging_trip_success_rate_pressure_medium": float(
+                mean(foraging_trip_success_rate_pressure_medium)
+            ) if foraging_trip_success_rate_pressure_medium else 0.0,
+            "avg_foraging_trip_success_rate_pressure_high": float(
+                mean(foraging_trip_success_rate_pressure_high)
+            ) if foraging_trip_success_rate_pressure_high else 0.0,
+            "avg_foraging_trip_efficiency_pressure_low": float(
+                mean(avg_foraging_trip_efficiency_pressure_low)
+            ) if avg_foraging_trip_efficiency_pressure_low else 0.0,
+            "avg_foraging_trip_efficiency_pressure_medium": float(
+                mean(avg_foraging_trip_efficiency_pressure_medium)
+            ) if avg_foraging_trip_efficiency_pressure_medium else 0.0,
+            "avg_foraging_trip_efficiency_pressure_high": float(
+                mean(avg_foraging_trip_efficiency_pressure_high)
+            ) if avg_foraging_trip_efficiency_pressure_high else 0.0,
+            "avg_foraging_trip_efficiency_contention_low": float(
+                mean(avg_foraging_trip_efficiency_contention_low)
+            ) if avg_foraging_trip_efficiency_contention_low else 0.0,
+            "avg_foraging_trip_efficiency_contention_medium": float(
+                mean(avg_foraging_trip_efficiency_contention_medium)
+            ) if avg_foraging_trip_efficiency_contention_medium else 0.0,
+            "avg_foraging_trip_efficiency_contention_high": float(
+                mean(avg_foraging_trip_efficiency_contention_high)
+            ) if avg_foraging_trip_efficiency_contention_high else 0.0,
+            "avg_foraging_micro_retarget_events": float(
+                mean(foraging_micro_retarget_events)
+            ) if foraging_micro_retarget_events else 0.0,
+            "avg_foraging_commitment_hold_overrides": float(
+                mean(foraging_commitment_hold_overrides)
+            ) if foraging_commitment_hold_overrides else 0.0,
+            "avg_foraging_bonus_yield_units_total": float(
+                mean(foraging_bonus_yield_units_total)
+            ) if foraging_bonus_yield_units_total else 0.0,
             "avg_food_move_time_ratio": float(
                 mean(food_move_time_ratio)
             ) if food_move_time_ratio else 0.0,
@@ -1446,6 +2640,386 @@ def aggregate_global_balance_results(
             ) if food_scarcity_adaptive_retarget_events else 0.0,
             "avg_food_gathered_total_observed": float(mean(food_gathered_total_observed)) if food_gathered_total_observed else 0.0,
             "avg_food_consumed_total_observed": float(mean(food_consumed_total_observed)) if food_consumed_total_observed else 0.0,
+            "avg_food_self_feeding_events": float(mean(food_self_feeding_events)) if food_self_feeding_events else 0.0,
+            "avg_food_self_feeding_units": float(mean(food_self_feeding_units)) if food_self_feeding_units else 0.0,
+            "avg_food_group_feeding_events": float(mean(food_group_feeding_events)) if food_group_feeding_events else 0.0,
+            "avg_food_group_feeding_units": float(mean(food_group_feeding_units)) if food_group_feeding_units else 0.0,
+            "avg_food_reserve_accumulation_events": float(
+                mean(food_reserve_accumulation_events)
+            ) if food_reserve_accumulation_events else 0.0,
+            "avg_food_reserve_accumulation_units": float(
+                mean(food_reserve_accumulation_units)
+            ) if food_reserve_accumulation_units else 0.0,
+            "avg_food_reserve_draw_events": float(mean(food_reserve_draw_events)) if food_reserve_draw_events else 0.0,
+            "avg_food_reserve_draw_units": float(mean(food_reserve_draw_units)) if food_reserve_draw_units else 0.0,
+            "avg_food_reserve_balance_units": float(mean(food_reserve_balance_units)) if food_reserve_balance_units else 0.0,
+            "avg_total_food_in_reserves": float(mean(total_food_in_reserves)) if total_food_in_reserves else 0.0,
+            "avg_avg_food_in_reserves": float(mean(avg_food_in_reserves)) if avg_food_in_reserves else 0.0,
+            "avg_max_food_in_reserves": float(mean(max_food_in_reserves)) if max_food_in_reserves else 0.0,
+            "avg_reserve_fill_events": float(mean(reserve_fill_events)) if reserve_fill_events else 0.0,
+            "avg_reserve_depletion_events": float(mean(reserve_depletion_events)) if reserve_depletion_events else 0.0,
+            "avg_ticks_reserve_above_threshold": float(
+                mean(ticks_reserve_above_threshold)
+            ) if ticks_reserve_above_threshold else 0.0,
+            "avg_ticks_reserve_empty": float(mean(ticks_reserve_empty)) if ticks_reserve_empty else 0.0,
+            "avg_reserve_recovery_cycles": float(mean(reserve_recovery_cycles)) if reserve_recovery_cycles else 0.0,
+            "avg_hunger_deaths_with_reserve_available": float(
+                mean(hunger_deaths_with_reserve_available)
+            ) if hunger_deaths_with_reserve_available else 0.0,
+            "avg_hunger_deaths_without_reserve": float(
+                mean(hunger_deaths_without_reserve)
+            ) if hunger_deaths_without_reserve else 0.0,
+            "avg_avg_agent_hunger_when_reserve_used": float(
+                mean(avg_agent_hunger_when_reserve_used)
+            ) if avg_agent_hunger_when_reserve_used else 0.0,
+            "avg_reserve_draw_events_during_food_stress": float(
+                mean(reserve_draw_events_during_food_stress)
+            ) if reserve_draw_events_during_food_stress else 0.0,
+            "avg_reserve_draw_events_during_normal_conditions": float(
+                mean(reserve_draw_events_during_normal_conditions)
+            ) if reserve_draw_events_during_normal_conditions else 0.0,
+            "avg_average_settlement_food_buffer": float(
+                mean(average_settlement_food_buffer)
+            ) if average_settlement_food_buffer else 0.0,
+            "avg_longest_reserve_continuity_window": float(
+                mean(longest_reserve_continuity_window)
+            ) if longest_reserve_continuity_window else 0.0,
+            "avg_settlement_food_shortage_events": float(
+                mean(settlement_food_shortage_events)
+            ) if settlement_food_shortage_events else 0.0,
+            "avg_reserve_usage_after_failed_foraging_trip": float(
+                mean(reserve_usage_after_failed_foraging_trip)
+            ) if reserve_usage_after_failed_foraging_trip else 0.0,
+            "avg_reserve_partial_recovery_cycles": float(
+                mean(reserve_partial_recovery_cycles)
+            ) if reserve_partial_recovery_cycles else 0.0,
+            "avg_reserve_full_recovery_cycles": float(
+                mean(reserve_full_recovery_cycles)
+            ) if reserve_full_recovery_cycles else 0.0,
+            "avg_reserve_failed_recovery_attempts": float(
+                mean(reserve_failed_recovery_attempts)
+            ) if reserve_failed_recovery_attempts else 0.0,
+            "avg_reserve_refill_attempts": float(
+                mean(reserve_refill_attempts)
+            ) if reserve_refill_attempts else 0.0,
+            "avg_reserve_refill_success": float(
+                mean(reserve_refill_success)
+            ) if reserve_refill_success else 0.0,
+            "avg_avg_food_added_per_refill": float(
+                mean(avg_food_added_per_refill)
+            ) if avg_food_added_per_refill else 0.0,
+            "avg_ticks_between_reserve_refills": float(
+                mean(ticks_between_reserve_refills)
+            ) if ticks_between_reserve_refills else 0.0,
+            "avg_avg_food_draw_per_event": float(
+                mean(avg_food_draw_per_event)
+            ) if avg_food_draw_per_event else 0.0,
+            "avg_ticks_between_reserve_draws": float(
+                mean(ticks_between_reserve_draws)
+            ) if ticks_between_reserve_draws else 0.0,
+            "avg_reserve_draw_after_failed_foraging_trip": float(
+                mean(reserve_draw_after_failed_foraging_trip)
+            ) if reserve_draw_after_failed_foraging_trip else 0.0,
+            "avg_reserve_draw_under_pressure": float(
+                mean(reserve_draw_under_pressure)
+            ) if reserve_draw_under_pressure else 0.0,
+            "avg_reserve_draw_under_normal_conditions": float(
+                mean(reserve_draw_under_normal_conditions)
+            ) if reserve_draw_under_normal_conditions else 0.0,
+            "avg_reserve_refill_blocked_by_pressure": float(
+                mean(reserve_refill_blocked_by_pressure)
+            ) if reserve_refill_blocked_by_pressure else 0.0,
+            "avg_reserve_refill_blocked_by_no_surplus": float(
+                mean(reserve_refill_blocked_by_no_surplus)
+            ) if reserve_refill_blocked_by_no_surplus else 0.0,
+            "avg_reserve_refill_blocked_by_unstable_context": float(
+                mean(reserve_refill_blocked_by_unstable_context)
+            ) if reserve_refill_blocked_by_unstable_context else 0.0,
+            "avg_local_food_handoff_events": float(
+                mean(local_food_handoff_events)
+            ) if local_food_handoff_events else 0.0,
+            "avg_local_food_handoff_units": float(
+                mean(local_food_handoff_units)
+            ) if local_food_handoff_units else 0.0,
+            "avg_handoff_allowed_by_context_count": float(
+                mean(handoff_allowed_by_context_count)
+            ) if handoff_allowed_by_context_count else 0.0,
+            "avg_handoff_blocked_by_group_priority_count": float(
+                mean(handoff_blocked_by_group_priority_count)
+            ) if handoff_blocked_by_group_priority_count else 0.0,
+            "avg_handoff_blocked_by_cooldown_count": float(
+                mean(handoff_blocked_by_cooldown_count)
+            ) if handoff_blocked_by_cooldown_count else 0.0,
+            "avg_handoff_blocked_by_same_unit_recently_count": float(
+                mean(handoff_blocked_by_same_unit_recently_count)
+            ) if handoff_blocked_by_same_unit_recently_count else 0.0,
+            "avg_handoff_blocked_by_receiver_viability": float(
+                mean(handoff_blocked_by_receiver_viability)
+            ) if handoff_blocked_by_receiver_viability else 0.0,
+            "avg_handoff_blocked_by_camp_fragility": float(
+                mean(handoff_blocked_by_camp_fragility)
+            ) if handoff_blocked_by_camp_fragility else 0.0,
+            "avg_handoff_blocked_by_recent_rescue": float(
+                mean(handoff_blocked_by_recent_rescue)
+            ) if handoff_blocked_by_recent_rescue else 0.0,
+            "avg_handoff_blocked_by_camp_fragility_when_receiver_critical_count": float(
+                mean(handoff_blocked_by_camp_fragility_when_receiver_critical_count)
+            ) if handoff_blocked_by_camp_fragility_when_receiver_critical_count else 0.0,
+            "avg_handoff_blocked_by_camp_fragility_when_donor_safe_count": float(
+                mean(handoff_blocked_by_camp_fragility_when_donor_safe_count)
+            ) if handoff_blocked_by_camp_fragility_when_donor_safe_count else 0.0,
+            "avg_handoff_blocked_by_camp_fragility_with_local_surplus_count": float(
+                mean(handoff_blocked_by_camp_fragility_with_local_surplus_count)
+            ) if handoff_blocked_by_camp_fragility_with_local_surplus_count else 0.0,
+            "avg_handoff_blocked_by_camp_fragility_context_pressure_count": float(
+                mean(handoff_blocked_by_camp_fragility_context_pressure_count)
+            ) if handoff_blocked_by_camp_fragility_context_pressure_count else 0.0,
+            "avg_handoff_blocked_by_camp_fragility_context_nonpressure_count": float(
+                mean(handoff_blocked_by_camp_fragility_context_nonpressure_count)
+            ) if handoff_blocked_by_camp_fragility_context_nonpressure_count else 0.0,
+            "avg_avg_handoff_blocked_by_camp_fragility_donor_food": float(
+                mean(avg_handoff_blocked_by_camp_fragility_donor_food)
+            ) if avg_handoff_blocked_by_camp_fragility_donor_food else 0.0,
+            "avg_avg_handoff_blocked_by_camp_fragility_receiver_hunger": float(
+                mean(avg_handoff_blocked_by_camp_fragility_receiver_hunger)
+            ) if avg_handoff_blocked_by_camp_fragility_receiver_hunger else 0.0,
+            "avg_avg_handoff_blocked_by_camp_fragility_camp_food": float(
+                mean(avg_handoff_blocked_by_camp_fragility_camp_food)
+            ) if avg_handoff_blocked_by_camp_fragility_camp_food else 0.0,
+            "avg_local_food_handoff_prevented_by_low_surplus": float(
+                mean(local_food_handoff_prevented_by_low_surplus)
+            ) if local_food_handoff_prevented_by_low_surplus else 0.0,
+            "avg_local_food_handoff_prevented_by_distance": float(
+                mean(local_food_handoff_prevented_by_distance)
+            ) if local_food_handoff_prevented_by_distance else 0.0,
+            "avg_local_food_handoff_prevented_by_donor_risk": float(
+                mean(local_food_handoff_prevented_by_donor_risk)
+            ) if local_food_handoff_prevented_by_donor_risk else 0.0,
+            "avg_hunger_relief_after_local_handoff": float(
+                mean(hunger_relief_after_local_handoff)
+            ) if hunger_relief_after_local_handoff else 0.0,
+            "avg_ratio_food_security_layer_self_feeding": float(
+                mean(ratio_food_security_layer_self_feeding)
+            ) if ratio_food_security_layer_self_feeding else 0.0,
+            "avg_ratio_food_security_layer_group_feeding": float(
+                mean(ratio_food_security_layer_group_feeding)
+            ) if ratio_food_security_layer_group_feeding else 0.0,
+            "avg_ratio_food_security_layer_reserve_accumulation": float(
+                mean(ratio_food_security_layer_reserve_accumulation)
+            ) if ratio_food_security_layer_reserve_accumulation else 0.0,
+            "avg_ratio_food_security_layer_none": float(
+                mean(ratio_food_security_layer_none)
+            ) if ratio_food_security_layer_none else 0.0,
+            "avg_food_security_layer_transition_count": float(
+                mean(food_security_layer_transition_count)
+            ) if food_security_layer_transition_count else 0.0,
+            "avg_food_security_layer_transition_none_to_self_feeding": float(
+                mean(food_security_layer_transition_none_to_self_feeding)
+            ) if food_security_layer_transition_none_to_self_feeding else 0.0,
+            "avg_food_security_layer_transition_self_feeding_to_group_feeding": float(
+                mean(food_security_layer_transition_self_feeding_to_group_feeding)
+            ) if food_security_layer_transition_self_feeding_to_group_feeding else 0.0,
+            "avg_food_security_layer_transition_group_feeding_to_reserve_accumulation": float(
+                mean(food_security_layer_transition_group_feeding_to_reserve_accumulation)
+            ) if food_security_layer_transition_group_feeding_to_reserve_accumulation else 0.0,
+            "avg_food_security_layer_transition_reserve_accumulation_to_none": float(
+                mean(food_security_layer_transition_reserve_accumulation_to_none)
+            ) if food_security_layer_transition_reserve_accumulation_to_none else 0.0,
+            "avg_food_security_reserve_entry_checks": float(
+                mean(food_security_reserve_entry_checks)
+            ) if food_security_reserve_entry_checks else 0.0,
+            "avg_food_security_reserve_entry_condition_met_count": float(
+                mean(food_security_reserve_entry_condition_met_count)
+            ) if food_security_reserve_entry_condition_met_count else 0.0,
+            "avg_food_security_reserve_entry_activated_count": float(
+                mean(food_security_reserve_entry_activated_count)
+            ) if food_security_reserve_entry_activated_count else 0.0,
+            "avg_food_security_reserve_entry_blocked_no_surplus": float(
+                mean(food_security_reserve_entry_blocked_no_surplus)
+            ) if food_security_reserve_entry_blocked_no_surplus else 0.0,
+            "avg_food_security_reserve_entry_blocked_no_qualifying_task": float(
+                mean(food_security_reserve_entry_blocked_no_qualifying_task)
+            ) if food_security_reserve_entry_blocked_no_qualifying_task else 0.0,
+            "avg_food_security_reserve_entry_blocked_unstable_context": float(
+                mean(food_security_reserve_entry_blocked_unstable_context)
+            ) if food_security_reserve_entry_blocked_unstable_context else 0.0,
+            "avg_food_security_reserve_entry_blocked_group_feeding_dominance": float(
+                mean(food_security_reserve_entry_blocked_group_feeding_dominance)
+            ) if food_security_reserve_entry_blocked_group_feeding_dominance else 0.0,
+            "avg_food_security_reserve_prepolicy_candidate_count": float(
+                mean(food_security_reserve_prepolicy_candidate_count)
+            ) if food_security_reserve_prepolicy_candidate_count else 0.0,
+            "avg_food_security_reserve_postpolicy_candidate_count": float(
+                mean(food_security_reserve_postpolicy_candidate_count)
+            ) if food_security_reserve_postpolicy_candidate_count else 0.0,
+            "avg_food_security_reserve_final_activation_count": float(
+                mean(food_security_reserve_final_activation_count)
+            ) if food_security_reserve_final_activation_count else 0.0,
+            "avg_food_security_reserve_selection_considered_count": float(
+                mean(food_security_reserve_selection_considered_count)
+            ) if food_security_reserve_selection_considered_count else 0.0,
+            "avg_food_security_reserve_selection_chosen_count": float(
+                mean(food_security_reserve_selection_chosen_count)
+            ) if food_security_reserve_selection_chosen_count else 0.0,
+            "avg_food_security_reserve_selection_rejected_count": float(
+                mean(food_security_reserve_selection_rejected_count)
+            ) if food_security_reserve_selection_rejected_count else 0.0,
+            "avg_food_security_reserve_selection_rejected_by_group_feeding_count": float(
+                mean(food_security_reserve_selection_rejected_by_group_feeding_count)
+            ) if food_security_reserve_selection_rejected_by_group_feeding_count else 0.0,
+            "avg_food_security_reserve_selection_rejected_by_unstable_context_count": float(
+                mean(food_security_reserve_selection_rejected_by_unstable_context_count)
+            ) if food_security_reserve_selection_rejected_by_unstable_context_count else 0.0,
+            "avg_food_security_reserve_selection_rejected_by_no_surplus_count": float(
+                mean(food_security_reserve_selection_rejected_by_no_surplus_count)
+            ) if food_security_reserve_selection_rejected_by_no_surplus_count else 0.0,
+            "avg_food_security_reserve_selection_rejected_by_other_count": float(
+                mean(food_security_reserve_selection_rejected_by_other_count)
+            ) if food_security_reserve_selection_rejected_by_other_count else 0.0,
+            "avg_food_security_reserve_final_selection_lost_to_self_feeding_count": float(
+                mean(food_security_reserve_final_selection_lost_to_self_feeding_count)
+            ) if food_security_reserve_final_selection_lost_to_self_feeding_count else 0.0,
+            "avg_food_security_reserve_final_selection_lost_to_group_feeding_count": float(
+                mean(food_security_reserve_final_selection_lost_to_group_feeding_count)
+            ) if food_security_reserve_final_selection_lost_to_group_feeding_count else 0.0,
+            "avg_food_security_reserve_final_selection_lost_to_unstable_context_count": float(
+                mean(food_security_reserve_final_selection_lost_to_unstable_context_count)
+            ) if food_security_reserve_final_selection_lost_to_unstable_context_count else 0.0,
+            "avg_food_security_reserve_final_selection_lost_to_no_surplus_count": float(
+                mean(food_security_reserve_final_selection_lost_to_no_surplus_count)
+            ) if food_security_reserve_final_selection_lost_to_no_surplus_count else 0.0,
+            "avg_food_security_reserve_final_selection_lost_to_other_count": float(
+                mean(food_security_reserve_final_selection_lost_to_other_count)
+            ) if food_security_reserve_final_selection_lost_to_other_count else 0.0,
+            "avg_food_security_reserve_final_selection_winner_self_feeding_count": float(
+                mean(food_security_reserve_final_selection_winner_self_feeding_count)
+            ) if food_security_reserve_final_selection_winner_self_feeding_count else 0.0,
+            "avg_food_security_reserve_final_selection_winner_group_feeding_count": float(
+                mean(food_security_reserve_final_selection_winner_group_feeding_count)
+            ) if food_security_reserve_final_selection_winner_group_feeding_count else 0.0,
+            "avg_food_security_reserve_final_selection_winner_other_count": float(
+                mean(food_security_reserve_final_selection_winner_other_count)
+            ) if food_security_reserve_final_selection_winner_other_count else 0.0,
+            "avg_food_security_reserve_loss_stage_policy_ranking_count": float(
+                mean(food_security_reserve_loss_stage_policy_ranking_count)
+            ) if food_security_reserve_loss_stage_policy_ranking_count else 0.0,
+            "avg_food_security_reserve_loss_stage_final_gate_count": float(
+                mean(food_security_reserve_loss_stage_final_gate_count)
+            ) if food_security_reserve_loss_stage_final_gate_count else 0.0,
+            "avg_food_security_reserve_loss_stage_final_override_count": float(
+                mean(food_security_reserve_loss_stage_final_override_count)
+            ) if food_security_reserve_loss_stage_final_override_count else 0.0,
+            "avg_food_security_reserve_final_decision_observed_count": float(
+                mean(food_security_reserve_final_decision_observed_count)
+            ) if food_security_reserve_final_decision_observed_count else 0.0,
+            "avg_food_security_reserve_final_decision_candidate_count": float(
+                mean(food_security_reserve_final_decision_candidate_count)
+            ) if food_security_reserve_final_decision_candidate_count else 0.0,
+            "avg_food_security_reserve_final_decision_candidate_survived_prepolicy_count": float(
+                mean(food_security_reserve_final_decision_candidate_survived_prepolicy_count)
+            ) if food_security_reserve_final_decision_candidate_survived_prepolicy_count else 0.0,
+            "avg_food_security_reserve_final_decision_candidate_survived_postpolicy_count": float(
+                mean(food_security_reserve_final_decision_candidate_survived_postpolicy_count)
+            ) if food_security_reserve_final_decision_candidate_survived_postpolicy_count else 0.0,
+            "avg_food_security_reserve_final_decision_candidate_lost_count": float(
+                mean(food_security_reserve_final_decision_candidate_lost_count)
+            ) if food_security_reserve_final_decision_candidate_lost_count else 0.0,
+            "avg_food_security_reserve_final_decision_candidate_chosen_count": float(
+                mean(food_security_reserve_final_decision_candidate_chosen_count)
+            ) if food_security_reserve_final_decision_candidate_chosen_count else 0.0,
+            "avg_food_security_reserve_final_selected_task_food_logistics_count": float(
+                mean(food_security_reserve_final_selected_task_food_logistics_count)
+            ) if food_security_reserve_final_selected_task_food_logistics_count else 0.0,
+            "avg_food_security_reserve_final_selected_task_village_logistics_count": float(
+                mean(food_security_reserve_final_selected_task_village_logistics_count)
+            ) if food_security_reserve_final_selected_task_village_logistics_count else 0.0,
+            "avg_food_security_reserve_final_selected_task_camp_supply_food_count": float(
+                mean(food_security_reserve_final_selected_task_camp_supply_food_count)
+            ) if food_security_reserve_final_selected_task_camp_supply_food_count else 0.0,
+            "avg_food_security_reserve_final_selected_task_other_count": float(
+                mean(food_security_reserve_final_selected_task_other_count)
+            ) if food_security_reserve_final_selected_task_other_count else 0.0,
+            "avg_food_security_reserve_final_selected_layer_reserve_accumulation_count": float(
+                mean(food_security_reserve_final_selected_layer_reserve_accumulation_count)
+            ) if food_security_reserve_final_selected_layer_reserve_accumulation_count else 0.0,
+            "avg_food_security_reserve_final_selected_layer_group_feeding_count": float(
+                mean(food_security_reserve_final_selected_layer_group_feeding_count)
+            ) if food_security_reserve_final_selected_layer_group_feeding_count else 0.0,
+            "avg_food_security_reserve_final_selected_layer_self_feeding_count": float(
+                mean(food_security_reserve_final_selected_layer_self_feeding_count)
+            ) if food_security_reserve_final_selected_layer_self_feeding_count else 0.0,
+            "avg_food_security_reserve_final_selected_layer_none_count": float(
+                mean(food_security_reserve_final_selected_layer_none_count)
+            ) if food_security_reserve_final_selected_layer_none_count else 0.0,
+            "avg_food_security_reserve_final_winner_subsystem_policy_ranking_count": float(
+                mean(food_security_reserve_final_winner_subsystem_policy_ranking_count)
+            ) if food_security_reserve_final_winner_subsystem_policy_ranking_count else 0.0,
+            "avg_food_security_reserve_final_winner_subsystem_role_task_update_count": float(
+                mean(food_security_reserve_final_winner_subsystem_role_task_update_count)
+            ) if food_security_reserve_final_winner_subsystem_role_task_update_count else 0.0,
+            "avg_food_security_reserve_final_winner_subsystem_final_gate_count": float(
+                mean(food_security_reserve_final_winner_subsystem_final_gate_count)
+            ) if food_security_reserve_final_winner_subsystem_final_gate_count else 0.0,
+            "avg_food_security_reserve_final_winner_subsystem_final_override_count": float(
+                mean(food_security_reserve_final_winner_subsystem_final_override_count)
+            ) if food_security_reserve_final_winner_subsystem_final_override_count else 0.0,
+            "avg_food_security_reserve_final_winner_subsystem_task_layer_routing_count": float(
+                mean(food_security_reserve_final_winner_subsystem_task_layer_routing_count)
+            ) if food_security_reserve_final_winner_subsystem_task_layer_routing_count else 0.0,
+            "avg_food_security_reserve_final_winner_subsystem_contextual_override_count": float(
+                mean(food_security_reserve_final_winner_subsystem_contextual_override_count)
+            ) if food_security_reserve_final_winner_subsystem_contextual_override_count else 0.0,
+            "avg_food_security_reserve_final_winner_subsystem_unknown_count": float(
+                mean(food_security_reserve_final_winner_subsystem_unknown_count)
+            ) if food_security_reserve_final_winner_subsystem_unknown_count else 0.0,
+            "avg_food_security_reserve_final_override_reason_group_feeding_pressure_override_count": float(
+                mean(food_security_reserve_final_override_reason_group_feeding_pressure_override_count)
+            ) if food_security_reserve_final_override_reason_group_feeding_pressure_override_count else 0.0,
+            "avg_food_security_reserve_final_override_reason_village_logistics_group_routing_count": float(
+                mean(food_security_reserve_final_override_reason_village_logistics_group_routing_count)
+            ) if food_security_reserve_final_override_reason_village_logistics_group_routing_count else 0.0,
+            "avg_food_security_reserve_final_override_reason_camp_supply_group_routing_count": float(
+                mean(food_security_reserve_final_override_reason_camp_supply_group_routing_count)
+            ) if food_security_reserve_final_override_reason_camp_supply_group_routing_count else 0.0,
+            "avg_food_security_reserve_final_override_reason_unstable_context_count": float(
+                mean(food_security_reserve_final_override_reason_unstable_context_count)
+            ) if food_security_reserve_final_override_reason_unstable_context_count else 0.0,
+            "avg_food_security_reserve_final_override_reason_no_surplus_count": float(
+                mean(food_security_reserve_final_override_reason_no_surplus_count)
+            ) if food_security_reserve_final_override_reason_no_surplus_count else 0.0,
+            "avg_food_security_reserve_final_override_reason_other_count": float(
+                mean(food_security_reserve_final_override_reason_other_count)
+            ) if food_security_reserve_final_override_reason_other_count else 0.0,
+            "avg_reserve_final_tiebreak_invoked_count": float(
+                mean(reserve_final_tiebreak_invoked_count)
+            ) if reserve_final_tiebreak_invoked_count else 0.0,
+            "avg_reserve_final_tiebreak_won_count": float(
+                mean(reserve_final_tiebreak_won_count)
+            ) if reserve_final_tiebreak_won_count else 0.0,
+            "avg_reserve_final_tiebreak_lost_count": float(
+                mean(reserve_final_tiebreak_lost_count)
+            ) if reserve_final_tiebreak_lost_count else 0.0,
+            "avg_reserve_final_tiebreak_blocked_by_pressure_count": float(
+                mean(reserve_final_tiebreak_blocked_by_pressure_count)
+            ) if reserve_final_tiebreak_blocked_by_pressure_count else 0.0,
+            "avg_reserve_final_tiebreak_blocked_by_unstable_context_count": float(
+                mean(reserve_final_tiebreak_blocked_by_unstable_context_count)
+            ) if reserve_final_tiebreak_blocked_by_unstable_context_count else 0.0,
+            "avg_reserve_final_tiebreak_blocked_by_no_surplus_count": float(
+                mean(reserve_final_tiebreak_blocked_by_no_surplus_count)
+            ) if reserve_final_tiebreak_blocked_by_no_surplus_count else 0.0,
+            "avg_agents_in_food_security_layer_self_feeding": float(
+                mean(avg_agents_in_food_security_layer_self_feeding)
+            ) if avg_agents_in_food_security_layer_self_feeding else 0.0,
+            "avg_agents_in_food_security_layer_group_feeding": float(
+                mean(avg_agents_in_food_security_layer_group_feeding)
+            ) if avg_agents_in_food_security_layer_group_feeding else 0.0,
+            "avg_agents_in_food_security_layer_reserve_accumulation": float(
+                mean(avg_agents_in_food_security_layer_reserve_accumulation)
+            ) if avg_agents_in_food_security_layer_reserve_accumulation else 0.0,
+            "avg_agents_in_food_security_layer_none": float(
+                mean(avg_agents_in_food_security_layer_none)
+            ) if avg_agents_in_food_security_layer_none else 0.0,
             "avg_deaths_before_first_house_completed": float(mean(deaths_before_first_house_completed)) if deaths_before_first_house_completed else 0.0,
             "avg_deaths_before_settlement_stability_threshold": float(mean(deaths_before_settlement_stability_threshold)) if deaths_before_settlement_stability_threshold else 0.0,
             "avg_population_collapse_events": float(mean(population_collapse_events)) if population_collapse_events else 0.0,
@@ -1458,6 +3032,32 @@ def aggregate_global_balance_results(
             "avg_first_village_formalization_tick": float(mean(first_village_formalization_tick)) if first_village_formalization_tick else 0.0,
             "avg_storage_built_before_house_count": float(mean(storage_built_before_house_count)) if storage_built_before_house_count else 0.0,
             "avg_road_built_before_house_threshold_count": float(mean(road_built_before_house_threshold_count)) if road_built_before_house_threshold_count else 0.0,
+            "avg_resource_conservation_raw_material_fabrication_detected": float(
+                mean(resource_conservation_raw_material_fabrication_detected)
+            ) if resource_conservation_raw_material_fabrication_detected else 0.0,
+            "avg_food_initial_world_stock_estimate": float(mean(food_initial_world_stock_estimate)) if food_initial_world_stock_estimate else 0.0,
+            "avg_wood_initial_world_stock_estimate": float(mean(wood_initial_world_stock_estimate)) if wood_initial_world_stock_estimate else 0.0,
+            "avg_stone_initial_world_stock_estimate": float(mean(stone_initial_world_stock_estimate)) if stone_initial_world_stock_estimate else 0.0,
+            "avg_food_available_world_total": float(mean(food_available_world_total)) if food_available_world_total else 0.0,
+            "avg_food_available_on_map": float(mean(food_available_on_map)) if food_available_on_map else 0.0,
+            "avg_food_in_agent_inventories": float(mean(food_in_agent_inventories)) if food_in_agent_inventories else 0.0,
+            "avg_food_in_storage_buildings": float(mean(food_in_storage_buildings)) if food_in_storage_buildings else 0.0,
+            "avg_food_in_camp_buffers": float(mean(food_in_camp_buffers)) if food_in_camp_buffers else 0.0,
+            "avg_food_in_construction_buffers": float(mean(food_in_construction_buffers)) if food_in_construction_buffers else 0.0,
+            "avg_food_gathered_total_material": float(mean(food_gathered_total_material)) if food_gathered_total_material else 0.0,
+            "avg_food_respawned_total_material": float(mean(food_respawned_total_material)) if food_respawned_total_material else 0.0,
+            "avg_food_consumed_total_observed_material": float(
+                mean(food_consumed_total_observed_material)
+            ) if food_consumed_total_observed_material else 0.0,
+            "avg_food_transported_to_camp_total": float(mean(food_transported_to_camp_total)) if food_transported_to_camp_total else 0.0,
+            "avg_food_transported_to_storage_total": float(
+                mean(food_transported_to_storage_total)
+            ) if food_transported_to_storage_total else 0.0,
+            "avg_food_transported_to_construction_total": float(
+                mean(food_transported_to_construction_total)
+            ) if food_transported_to_construction_total else 0.0,
+            "avg_food_deposited_total": float(mean(food_deposited_total)) if food_deposited_total else 0.0,
+            "avg_food_reserve_buffered_total": float(mean(food_reserve_buffered_total)) if food_reserve_buffered_total else 0.0,
             "avg_wood_available_world_total": float(mean(wood_available_world_total)) if wood_available_world_total else 0.0,
             "avg_wood_available_on_map": float(mean(wood_available_on_map)) if wood_available_on_map else 0.0,
             "avg_wood_in_agent_inventories": float(mean(wood_in_agent_inventories)) if wood_in_agent_inventories else 0.0,
@@ -1470,6 +3070,70 @@ def aggregate_global_balance_results(
             ) if wood_consumed_for_construction_total else 0.0,
             "avg_wood_shortage_events": float(mean(wood_shortage_events)) if wood_shortage_events else 0.0,
             "avg_local_wood_pressure": float(mean(avg_local_wood_pressure)) if avg_local_wood_pressure else 0.0,
+            "avg_wood_outstanding_construction_demand_units": float(
+                mean(wood_outstanding_construction_demand_units)
+            ) if wood_outstanding_construction_demand_units else 0.0,
+            "avg_wood_supply_demand_gap_units": float(mean(wood_supply_demand_gap_units)) if wood_supply_demand_gap_units else 0.0,
+            "avg_wood_respawn_to_extraction_ratio": float(
+                mean(wood_respawn_to_extraction_ratio)
+            ) if wood_respawn_to_extraction_ratio else 0.0,
+            "avg_wood_extraction_to_initial_stock_ratio": float(
+                mean(wood_extraction_to_initial_stock_ratio)
+            ) if wood_extraction_to_initial_stock_ratio else 0.0,
+            "avg_wood_transported_to_storage_total": float(
+                mean(wood_transported_to_storage_total)
+            ) if wood_transported_to_storage_total else 0.0,
+            "avg_wood_transported_to_construction_total": float(
+                mean(wood_transported_to_construction_total)
+            ) if wood_transported_to_construction_total else 0.0,
+            "avg_wood_deposited_total": float(mean(wood_deposited_total)) if wood_deposited_total else 0.0,
+            "avg_wood_reserve_buffered_total": float(mean(wood_reserve_buffered_total)) if wood_reserve_buffered_total else 0.0,
+            "avg_stone_available_world_total": float(mean(stone_available_world_total)) if stone_available_world_total else 0.0,
+            "avg_stone_available_on_map": float(mean(stone_available_on_map)) if stone_available_on_map else 0.0,
+            "avg_stone_in_agent_inventories": float(mean(stone_in_agent_inventories)) if stone_in_agent_inventories else 0.0,
+            "avg_stone_in_storage_buildings": float(mean(stone_in_storage_buildings)) if stone_in_storage_buildings else 0.0,
+            "avg_stone_in_construction_buffers": float(
+                mean(stone_in_construction_buffers)
+            ) if stone_in_construction_buffers else 0.0,
+            "avg_stone_gathered_total": float(mean(stone_gathered_total)) if stone_gathered_total else 0.0,
+            "avg_stone_respawned_total": float(mean(stone_respawned_total)) if stone_respawned_total else 0.0,
+            "avg_stone_consumed_for_construction_total": float(
+                mean(stone_consumed_for_construction_total)
+            ) if stone_consumed_for_construction_total else 0.0,
+            "avg_local_stone_pressure": float(mean(avg_local_stone_pressure)) if avg_local_stone_pressure else 0.0,
+            "avg_stone_outstanding_construction_demand_units": float(
+                mean(stone_outstanding_construction_demand_units)
+            ) if stone_outstanding_construction_demand_units else 0.0,
+            "avg_stone_supply_demand_gap_units": float(mean(stone_supply_demand_gap_units)) if stone_supply_demand_gap_units else 0.0,
+            "avg_stone_respawn_to_extraction_ratio": float(
+                mean(stone_respawn_to_extraction_ratio)
+            ) if stone_respawn_to_extraction_ratio else 0.0,
+            "avg_stone_extraction_to_initial_stock_ratio": float(
+                mean(stone_extraction_to_initial_stock_ratio)
+            ) if stone_extraction_to_initial_stock_ratio else 0.0,
+            "avg_stone_transported_to_storage_total": float(
+                mean(stone_transported_to_storage_total)
+            ) if stone_transported_to_storage_total else 0.0,
+            "avg_stone_transported_to_construction_total": float(
+                mean(stone_transported_to_construction_total)
+            ) if stone_transported_to_construction_total else 0.0,
+            "avg_stone_deposited_total": float(mean(stone_deposited_total)) if stone_deposited_total else 0.0,
+            "avg_stone_reserve_buffered_total": float(mean(stone_reserve_buffered_total)) if stone_reserve_buffered_total else 0.0,
+            "avg_material_transport_observed_total": float(
+                mean(material_transport_observed_total)
+            ) if material_transport_observed_total else 0.0,
+            "avg_construction_material_delivery_wood_units": float(
+                mean(construction_material_delivery_wood_units)
+            ) if construction_material_delivery_wood_units else 0.0,
+            "avg_construction_material_delivery_stone_units": float(
+                mean(construction_material_delivery_stone_units)
+            ) if construction_material_delivery_stone_units else 0.0,
+            "avg_construction_material_delivery_food_units": float(
+                mean(construction_material_delivery_food_units)
+            ) if construction_material_delivery_food_units else 0.0,
+            "avg_storage_deposit_food_units": float(mean(storage_deposit_food_units)) if storage_deposit_food_units else 0.0,
+            "avg_storage_deposit_wood_units": float(mean(storage_deposit_wood_units)) if storage_deposit_wood_units else 0.0,
+            "avg_storage_deposit_stone_units": float(mean(storage_deposit_stone_units)) if storage_deposit_stone_units else 0.0,
             "avg_construction_sites_created": float(mean(construction_sites_created)) if construction_sites_created else 0.0,
             "avg_construction_sites_created_house": float(
                 mean(construction_sites_created_house)
@@ -1510,12 +3174,240 @@ def aggregate_global_balance_results(
             "avg_construction_delivery_to_wrong_target_or_drift": float(
                 mean(construction_delivery_to_wrong_target_or_drift)
             ) if construction_delivery_to_wrong_target_or_drift else 0.0,
+            "avg_construction_delivery_source_binding_selected_count": float(
+                mean(construction_delivery_source_binding_selected_count)
+            ) if construction_delivery_source_binding_selected_count else 0.0,
+            "avg_construction_delivery_source_binding_persisted_count": float(
+                mean(construction_delivery_source_binding_persisted_count)
+            ) if construction_delivery_source_binding_persisted_count else 0.0,
+            "avg_construction_delivery_source_binding_refreshed_count": float(
+                mean(construction_delivery_source_binding_refreshed_count)
+            ) if construction_delivery_source_binding_refreshed_count else 0.0,
+            "avg_construction_delivery_source_binding_missing_count": float(
+                mean(construction_delivery_source_binding_missing_count)
+            ) if construction_delivery_source_binding_missing_count else 0.0,
+            "avg_construction_delivery_source_binding_unavailable_count": float(
+                mean(construction_delivery_source_binding_unavailable_count)
+            ) if construction_delivery_source_binding_unavailable_count else 0.0,
+            "avg_construction_delivery_source_binding_lost_missing_source_count": float(
+                mean(construction_delivery_source_binding_lost_missing_source_count)
+            ) if construction_delivery_source_binding_lost_missing_source_count else 0.0,
+            "avg_construction_delivery_source_binding_lost_ineligible_source_count": float(
+                mean(construction_delivery_source_binding_lost_ineligible_source_count)
+            ) if construction_delivery_source_binding_lost_ineligible_source_count else 0.0,
+            "avg_construction_delivery_source_binding_lost_not_refreshed_count": float(
+                mean(construction_delivery_source_binding_lost_not_refreshed_count)
+            ) if construction_delivery_source_binding_lost_not_refreshed_count else 0.0,
+            "avg_construction_delivery_prepickup_checks_count": float(
+                mean(construction_delivery_prepickup_checks_count)
+            ) if construction_delivery_prepickup_checks_count else 0.0,
+            "avg_construction_delivery_prepickup_site_exists_count": float(
+                mean(construction_delivery_prepickup_site_exists_count)
+            ) if construction_delivery_prepickup_site_exists_count else 0.0,
+            "avg_construction_delivery_prepickup_site_missing_count": float(
+                mean(construction_delivery_prepickup_site_missing_count)
+            ) if construction_delivery_prepickup_site_missing_count else 0.0,
+            "avg_construction_delivery_prepickup_site_under_construction_count": float(
+                mean(construction_delivery_prepickup_site_under_construction_count)
+            ) if construction_delivery_prepickup_site_under_construction_count else 0.0,
+            "avg_construction_delivery_prepickup_site_not_under_construction_count": float(
+                mean(construction_delivery_prepickup_site_not_under_construction_count)
+            ) if construction_delivery_prepickup_site_not_under_construction_count else 0.0,
+            "avg_construction_delivery_prepickup_site_reachable_count": float(
+                mean(construction_delivery_prepickup_site_reachable_count)
+            ) if construction_delivery_prepickup_site_reachable_count else 0.0,
+            "avg_construction_delivery_prepickup_site_unreachable_count": float(
+                mean(construction_delivery_prepickup_site_unreachable_count)
+            ) if construction_delivery_prepickup_site_unreachable_count else 0.0,
+            "avg_construction_delivery_prepickup_site_demand_matches_material_count": float(
+                mean(construction_delivery_prepickup_site_demand_matches_material_count)
+            ) if construction_delivery_prepickup_site_demand_matches_material_count else 0.0,
+            "avg_construction_delivery_prepickup_site_demand_mismatch_material_count": float(
+                mean(construction_delivery_prepickup_site_demand_mismatch_material_count)
+            ) if construction_delivery_prepickup_site_demand_mismatch_material_count else 0.0,
+            "avg_construction_delivery_source_persistence_window_invoked_count": float(
+                mean(construction_delivery_source_persistence_window_invoked_count)
+            ) if construction_delivery_source_persistence_window_invoked_count else 0.0,
+            "avg_construction_delivery_source_persistence_window_completed_count": float(
+                mean(construction_delivery_source_persistence_window_completed_count)
+            ) if construction_delivery_source_persistence_window_completed_count else 0.0,
+            "avg_construction_delivery_source_persistence_window_broken_by_source_invalidity_count": float(
+                mean(construction_delivery_source_persistence_window_broken_by_source_invalidity_count)
+            ) if construction_delivery_source_persistence_window_broken_by_source_invalidity_count else 0.0,
+            "avg_construction_delivery_source_persistence_window_broken_by_demand_mismatch_count": float(
+                mean(construction_delivery_source_persistence_window_broken_by_demand_mismatch_count)
+            ) if construction_delivery_source_persistence_window_broken_by_demand_mismatch_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_pass_count": float(
+                mean(construction_delivery_reservation_alignment_pass_count)
+            ) if construction_delivery_reservation_alignment_pass_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_count": float(
+                mean(construction_delivery_reservation_alignment_fail_count)
+            ) if construction_delivery_reservation_alignment_fail_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_material_wood_count": float(
+                mean(construction_delivery_reservation_alignment_fail_material_wood_count)
+            ) if construction_delivery_reservation_alignment_fail_material_wood_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_material_stone_count": float(
+                mean(construction_delivery_reservation_alignment_fail_material_stone_count)
+            ) if construction_delivery_reservation_alignment_fail_material_stone_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_material_food_count": float(
+                mean(construction_delivery_reservation_alignment_fail_material_food_count)
+            ) if construction_delivery_reservation_alignment_fail_material_food_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_reason_site_missing_count": float(
+                mean(construction_delivery_reservation_alignment_fail_reason_site_missing_count)
+            ) if construction_delivery_reservation_alignment_fail_reason_site_missing_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count": float(
+                mean(construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count)
+            ) if construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count": float(
+                mean(construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count)
+            ) if construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count": float(
+                mean(construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count)
+            ) if construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_reason_source_ineligible_count": float(
+                mean(construction_delivery_reservation_alignment_fail_reason_source_ineligible_count)
+            ) if construction_delivery_reservation_alignment_fail_reason_source_ineligible_count else 0.0,
+            "avg_construction_delivery_reservation_alignment_fail_reason_source_empty_count": float(
+                mean(construction_delivery_reservation_alignment_fail_reason_source_empty_count)
+            ) if construction_delivery_reservation_alignment_fail_reason_source_empty_count else 0.0,
+            "avg_delivery_commitment_hold_invoked_count": float(
+                mean(delivery_commitment_hold_invoked_count)
+            ) if delivery_commitment_hold_invoked_count else 0.0,
+            "avg_delivery_commitment_hold_completed_count": float(
+                mean(delivery_commitment_hold_completed_count)
+            ) if delivery_commitment_hold_completed_count else 0.0,
+            "avg_delivery_commitment_hold_broken_by_survival_count": float(
+                mean(delivery_commitment_hold_broken_by_survival_count)
+            ) if delivery_commitment_hold_broken_by_survival_count else 0.0,
+            "avg_delivery_commitment_hold_broken_by_invalid_site_count": float(
+                mean(delivery_commitment_hold_broken_by_invalid_site_count)
+            ) if delivery_commitment_hold_broken_by_invalid_site_count else 0.0,
+            "avg_delivery_commitment_hold_broken_by_invalid_source_count": float(
+                mean(delivery_commitment_hold_broken_by_invalid_source_count)
+            ) if delivery_commitment_hold_broken_by_invalid_source_count else 0.0,
+            "avg_construction_delivery_invalid_site_missing_site_count": float(
+                mean(construction_delivery_invalid_site_missing_site_count)
+            ) if construction_delivery_invalid_site_missing_site_count else 0.0,
+            "avg_construction_delivery_invalid_site_not_under_construction_count": float(
+                mean(construction_delivery_invalid_site_not_under_construction_count)
+            ) if construction_delivery_invalid_site_not_under_construction_count else 0.0,
+            "avg_construction_delivery_invalid_site_village_mismatch_count": float(
+                mean(construction_delivery_invalid_site_village_mismatch_count)
+            ) if construction_delivery_invalid_site_village_mismatch_count else 0.0,
+            "avg_construction_delivery_invalid_site_construction_completed_count": float(
+                mean(construction_delivery_invalid_site_construction_completed_count)
+            ) if construction_delivery_invalid_site_construction_completed_count else 0.0,
+            "avg_construction_delivery_invalid_site_no_path_to_site_count": float(
+                mean(construction_delivery_invalid_site_no_path_to_site_count)
+            ) if construction_delivery_invalid_site_no_path_to_site_count else 0.0,
+            "avg_construction_delivery_invalid_site_demand_mismatch_count": float(
+                mean(construction_delivery_invalid_site_demand_mismatch_count)
+            ) if construction_delivery_invalid_site_demand_mismatch_count else 0.0,
+            "avg_construction_delivery_invalid_site_other_count": float(
+                mean(construction_delivery_invalid_site_other_count)
+            ) if construction_delivery_invalid_site_other_count else 0.0,
+            "avg_construction_delivery_invalid_source_no_source_available_count": float(
+                mean(construction_delivery_invalid_source_no_source_available_count)
+            ) if construction_delivery_invalid_source_no_source_available_count else 0.0,
+            "avg_construction_delivery_invalid_source_source_depleted_count": float(
+                mean(construction_delivery_invalid_source_source_depleted_count)
+            ) if construction_delivery_invalid_source_source_depleted_count else 0.0,
+            "avg_construction_delivery_invalid_source_reservation_invalidated_count": float(
+                mean(construction_delivery_invalid_source_reservation_invalidated_count)
+            ) if construction_delivery_invalid_source_reservation_invalidated_count else 0.0,
+            "avg_construction_delivery_invalid_source_source_reassigned_count": float(
+                mean(construction_delivery_invalid_source_source_reassigned_count)
+            ) if construction_delivery_invalid_source_source_reassigned_count else 0.0,
+            "avg_construction_delivery_invalid_source_linkage_mismatch_count": float(
+                mean(construction_delivery_invalid_source_linkage_mismatch_count)
+            ) if construction_delivery_invalid_source_linkage_mismatch_count else 0.0,
+            "avg_construction_delivery_invalid_source_no_path_to_source_count": float(
+                mean(construction_delivery_invalid_source_no_path_to_source_count)
+            ) if construction_delivery_invalid_source_no_path_to_source_count else 0.0,
+            "avg_construction_delivery_invalid_source_other_count": float(
+                mean(construction_delivery_invalid_source_other_count)
+            ) if construction_delivery_invalid_source_other_count else 0.0,
+            "avg_construction_delivery_invalid_site_before_pickup_count": float(
+                mean(construction_delivery_invalid_site_before_pickup_count)
+            ) if construction_delivery_invalid_site_before_pickup_count else 0.0,
+            "avg_construction_delivery_invalid_site_after_pickup_count": float(
+                mean(construction_delivery_invalid_site_after_pickup_count)
+            ) if construction_delivery_invalid_site_after_pickup_count else 0.0,
+            "avg_construction_delivery_invalid_source_before_pickup_count": float(
+                mean(construction_delivery_invalid_source_before_pickup_count)
+            ) if construction_delivery_invalid_source_before_pickup_count else 0.0,
+            "avg_construction_delivery_invalid_source_after_pickup_count": float(
+                mean(construction_delivery_invalid_source_after_pickup_count)
+            ) if construction_delivery_invalid_source_after_pickup_count else 0.0,
+            "avg_construction_delivery_ticks_reservation_to_invalid_site_avg": float(
+                mean(construction_delivery_ticks_reservation_to_invalid_site_avg)
+            ) if construction_delivery_ticks_reservation_to_invalid_site_avg else 0.0,
+            "avg_construction_delivery_ticks_reservation_to_invalid_source_avg": float(
+                mean(construction_delivery_ticks_reservation_to_invalid_source_avg)
+            ) if construction_delivery_ticks_reservation_to_invalid_source_avg else 0.0,
+            "avg_construction_delivery_ticks_pickup_to_invalid_site_avg": float(
+                mean(construction_delivery_ticks_pickup_to_invalid_site_avg)
+            ) if construction_delivery_ticks_pickup_to_invalid_site_avg else 0.0,
+            "avg_construction_delivery_ticks_pickup_to_invalid_source_avg": float(
+                mean(construction_delivery_ticks_pickup_to_invalid_source_avg)
+            ) if construction_delivery_ticks_pickup_to_invalid_source_avg else 0.0,
+            "avg_construction_delivery_invalid_site_material_wood_count": float(
+                mean(construction_delivery_invalid_site_material_wood_count)
+            ) if construction_delivery_invalid_site_material_wood_count else 0.0,
+            "avg_construction_delivery_invalid_site_material_stone_count": float(
+                mean(construction_delivery_invalid_site_material_stone_count)
+            ) if construction_delivery_invalid_site_material_stone_count else 0.0,
+            "avg_construction_delivery_invalid_site_material_food_count": float(
+                mean(construction_delivery_invalid_site_material_food_count)
+            ) if construction_delivery_invalid_site_material_food_count else 0.0,
+            "avg_construction_delivery_invalid_source_material_wood_count": float(
+                mean(construction_delivery_invalid_source_material_wood_count)
+            ) if construction_delivery_invalid_source_material_wood_count else 0.0,
+            "avg_construction_delivery_invalid_source_material_stone_count": float(
+                mean(construction_delivery_invalid_source_material_stone_count)
+            ) if construction_delivery_invalid_source_material_stone_count else 0.0,
+            "avg_construction_delivery_invalid_source_material_food_count": float(
+                mean(construction_delivery_invalid_source_material_food_count)
+            ) if construction_delivery_invalid_source_material_food_count else 0.0,
+            "avg_construction_delivery_invalid_site_committed_site_mismatch_count": float(
+                mean(construction_delivery_invalid_site_committed_site_mismatch_count)
+            ) if construction_delivery_invalid_site_committed_site_mismatch_count else 0.0,
+            "avg_construction_delivery_invalid_source_committed_source_missing_count": float(
+                mean(construction_delivery_invalid_source_committed_source_missing_count)
+            ) if construction_delivery_invalid_source_committed_source_missing_count else 0.0,
             "avg_construction_delivery_avg_distance_to_site": float(
                 mean(construction_delivery_avg_distance_to_site)
             ) if construction_delivery_avg_distance_to_site else 0.0,
             "avg_construction_delivery_avg_distance_to_source": float(
                 mean(construction_delivery_avg_distance_to_source)
             ) if construction_delivery_avg_distance_to_source else 0.0,
+            "avg_construction_delivery_failure_no_source_available": float(
+                mean(construction_delivery_failure_no_source_available)
+            ) if construction_delivery_failure_no_source_available else 0.0,
+            "avg_construction_delivery_failure_source_depleted": float(
+                mean(construction_delivery_failure_source_depleted)
+            ) if construction_delivery_failure_source_depleted else 0.0,
+            "avg_construction_delivery_failure_reservation_invalidated": float(
+                mean(construction_delivery_failure_reservation_invalidated)
+            ) if construction_delivery_failure_reservation_invalidated else 0.0,
+            "avg_construction_delivery_failure_no_path_to_source": float(
+                mean(construction_delivery_failure_no_path_to_source)
+            ) if construction_delivery_failure_no_path_to_source else 0.0,
+            "avg_construction_delivery_failure_no_path_to_site": float(
+                mean(construction_delivery_failure_no_path_to_site)
+            ) if construction_delivery_failure_no_path_to_site else 0.0,
+            "avg_construction_delivery_failure_arrival_failed": float(
+                mean(construction_delivery_failure_arrival_failed)
+            ) if construction_delivery_failure_arrival_failed else 0.0,
+            "avg_construction_delivery_failure_retargeted_before_delivery": float(
+                mean(construction_delivery_failure_retargeted_before_delivery)
+            ) if construction_delivery_failure_retargeted_before_delivery else 0.0,
+            "avg_construction_delivery_failure_interrupted_by_other_priority": float(
+                mean(construction_delivery_failure_interrupted_by_other_priority)
+            ) if construction_delivery_failure_interrupted_by_other_priority else 0.0,
+            "avg_construction_delivery_failure_unknown": float(
+                mean(construction_delivery_failure_unknown)
+            ) if construction_delivery_failure_unknown else 0.0,
             "avg_storage_delivery_failures": float(mean(storage_delivery_failures)) if storage_delivery_failures else 0.0,
             "avg_house_delivery_failures": float(mean(house_delivery_failures)) if house_delivery_failures else 0.0,
             "avg_storage_delivery_successes": float(mean(storage_delivery_successes)) if storage_delivery_successes else 0.0,
@@ -1668,6 +3560,68 @@ def aggregate_global_balance_results(
             "avg_construction_site_active_age_ticks_avg": float(
                 mean(construction_site_active_age_ticks_avg)
             ) if construction_site_active_age_ticks_avg else 0.0,
+            "avg_construction_site_nearest_wood_distance_avg": float(
+                mean(construction_site_nearest_wood_distance_avg)
+            ) if construction_site_nearest_wood_distance_avg else 0.0,
+            "avg_construction_site_nearest_stone_distance_avg": float(
+                mean(construction_site_nearest_stone_distance_avg)
+            ) if construction_site_nearest_stone_distance_avg else 0.0,
+            "avg_construction_site_viable_wood_sources_within_radius_avg": float(
+                mean(construction_site_viable_wood_sources_within_radius_avg)
+            ) if construction_site_viable_wood_sources_within_radius_avg else 0.0,
+            "avg_construction_site_viable_stone_sources_within_radius_avg": float(
+                mean(construction_site_viable_stone_sources_within_radius_avg)
+            ) if construction_site_viable_stone_sources_within_radius_avg else 0.0,
+            "avg_construction_site_zero_wood_sources_within_radius_ticks": float(
+                mean(construction_site_zero_wood_sources_within_radius_ticks)
+            ) if construction_site_zero_wood_sources_within_radius_ticks else 0.0,
+            "avg_construction_site_zero_stone_sources_within_radius_ticks": float(
+                mean(construction_site_zero_stone_sources_within_radius_ticks)
+            ) if construction_site_zero_stone_sources_within_radius_ticks else 0.0,
+            "avg_construction_site_local_wood_source_contention_avg": float(
+                mean(construction_site_local_wood_source_contention_avg)
+            ) if construction_site_local_wood_source_contention_avg else 0.0,
+            "avg_construction_site_local_stone_source_contention_avg": float(
+                mean(construction_site_local_stone_source_contention_avg)
+            ) if construction_site_local_stone_source_contention_avg else 0.0,
+            "avg_construction_site_ticks_since_last_delivery_avg": float(
+                mean(construction_site_ticks_since_last_delivery_avg)
+            ) if construction_site_ticks_since_last_delivery_avg else 0.0,
+            "avg_construction_site_waiting_with_positive_wood_stock_ticks": float(
+                mean(construction_site_waiting_with_positive_wood_stock_ticks)
+            ) if construction_site_waiting_with_positive_wood_stock_ticks else 0.0,
+            "avg_construction_site_waiting_with_positive_stone_stock_ticks": float(
+                mean(construction_site_waiting_with_positive_stone_stock_ticks)
+            ) if construction_site_waiting_with_positive_stone_stock_ticks else 0.0,
+            "avg_construction_site_first_demand_to_first_delivery_avg": float(
+                mean(construction_site_first_demand_to_first_delivery_avg)
+            ) if construction_site_first_demand_to_first_delivery_avg else 0.0,
+            "avg_construction_site_material_inflow_rate_avg": float(
+                mean(construction_site_material_inflow_rate_avg)
+            ) if construction_site_material_inflow_rate_avg else 0.0,
+            "avg_construction_site_delivered_wood_units_total_live": float(
+                mean(construction_site_delivered_wood_units_total_live)
+            ) if construction_site_delivered_wood_units_total_live else 0.0,
+            "avg_construction_site_delivered_stone_units_total_live": float(
+                mean(construction_site_delivered_stone_units_total_live)
+            ) if construction_site_delivered_stone_units_total_live else 0.0,
+            "avg_construction_site_delivered_food_units_total_live": float(
+                mean(construction_site_delivered_food_units_total_live)
+            ) if construction_site_delivered_food_units_total_live else 0.0,
+            "avg_active_builders_count_material": float(mean(active_builders_count_material)) if active_builders_count_material else 0.0,
+            "avg_active_haulers_count_material": float(mean(active_haulers_count_material)) if active_haulers_count_material else 0.0,
+            "avg_active_builders_nearest_wood_distance_avg": float(
+                mean(active_builders_nearest_wood_distance_avg)
+            ) if active_builders_nearest_wood_distance_avg else 0.0,
+            "avg_active_builders_nearest_stone_distance_avg": float(
+                mean(active_builders_nearest_stone_distance_avg)
+            ) if active_builders_nearest_stone_distance_avg else 0.0,
+            "avg_active_haulers_nearest_wood_distance_avg": float(
+                mean(active_haulers_nearest_wood_distance_avg)
+            ) if active_haulers_nearest_wood_distance_avg else 0.0,
+            "avg_active_haulers_nearest_stone_distance_avg": float(
+                mean(active_haulers_nearest_stone_distance_avg)
+            ) if active_haulers_nearest_stone_distance_avg else 0.0,
             "avg_construction_site_first_builder_arrival_delay_avg": float(
                 mean(construction_site_first_builder_arrival_delay_avg)
             ) if construction_site_first_builder_arrival_delay_avg else 0.0,

@@ -31,6 +31,7 @@ CONSTRUCTION_WORK_RANGE = 1
 CONSTRUCTION_WORK_PER_TICK = 1
 CONSTRUCTION_WAIT_SIGNAL_TICKS = 24
 DELIVERY_COMMIT_TICKS = 8
+SOURCE_BINDING_PERSIST_TICKS = 4
 BUILDER_SELF_SUPPLY_MAX_PER_RESOURCE = 1
 BUILDER_SELF_SUPPLY_MAX_SOURCE_DISTANCE = 3
 BUILDER_SELF_SUPPLY_HUNGER_MIN = 16
@@ -1070,6 +1071,8 @@ def deposit_agent_inventory_to_storage(world: "World", agent: "Agent") -> bool:
         agent.inventory[key] = have - qty
         moved = True
         moved_materials += int(qty)
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric(f"storage_deposit_{str(key)}_units", int(qty))
         if key in {"wood", "stone"}:
             moved_wood_or_stone += int(qty)
 
@@ -2933,6 +2936,16 @@ def _clear_hauler_delivery(agent: "Agent", world: Optional["World"] = None) -> N
         agent.delivery_reserved_amount = 0
     if hasattr(agent, "delivery_commit_until_tick"):
         agent.delivery_commit_until_tick = -1
+    if hasattr(agent, "delivery_pickup_tick"):
+        agent.delivery_pickup_tick = -1
+    if hasattr(agent, "delivery_source_storage_id"):
+        agent.delivery_source_storage_id = None
+    if hasattr(agent, "delivery_source_binding_until_tick"):
+        agent.delivery_source_binding_until_tick = -1
+    if hasattr(agent, "delivery_commitment_hold_active"):
+        agent.delivery_commitment_hold_active = False
+    if hasattr(agent, "delivery_commitment_hold_site_id"):
+        agent.delivery_commitment_hold_site_id = None
 
 
 def _withdraw_resource_from_storage(
@@ -2967,6 +2980,33 @@ def _withdraw_resource_from_storage(
     return qty
 
 
+def _withdraw_resource_from_specific_storage(
+    world: "World",
+    agent: "Agent",
+    *,
+    storage_building: Dict[str, Any],
+    resource_type: str,
+    amount: int,
+) -> int:
+    if not isinstance(storage_building, dict):
+        return 0
+    sx = int(storage_building.get("x", 0))
+    sy = int(storage_building.get("y", 0))
+    if _distance((agent.x, agent.y), (sx, sy)) > 1:
+        return 0
+    storage = _ensure_storage_state(storage_building)
+    want = max(0, int(amount))
+    available = max(0, int(storage.get(resource_type, 0)))
+    qty = min(want, available, max(0, int(getattr(agent, "inventory_space", lambda: 0)())))
+    if qty <= 0:
+        return 0
+    storage[resource_type] = available - qty
+    agent.inventory[resource_type] = int(agent.inventory.get(resource_type, 0)) + qty
+    village = world.get_village_by_id(getattr(agent, "village_id", None))
+    _sync_village_storage_cache(world, village)
+    return qty
+
+
 def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
     def _delivery_stage(stage: str, *, role: Optional[str] = None, village_uid: Optional[str] = None) -> None:
         if hasattr(world, "record_delivery_pipeline_stage"):
@@ -2985,6 +3025,219 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
                 world.record_settlement_progression_metric("storage_delivery_failures")
             elif str(target_site.get("type", "")) == "house":
                 world.record_settlement_progression_metric("house_delivery_failures")
+
+    def _record_delivery_invalidation(kind: str, reason: str) -> None:
+        if not hasattr(world, "record_settlement_progression_metric"):
+            return
+        kind_key = "site" if str(kind) == "site" else "source"
+        reason_key = str(reason or "unknown")
+        if kind_key == "site":
+            reason_metric = {
+                "missing_site": "construction_delivery_invalid_site_missing_site_count",
+                "not_under_construction": "construction_delivery_invalid_site_not_under_construction_count",
+                "village_mismatch": "construction_delivery_invalid_site_village_mismatch_count",
+                "construction_completed": "construction_delivery_invalid_site_construction_completed_count",
+                "no_path_to_site": "construction_delivery_invalid_site_no_path_to_site_count",
+                "demand_mismatch": "construction_delivery_invalid_site_demand_mismatch_count",
+            }.get(reason_key, "construction_delivery_invalid_site_other_count")
+        else:
+            reason_metric = {
+                "no_source_available": "construction_delivery_invalid_source_no_source_available_count",
+                "source_depleted": "construction_delivery_invalid_source_source_depleted_count",
+                "reservation_invalidated": "construction_delivery_invalid_source_reservation_invalidated_count",
+                "source_reassigned": "construction_delivery_invalid_source_source_reassigned_count",
+                "linkage_mismatch": "construction_delivery_invalid_source_linkage_mismatch_count",
+                "no_path_to_source": "construction_delivery_invalid_source_no_path_to_source_count",
+            }.get(reason_key, "construction_delivery_invalid_source_other_count")
+        world.record_settlement_progression_metric(reason_metric, 1)
+
+        pickup_tick = int(getattr(agent, "delivery_pickup_tick", -1) or -1)
+        before_pickup = pickup_tick < 0
+        world.record_settlement_progression_metric(
+            f"construction_delivery_invalid_{kind_key}_{'before' if before_pickup else 'after'}_pickup_count",
+            1,
+        )
+        now_tick = int(getattr(world, "tick", 0))
+        chain_started = int(getattr(agent, "delivery_chain_started_tick", -1) or -1)
+        if chain_started >= 0:
+            world.record_settlement_progression_metric(
+                f"construction_delivery_ticks_reservation_to_invalid_{kind_key}_total",
+                max(0, now_tick - chain_started),
+            )
+            world.record_settlement_progression_metric(
+                f"construction_delivery_ticks_reservation_to_invalid_{kind_key}_samples",
+                1,
+            )
+        if pickup_tick >= 0:
+            world.record_settlement_progression_metric(
+                f"construction_delivery_ticks_pickup_to_invalid_{kind_key}_total",
+                max(0, now_tick - pickup_tick),
+            )
+            world.record_settlement_progression_metric(
+                f"construction_delivery_ticks_pickup_to_invalid_{kind_key}_samples",
+                1,
+            )
+        material = str(getattr(agent, "delivery_resource_type", "") or "")
+        if material in {"wood", "stone", "food"}:
+            world.record_settlement_progression_metric(
+                f"construction_delivery_invalid_{kind_key}_material_{material}_count",
+                1,
+            )
+        if kind_key == "site":
+            committed_site = str(getattr(agent, "delivery_commitment_hold_site_id", "") or "")
+            target_site = str(getattr(agent, "delivery_target_building_id", "") or "")
+            if committed_site and target_site and committed_site != target_site:
+                world.record_settlement_progression_metric(
+                    "construction_delivery_invalid_site_committed_site_mismatch_count",
+                    1,
+                )
+        else:
+            source_id = str(getattr(agent, "delivery_source_storage_id", "") or "")
+            if not source_id:
+                world.record_settlement_progression_metric(
+                    "construction_delivery_invalid_source_committed_source_missing_count",
+                    1,
+                )
+
+    def _source_matches_village(source: Dict[str, Any], village_obj: Dict[str, Any]) -> bool:
+        if not isinstance(source, dict):
+            return False
+        if int(source.get("village_id", -1)) == int(village_obj.get("id", -2)):
+            return True
+        suid = str(source.get("village_uid", "") or "")
+        vuid = str(village_obj.get("village_uid", "") or "")
+        return bool(suid and vuid and suid == vuid)
+
+    def _reservation_stage_alignment_reason(
+        site_obj: Optional[Dict[str, Any]],
+        village_obj: Dict[str, Any],
+        resource: str,
+        reserved_qty: int,
+        source_obj: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        if not isinstance(site_obj, dict):
+            return "site_missing"
+        if str(site_obj.get("operational_state", "")) != "under_construction":
+            return "site_not_under_construction"
+        if reserved_qty <= 0:
+            return "reservation_invalid"
+        needs = get_outstanding_construction_needs(site_obj)
+        if int(needs.get(resource, 0)) <= 0:
+            req = site_obj.get("construction_request", {})
+            req_needed = int(req.get(f"{resource}_needed", 0)) if isinstance(req, dict) else 0
+            req_reserved = int(req.get(f"{resource}_reserved", 0)) if isinstance(req, dict) else 0
+            if req_needed + req_reserved <= 0:
+                return "demand_mismatch"
+        if source_obj is not None:
+            if str(source_obj.get("type", "")) != "storage" or not _source_matches_village(source_obj, village_obj):
+                return "source_ineligible"
+            storage = _ensure_storage_state(source_obj)
+            if int(storage.get(resource, 0)) <= 0:
+                return "source_empty"
+        return None
+
+    def _resolve_bound_source(village_obj: Dict[str, Any], resource: str) -> Optional[Dict[str, Any]]:
+        bound_id = str(getattr(agent, "delivery_source_storage_id", "") or "")
+        if not bound_id:
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_binding_missing_count", 1)
+            return None
+        bound = getattr(world, "buildings", {}).get(bound_id)
+        if not isinstance(bound, dict):
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_binding_lost_missing_source_count", 1)
+            return None
+        if str(bound.get("type", "")) != "storage" or not _source_matches_village(bound, village_obj):
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_binding_lost_ineligible_source_count", 1)
+            return None
+        storage = _ensure_storage_state(bound)
+        if int(storage.get(resource, 0)) <= 0:
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_binding_lost_ineligible_source_count", 1)
+            return None
+        return bound
+
+    def _has_recent_delivery_commitment() -> bool:
+        now_tick = int(getattr(world, "tick", 0))
+        commit_until = int(getattr(agent, "delivery_commit_until_tick", -1) or -1)
+        chain_started = int(getattr(agent, "delivery_chain_started_tick", -10_000) or -10_000)
+        focus_tick = int(getattr(agent, "construction_focus_tick", -10_000) or -10_000)
+        return (
+            (commit_until >= now_tick and commit_until >= 0)
+            or (now_tick - chain_started <= int(DELIVERY_COMMIT_TICKS))
+            or (now_tick - focus_tick <= 120)
+        )
+
+    def _attempt_delivery_commitment_hold(village_obj: Dict[str, Any]) -> Optional[Tuple[str, str, int]]:
+        if not hasattr(world, "record_settlement_progression_metric"):
+            return None
+        if not _has_recent_delivery_commitment():
+            return None
+        carrying_by_resource = {
+            "wood": int(getattr(agent, "inventory", {}).get("wood", 0)),
+            "stone": int(getattr(agent, "inventory", {}).get("stone", 0)),
+            "food": int(getattr(agent, "inventory", {}).get("food", 0)),
+        }
+        carrying_any = int(carrying_by_resource["wood"]) + int(carrying_by_resource["stone"]) + int(carrying_by_resource["food"])
+        if carrying_any <= 0:
+            return None
+        world.record_settlement_progression_metric("delivery_commitment_hold_invoked_count", 1)
+        if float(getattr(agent, "hunger", 100.0)) <= 12.0:
+            world.record_settlement_progression_metric("delivery_commitment_hold_broken_by_survival_count", 1)
+            return None
+
+        hold_site_id = str(getattr(agent, "delivery_target_building_id", "") or "")
+        if not hold_site_id:
+            hold_site_id = str(getattr(agent, "construction_focus_site_id", "") or "")
+        if not hold_site_id:
+            world.record_settlement_progression_metric("delivery_commitment_hold_broken_by_invalid_site_count", 1)
+            _record_delivery_invalidation("site", "missing_site")
+            return None
+        hold_site = getattr(world, "buildings", {}).get(hold_site_id)
+        if not isinstance(hold_site, dict):
+            world.record_settlement_progression_metric("delivery_commitment_hold_broken_by_invalid_site_count", 1)
+            _record_delivery_invalidation("site", "missing_site")
+            return None
+        if str(hold_site.get("operational_state", "")) != "under_construction":
+            world.record_settlement_progression_metric("delivery_commitment_hold_broken_by_invalid_site_count", 1)
+            _record_delivery_invalidation("site", "not_under_construction")
+            return None
+        same_village = (
+            int(hold_site.get("village_id", -1)) == int(village_obj.get("id", -2))
+            or (
+                str(hold_site.get("village_uid", ""))
+                and str(village_obj.get("village_uid", ""))
+                and str(hold_site.get("village_uid", "")) == str(village_obj.get("village_uid", ""))
+            )
+        )
+        if not same_village:
+            world.record_settlement_progression_metric("delivery_commitment_hold_broken_by_invalid_site_count", 1)
+            _record_delivery_invalidation("site", "village_mismatch")
+            return None
+        needs = get_outstanding_construction_needs(hold_site)
+        for resource in ("wood", "stone", "food"):
+            carrying = int(carrying_by_resource.get(resource, 0))
+            needed = int(needs.get(resource, 0))
+            if carrying <= 0 or needed <= 0:
+                continue
+            reserve_amount = min(carrying, needed)
+            reserved = reserve_materials_for_construction(world, hold_site_id, resource, reserve_amount)
+            if reserved <= 0:
+                continue
+            agent.delivery_target_building_id = str(hold_site_id)
+            agent.delivery_resource_type = str(resource)
+            agent.delivery_reserved_amount = int(reserved)
+            agent.delivery_chain_started_tick = int(getattr(world, "tick", 0))
+            agent.delivery_pickup_tick = int(getattr(agent, "delivery_pickup_tick", -1) or -1)
+            agent.delivery_commit_until_tick = int(getattr(world, "tick", 0)) + int(DELIVERY_COMMIT_TICKS)
+            agent.delivery_commitment_hold_active = True
+            agent.delivery_commitment_hold_site_id = str(hold_site_id)
+            _mark_construction_site_demand_tick(world, hold_site)
+            return (str(hold_site_id), str(resource), int(reserved))
+        world.record_settlement_progression_metric("delivery_commitment_hold_broken_by_invalid_source_count", 1)
+        _record_delivery_invalidation("source", "linkage_mismatch")
+        return None
 
     if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_attempt"):
         world.record_task_completion_attempt(agent, "construction_delivery")
@@ -3081,87 +3334,116 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
         if candidates:
             _delivery_stage("delivery_target_visible_count", village_uid=village_uid)
         if not candidates:
-            carrying_any = int(getattr(agent, "inventory", {}).get("wood", 0)) + int(getattr(agent, "inventory", {}).get("stone", 0)) + int(
-                getattr(agent, "inventory", {}).get("food", 0)
-            )
-            if carrying_any > 0 and hasattr(world, "record_settlement_progression_metric"):
-                world.record_settlement_progression_metric("construction_material_delivery_drift_events")
-            _clear_hauler_delivery(agent, world)
-            fail_reason = "no_delivery_target" if not sites else "no_resource_available"
-            _delivery_fail(fail_reason, village_uid=village_uid)
-            _record_housing_failure(world, fail_reason, village_uid=village_uid or None)
-            if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_preconditions_failed"):
-                world.record_task_completion_preconditions_failed(agent, "construction_delivery", "no_delivery_target")
-            if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
-                if not sites:
-                    world.record_workforce_block_reason(agent, "hauler", "no_construction_site")
-                else:
-                    world.record_workforce_block_reason(agent, "hauler", "no_materials_available")
-            return False
-        candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10]))
-        _, _, _, _, _, local_bonus_key, _, _, _, bid, resource_type, need = candidates[0]
-        if int(local_bonus_key) < 0 and hasattr(world, "secondary_nucleus_delivery_priority"):
-            try:
+            hold_target = _attempt_delivery_commitment_hold(village)
+            if hold_target is not None:
+                bid, resource_type, reserved = hold_target
+                target_id = bid
+                reserved_amount = int(reserved)
                 selected_site = getattr(world, "buildings", {}).get(str(bid))
-                if isinstance(selected_site, dict):
-                    world.secondary_nucleus_delivery_priority(agent, selected_site, record_event=True)
-            except Exception:
-                pass
-        if int(local_bonus_key) < 0 and hasattr(world, "storage_delivery_priority_bonus"):
-            try:
-                selected_site = getattr(world, "buildings", {}).get(str(bid))
-                if isinstance(selected_site, dict):
-                    world.storage_delivery_priority_bonus(agent, selected_site, record_event=True)
-            except Exception:
-                pass
-        _delivery_stage("delivery_target_created_count", village_uid=village_uid)
-        selected_site = getattr(world, "buildings", {}).get(str(bid))
-        is_house_target = isinstance(selected_site, dict) and str(selected_site.get("type", "")) == "house"
-        if is_house_target:
-            _record_housing_stage(
-                world,
-                "house_delivery_target_created",
-                village_uid=village_uid or None,
-                building_id=str(bid),
-            )
-            _record_housing_worker(world, "hauler_assigned_house_delivery", village_uid=village_uid or None)
-        reserve_cap = min(int(need), int(getattr(agent, "max_inventory", 0)))
-        reserved = reserve_materials_for_construction(world, bid, resource_type, reserve_cap)
-        if reserved <= 0:
-            _clear_hauler_delivery(agent, world)
-            _delivery_fail("reservation_lost", village_uid=village_uid)
+                is_house_target = isinstance(selected_site, dict) and str(selected_site.get("type", "")) == "house"
+                if is_house_target:
+                    _record_housing_stage(
+                        world,
+                        "house_delivery_target_created",
+                        village_uid=village_uid or None,
+                        building_id=str(bid),
+                    )
+                    _record_housing_worker(world, "hauler_assigned_house_delivery", village_uid=village_uid or None)
+                    _record_housing_stage(
+                        world,
+                        "house_delivery_reserved",
+                        village_uid=village_uid or None,
+                        building_id=str(bid),
+                    )
+            else:
+                carrying_any = int(getattr(agent, "inventory", {}).get("wood", 0)) + int(getattr(agent, "inventory", {}).get("stone", 0)) + int(
+                    getattr(agent, "inventory", {}).get("food", 0)
+                )
+                if carrying_any > 0 and hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("construction_material_delivery_drift_events")
+                _clear_hauler_delivery(agent, world)
+                fail_reason = "retargeted_before_delivery" if carrying_any > 0 else ("no_delivery_target" if not sites else "no_resource_available")
+                _delivery_fail(fail_reason, village_uid=village_uid)
+                _record_housing_failure(world, fail_reason, village_uid=village_uid or None)
+                if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_preconditions_failed"):
+                    world.record_task_completion_preconditions_failed(agent, "construction_delivery", "no_delivery_target")
+                if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
+                    if not sites:
+                        world.record_workforce_block_reason(agent, "hauler", "no_construction_site")
+                    else:
+                        world.record_workforce_block_reason(agent, "hauler", "no_materials_available")
+                return False
+        if not target_id or resource_type not in ("wood", "stone", "food") or int(reserved_amount) <= 0:
+            candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10]))
+            _, _, _, _, _, local_bonus_key, _, _, _, bid, resource_type, need = candidates[0]
+            if int(local_bonus_key) < 0 and hasattr(world, "secondary_nucleus_delivery_priority"):
+                try:
+                    selected_site = getattr(world, "buildings", {}).get(str(bid))
+                    if isinstance(selected_site, dict):
+                        world.secondary_nucleus_delivery_priority(agent, selected_site, record_event=True)
+                except Exception:
+                    pass
+            if int(local_bonus_key) < 0 and hasattr(world, "storage_delivery_priority_bonus"):
+                try:
+                    selected_site = getattr(world, "buildings", {}).get(str(bid))
+                    if isinstance(selected_site, dict):
+                        world.storage_delivery_priority_bonus(agent, selected_site, record_event=True)
+                except Exception:
+                    pass
+            _delivery_stage("delivery_target_created_count", village_uid=village_uid)
+            selected_site = getattr(world, "buildings", {}).get(str(bid))
+            is_house_target = isinstance(selected_site, dict) and str(selected_site.get("type", "")) == "house"
             if is_house_target:
-                _record_housing_failure(world, "hauler_reassigned", village_uid=village_uid or None)
-            if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_preconditions_failed"):
-                world.record_task_completion_preconditions_failed(agent, "construction_delivery", "no_reserved_delivery")
-            if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
-                world.record_workforce_block_reason(agent, "hauler", "waiting_on_delivery")
-            return False
-        _delivery_stage("delivery_target_reserved_count", village_uid=village_uid)
-        if is_house_target:
-            _record_housing_stage(
-                world,
-                "house_delivery_reserved",
-                village_uid=village_uid or None,
-                building_id=str(bid),
-            )
-        agent.delivery_target_building_id = bid
-        agent.delivery_resource_type = resource_type
-        agent.delivery_reserved_amount = int(reserved)
-        agent.delivery_chain_started_tick = int(getattr(world, "tick", 0))
-        agent.delivery_commit_until_tick = int(getattr(world, "tick", 0)) + int(DELIVERY_COMMIT_TICKS)
-        if isinstance(selected_site, dict):
-            _mark_construction_site_demand_tick(world, selected_site)
-        target_id = bid
-        reserved_amount = int(reserved)
+                _record_housing_stage(
+                    world,
+                    "house_delivery_target_created",
+                    village_uid=village_uid or None,
+                    building_id=str(bid),
+                )
+                _record_housing_worker(world, "hauler_assigned_house_delivery", village_uid=village_uid or None)
+            reserve_cap = min(int(need), int(getattr(agent, "max_inventory", 0)))
+            reserved = reserve_materials_for_construction(world, bid, resource_type, reserve_cap)
+            if reserved <= 0:
+                _record_delivery_invalidation("source", "reservation_invalidated")
+                _clear_hauler_delivery(agent, world)
+                _delivery_fail("reservation_lost", village_uid=village_uid)
+                if is_house_target:
+                    _record_housing_failure(world, "hauler_reassigned", village_uid=village_uid or None)
+                if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_task_completion_preconditions_failed"):
+                    world.record_task_completion_preconditions_failed(agent, "construction_delivery", "no_reserved_delivery")
+                if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
+                    world.record_workforce_block_reason(agent, "hauler", "waiting_on_delivery")
+                return False
+            _delivery_stage("delivery_target_reserved_count", village_uid=village_uid)
+            if is_house_target:
+                _record_housing_stage(
+                    world,
+                    "house_delivery_reserved",
+                    village_uid=village_uid or None,
+                    building_id=str(bid),
+                )
+            agent.delivery_target_building_id = bid
+            agent.delivery_resource_type = resource_type
+            agent.delivery_reserved_amount = int(reserved)
+            agent.delivery_chain_started_tick = int(getattr(world, "tick", 0))
+            agent.delivery_commit_until_tick = int(getattr(world, "tick", 0)) + int(DELIVERY_COMMIT_TICKS)
+            if isinstance(selected_site, dict):
+                _mark_construction_site_demand_tick(world, selected_site)
+            target_id = bid
+            reserved_amount = int(reserved)
 
     site = getattr(world, "buildings", {}).get(str(target_id))
     site_is_house = isinstance(site, dict) and str(site.get("type", "")) == "house"
     if not isinstance(site, dict) or site.get("operational_state") != "under_construction":
-        _clear_hauler_delivery(agent, world)
         fail_reason = "site_invalidated"
+        invalid_reason = "missing_site"
         if isinstance(site, dict) and str(site.get("operational_state", "")) == "active":
             fail_reason = "construction_completed_before_delivery"
+            invalid_reason = "construction_completed"
+        elif isinstance(site, dict):
+            invalid_reason = "not_under_construction"
+        _record_delivery_invalidation("site", invalid_reason)
+        _clear_hauler_delivery(agent, world)
         _delivery_fail(fail_reason, village_uid=village_uid)
         if site_is_house:
             _record_housing_failure(world, "site_invalidated", village_uid=village_uid or None)
@@ -3174,6 +3456,7 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
     resource_type = str(getattr(agent, "delivery_resource_type", ""))
     reserved_amount = int(getattr(agent, "delivery_reserved_amount", 0))
     if reserved_amount <= 0:
+        _record_delivery_invalidation("source", "reservation_invalidated")
         _clear_hauler_delivery(agent, world)
         _delivery_fail("reservation_lost", village_uid=village_uid)
         if site_is_house:
@@ -3187,10 +3470,75 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
 
     carrying = int(agent.inventory.get(resource_type, 0))
     if carrying <= 0:
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("construction_delivery_prepickup_checks_count", 1)
+            if isinstance(site, dict):
+                world.record_settlement_progression_metric("construction_delivery_prepickup_site_exists_count", 1)
+                if str(site.get("operational_state", "")) == "under_construction":
+                    world.record_settlement_progression_metric("construction_delivery_prepickup_site_under_construction_count", 1)
+                else:
+                    world.record_settlement_progression_metric("construction_delivery_prepickup_site_not_under_construction_count", 1)
+                sx = int(site.get("x", 0))
+                sy = int(site.get("y", 0))
+                if _distance((agent.x, agent.y), (sx, sy)) <= 1:
+                    world.record_settlement_progression_metric("construction_delivery_prepickup_site_reachable_count", 1)
+                else:
+                    world.record_settlement_progression_metric("construction_delivery_prepickup_site_unreachable_count", 1)
+                needs = get_outstanding_construction_needs(site)
+                if int(needs.get(str(resource_type), 0)) > 0:
+                    world.record_settlement_progression_metric("construction_delivery_prepickup_site_demand_matches_material_count", 1)
+                else:
+                    world.record_settlement_progression_metric("construction_delivery_prepickup_site_demand_mismatch_material_count", 1)
+            else:
+                world.record_settlement_progression_metric("construction_delivery_prepickup_site_missing_count", 1)
         _delivery_stage("resource_pickup_attempt_count", village_uid=village_uid)
+        if hasattr(world, "record_settlement_progression_metric"):
+            align_reason_pre = _reservation_stage_alignment_reason(site, village, resource_type, reserved_amount, None)
+            if align_reason_pre is None:
+                world.record_settlement_progression_metric("construction_delivery_reservation_alignment_pass_count", 1)
+            else:
+                world.record_settlement_progression_metric("construction_delivery_reservation_alignment_fail_count", 1)
+                world.record_settlement_progression_metric(
+                    f"construction_delivery_reservation_alignment_fail_material_{resource_type}_count",
+                    1,
+                )
+                world.record_settlement_progression_metric(
+                    f"construction_delivery_reservation_alignment_fail_reason_{align_reason_pre}_count",
+                    1,
+                )
+                _record_delivery_invalidation("site", "demand_mismatch")
+                _clear_hauler_delivery(agent, world)
+                _delivery_fail("reservation_lost", village_uid=village_uid)
+                return False
         source_storage = _nearest_storage_with_resource_for_agent(world, agent, village, resource_type)
+        bound_source = _resolve_bound_source(village, resource_type)
+        used_persistence_window = False
+        now_tick = int(getattr(world, "tick", 0))
+        binding_until = int(getattr(agent, "delivery_source_binding_until_tick", -1) or -1)
+        if source_storage is None and binding_until >= now_tick:
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_persistence_window_invoked_count", 1)
+            used_persistence_window = True
+            if bound_source is None and hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric(
+                    "construction_delivery_source_persistence_window_broken_by_source_invalidity_count",
+                    1,
+                )
+        if source_storage is None and bound_source is not None:
+            source_storage = bound_source
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_binding_refreshed_count", 1)
+        elif source_storage is not None and bound_source is not None:
+            if str(source_storage.get("building_id", "")) == str(bound_source.get("building_id", "")):
+                if hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("construction_delivery_source_binding_persisted_count", 1)
+            elif hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_binding_lost_not_refreshed_count", 1)
         if source_storage is None:
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_binding_unavailable_count", 1)
             _delivery_fail("no_source_storage", village_uid=village_uid)
+            _record_delivery_invalidation("source", "no_source_available")
             if site_is_house:
                 _record_housing_failure(world, "no_source_storage", village_uid=village_uid or None)
             if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
@@ -3198,14 +3546,41 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
                 if hasattr(world, "record_task_completion_preconditions_failed"):
                     world.record_task_completion_preconditions_failed(agent, "construction_delivery", "no_resource_available")
             return False
+        align_reason = _reservation_stage_alignment_reason(site, village, resource_type, reserved_amount, source_storage)
+        if align_reason is not None:
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_reservation_alignment_fail_count", 1)
+                world.record_settlement_progression_metric(
+                    f"construction_delivery_reservation_alignment_fail_material_{resource_type}_count",
+                    1,
+                )
+                world.record_settlement_progression_metric(
+                    f"construction_delivery_reservation_alignment_fail_reason_{align_reason}_count",
+                    1,
+                )
+                if used_persistence_window and align_reason in {"demand_mismatch", "site_missing", "site_not_under_construction"}:
+                    world.record_settlement_progression_metric(
+                        "construction_delivery_source_persistence_window_broken_by_demand_mismatch_count",
+                        1,
+                    )
+            _record_delivery_invalidation("site", "demand_mismatch")
+            _clear_hauler_delivery(agent, world)
+            _delivery_fail("reservation_lost", village_uid=village_uid)
+            return False
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("construction_delivery_reservation_alignment_pass_count", 1)
         _delivery_stage("resource_source_found_count", village_uid=village_uid)
         if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("construction_delivery_source_binding_selected_count", 1)
             source_dist = _distance((agent.x, agent.y), (int(source_storage.get("x", 0)), int(source_storage.get("y", 0))))
             world.record_settlement_progression_metric("construction_delivery_distance_to_source_sum", int(source_dist))
             world.record_settlement_progression_metric("construction_delivery_distance_to_source_samples", 1)
-        taken = _withdraw_resource_from_storage(
+        agent.delivery_source_storage_id = str(source_storage.get("building_id", "") or "")
+        agent.delivery_source_binding_until_tick = int(getattr(world, "tick", 0)) + int(SOURCE_BINDING_PERSIST_TICKS)
+        taken = _withdraw_resource_from_specific_storage(
             world,
             agent,
+            storage_building=source_storage,
             resource_type=resource_type,
             amount=reserved_amount,
         )
@@ -3216,21 +3591,27 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
             if site_is_house:
                 _record_housing_worker(world, "hauler_pickup_house_material", village_uid=village_uid or None)
             agent.delivery_commit_until_tick = int(getattr(world, "tick", 0)) + int(DELIVERY_COMMIT_TICKS)
+            agent.delivery_pickup_tick = int(getattr(world, "tick", 0))
+            if used_persistence_window and hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("construction_delivery_source_persistence_window_completed_count", 1)
         if taken <= 0 and str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
             world.record_workforce_block_reason(agent, "hauler", "no_materials_available")
             if hasattr(world, "record_task_completion_preconditions_failed"):
                 world.record_task_completion_preconditions_failed(agent, "construction_delivery", "no_resource_available")
             source_state = _ensure_storage_state(source_storage)
             if int(source_state.get(resource_type, 0)) <= 0:
-                _delivery_fail("no_resource_available", village_uid=village_uid)
+                _delivery_fail("source_depleted", village_uid=village_uid)
+                _record_delivery_invalidation("source", "source_depleted")
                 if site_is_house:
                     _record_housing_failure(world, "no_resource_available", village_uid=village_uid or None)
             elif _distance((agent.x, agent.y), (int(source_storage.get("x", 0)), int(source_storage.get("y", 0)))) > 1:
-                _delivery_fail("path_failed", village_uid=village_uid)
+                _delivery_fail("no_path_to_source", village_uid=village_uid)
+                _record_delivery_invalidation("source", "no_path_to_source")
                 if site_is_house:
                     _record_housing_failure(world, "path_failed", village_uid=village_uid or None)
             else:
                 _delivery_fail("unknown_failure", village_uid=village_uid)
+                _record_delivery_invalidation("source", "unknown")
                 if site_is_house:
                     _record_housing_failure(world, "site_invalidated", village_uid=village_uid or None)
         return taken > 0
@@ -3243,7 +3624,8 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
             world.record_task_completion_preconditions_failed(agent, "construction_delivery", "target_not_in_range")
         if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
             world.record_workforce_block_reason(agent, "hauler", "no_target_found")
-        _delivery_fail("site_not_in_range", village_uid=village_uid)
+        _delivery_fail("no_path_to_site", village_uid=village_uid)
+        _record_delivery_invalidation("site", "no_path_to_site")
         if site_is_house:
             _record_housing_failure(world, "site_invalidated", village_uid=village_uid or None)
         return False
@@ -3267,6 +3649,7 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
         )
     fulfilled = fulfill_reserved_delivery(world, str(target_id), resource_type, deliver_amount)
     if fulfilled <= 0:
+        _record_delivery_invalidation("source", "reservation_invalidated")
         _clear_hauler_delivery(agent, world)
         _delivery_fail("reservation_lost", village_uid=village_uid)
         if site_is_house:
@@ -3276,6 +3659,7 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
         if str(getattr(agent, "role", "")) == "hauler" and hasattr(world, "record_workforce_block_reason"):
             world.record_workforce_block_reason(agent, "hauler", "waiting_on_delivery")
         return False
+    hold_was_active = bool(getattr(agent, "delivery_commitment_hold_active", False))
     agent.inventory[resource_type] = carrying - fulfilled
     agent.delivery_reserved_amount = max(0, reserved_amount - fulfilled)
     if int(agent.delivery_reserved_amount) <= 0:
@@ -3291,6 +3675,9 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
             world.record_settlement_progression_metric("storage_delivery_successes")
         elif str(site.get("type", "")) == "house":
             world.record_settlement_progression_metric("house_delivery_successes")
+        if hold_was_active:
+            world.record_settlement_progression_metric("delivery_commitment_hold_completed_count", 1)
+            agent.delivery_commitment_hold_active = False
     if site_is_house:
         _record_housing_stage(
             world,
@@ -3316,9 +3703,16 @@ def run_hauler_construction_delivery(world: "World", agent: "Agent") -> bool:
     _mark_construction_site_demand_tick(world, site)
     if hasattr(world, "record_settlement_progression_metric"):
         world.record_settlement_progression_metric("construction_material_delivery_events", int(fulfilled))
+        world.record_settlement_progression_metric(
+            f"construction_material_delivery_{str(resource_type)}_units",
+            int(fulfilled),
+        )
         if int(site.get("construction_progress", 0)) > 0 or _site_has_recent_builder_wait_signal(world, site):
             world.record_settlement_progression_metric("construction_material_delivery_to_active_site", int(fulfilled))
         site["construction_delivered_units"] = int(site.get("construction_delivered_units", 0)) + int(fulfilled)
+        site[f"construction_delivered_{str(resource_type)}_units"] = int(
+            site.get(f"construction_delivered_{str(resource_type)}_units", 0)
+        ) + int(fulfilled)
     agent.construction_focus_site_id = str(target_id)
     agent.construction_focus_tick = int(getattr(world, "tick", 0))
     site["construction_last_delivery_tick"] = int(getattr(world, "tick", 0))

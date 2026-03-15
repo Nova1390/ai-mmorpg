@@ -82,6 +82,14 @@ CULTURAL_MEMORY_MIN_CONFIDENCE = 0.18
 CAMP_FOOD_DECAY_INTERVAL_TICKS = 50
 LOCAL_FOOD_PRESSURE_RADIUS = 10
 LOCAL_FOOD_PRESSURE_NEEDY_HUNGER = 50.0
+LOCAL_HANDOFF_MAX_DISTANCE = 1
+LOCAL_HANDOFF_RECEIVER_HUNGER_THRESHOLD = 20.0
+LOCAL_HANDOFF_RECEIVER_CRITICAL_HUNGER_OVERRIDE = 14.0
+LOCAL_HANDOFF_DONOR_MIN_FOOD = 2
+LOCAL_HANDOFF_DONOR_MIN_HUNGER = 65.0
+LOCAL_HANDOFF_COOLDOWN_TICKS = 36
+LOCAL_HANDOFF_PAIR_COOLDOWN_TICKS = 60
+LOCAL_HANDOFF_RECENT_RESCUE_TICKS = 80
 EARLY_SURVIVAL_RELIEF_TICKS = 320
 EARLY_SURVIVAL_RELIEF_HUNGER_DECAY_MULTIPLIER = 0.9
 SETTLEMENT_STABILITY_TICK_THRESHOLD = 120
@@ -235,9 +243,15 @@ DELIVERY_DIAGNOSTIC_FAILURE_REASONS = {
     "no_delivery_target",
     "no_source_storage",
     "no_resource_available",
+    "source_depleted",
     "reservation_lost",
     "site_invalidated",
     "site_not_in_range",
+    "no_path_to_source",
+    "no_path_to_site",
+    "arrival_failed",
+    "retargeted_before_delivery",
+    "interrupted_by_other_priority",
     "inventory_empty",
     "task_replaced",
     "path_failed",
@@ -675,6 +689,164 @@ def _default_settlement_progression_stats() -> Dict[str, Any]:
         "food_acquisition_interval_ticks_total": 0,
         "food_acquisition_interval_ticks_samples": 0,
         "food_acquisition_events_total": 0,
+        "food_self_feeding_events": 0,
+        "food_self_feeding_units": 0,
+        "food_group_feeding_events": 0,
+        "food_group_feeding_units": 0,
+        "food_reserve_accumulation_events": 0,
+        "food_reserve_accumulation_units": 0,
+        "food_reserve_draw_events": 0,
+        "food_reserve_draw_units": 0,
+        "food_security_layer_self_feeding_ticks_total": 0,
+        "food_security_layer_group_feeding_ticks_total": 0,
+        "food_security_layer_reserve_accumulation_ticks_total": 0,
+        "food_security_layer_none_ticks_total": 0,
+        "food_security_layer_agents_self_feeding_total": 0,
+        "food_security_layer_agents_group_feeding_total": 0,
+        "food_security_layer_agents_reserve_accumulation_total": 0,
+        "food_security_layer_agents_none_total": 0,
+        "food_security_layer_samples": 0,
+        "food_security_layer_transition_count": 0,
+        "food_security_layer_transition_none_to_self_feeding": 0,
+        "food_security_layer_transition_none_to_group_feeding": 0,
+        "food_security_layer_transition_none_to_reserve_accumulation": 0,
+        "food_security_layer_transition_none_to_none": 0,
+        "food_security_layer_transition_self_feeding_to_self_feeding": 0,
+        "food_security_layer_transition_self_feeding_to_group_feeding": 0,
+        "food_security_layer_transition_self_feeding_to_reserve_accumulation": 0,
+        "food_security_layer_transition_self_feeding_to_none": 0,
+        "food_security_layer_transition_group_feeding_to_self_feeding": 0,
+        "food_security_layer_transition_group_feeding_to_group_feeding": 0,
+        "food_security_layer_transition_group_feeding_to_reserve_accumulation": 0,
+        "food_security_layer_transition_group_feeding_to_none": 0,
+        "food_security_layer_transition_reserve_accumulation_to_self_feeding": 0,
+        "food_security_layer_transition_reserve_accumulation_to_group_feeding": 0,
+        "food_security_layer_transition_reserve_accumulation_to_reserve_accumulation": 0,
+        "food_security_layer_transition_reserve_accumulation_to_none": 0,
+        "food_security_reserve_entry_checks": 0,
+        "food_security_reserve_entry_condition_met_count": 0,
+        "food_security_reserve_entry_activated_count": 0,
+        "food_security_reserve_entry_blocked_no_surplus": 0,
+        "food_security_reserve_entry_blocked_no_qualifying_task": 0,
+        "food_security_reserve_entry_blocked_unstable_context": 0,
+        "food_security_reserve_entry_blocked_group_feeding_dominance": 0,
+        "food_security_reserve_prepolicy_candidate_count": 0,
+        "food_security_reserve_postpolicy_candidate_count": 0,
+        "food_security_reserve_final_activation_count": 0,
+        "food_security_reserve_selection_considered_count": 0,
+        "food_security_reserve_selection_chosen_count": 0,
+        "food_security_reserve_selection_rejected_count": 0,
+        "food_security_reserve_selection_rejected_by_group_feeding_count": 0,
+        "food_security_reserve_selection_rejected_by_unstable_context_count": 0,
+        "food_security_reserve_selection_rejected_by_no_surplus_count": 0,
+        "food_security_reserve_selection_rejected_by_other_count": 0,
+        "food_security_reserve_final_selection_lost_to_self_feeding_count": 0,
+        "food_security_reserve_final_selection_lost_to_group_feeding_count": 0,
+        "food_security_reserve_final_selection_lost_to_unstable_context_count": 0,
+        "food_security_reserve_final_selection_lost_to_no_surplus_count": 0,
+        "food_security_reserve_final_selection_lost_to_other_count": 0,
+        "food_security_reserve_final_selection_winner_self_feeding_count": 0,
+        "food_security_reserve_final_selection_winner_group_feeding_count": 0,
+        "food_security_reserve_final_selection_winner_other_count": 0,
+        "food_security_reserve_loss_stage_policy_ranking_count": 0,
+        "food_security_reserve_loss_stage_final_gate_count": 0,
+        "food_security_reserve_loss_stage_final_override_count": 0,
+        "food_security_reserve_final_decision_observed_count": 0,
+        "food_security_reserve_final_decision_candidate_count": 0,
+        "food_security_reserve_final_decision_candidate_survived_prepolicy_count": 0,
+        "food_security_reserve_final_decision_candidate_survived_postpolicy_count": 0,
+        "food_security_reserve_final_decision_candidate_lost_count": 0,
+        "food_security_reserve_final_decision_candidate_chosen_count": 0,
+        "food_security_reserve_final_selected_task_food_logistics_count": 0,
+        "food_security_reserve_final_selected_task_village_logistics_count": 0,
+        "food_security_reserve_final_selected_task_camp_supply_food_count": 0,
+        "food_security_reserve_final_selected_task_other_count": 0,
+        "food_security_reserve_final_selected_layer_reserve_accumulation_count": 0,
+        "food_security_reserve_final_selected_layer_group_feeding_count": 0,
+        "food_security_reserve_final_selected_layer_self_feeding_count": 0,
+        "food_security_reserve_final_selected_layer_none_count": 0,
+        "food_security_reserve_final_winner_subsystem_policy_ranking_count": 0,
+        "food_security_reserve_final_winner_subsystem_role_task_update_count": 0,
+        "food_security_reserve_final_winner_subsystem_final_gate_count": 0,
+        "food_security_reserve_final_winner_subsystem_final_override_count": 0,
+        "food_security_reserve_final_winner_subsystem_task_layer_routing_count": 0,
+        "food_security_reserve_final_winner_subsystem_contextual_override_count": 0,
+        "food_security_reserve_final_winner_subsystem_unknown_count": 0,
+        "food_security_reserve_final_override_reason_group_feeding_pressure_override_count": 0,
+        "food_security_reserve_final_override_reason_village_logistics_group_routing_count": 0,
+        "food_security_reserve_final_override_reason_camp_supply_group_routing_count": 0,
+        "food_security_reserve_final_override_reason_unstable_context_count": 0,
+        "food_security_reserve_final_override_reason_no_surplus_count": 0,
+        "food_security_reserve_final_override_reason_other_count": 0,
+        "reserve_final_tiebreak_invoked_count": 0,
+        "reserve_final_tiebreak_won_count": 0,
+        "reserve_final_tiebreak_lost_count": 0,
+        "reserve_final_tiebreak_blocked_by_pressure_count": 0,
+        "reserve_final_tiebreak_blocked_by_unstable_context_count": 0,
+        "reserve_final_tiebreak_blocked_by_no_surplus_count": 0,
+        "reserve_total_food_observed_sum": 0,
+        "reserve_total_food_observed_samples": 0,
+        "reserve_total_food_observed_max": 0,
+        "reserve_fill_events": 0,
+        "reserve_depletion_events": 0,
+        "ticks_reserve_above_threshold": 0,
+        "ticks_reserve_empty": 0,
+        "reserve_recovery_cycles": 0,
+        "reserve_partial_recovery_cycles": 0,
+        "reserve_full_recovery_cycles": 0,
+        "reserve_failed_recovery_attempts": 0,
+        "reserve_recovery_tracking_active": 0,
+        "reserve_recovery_refill_started": 0,
+        "reserve_recovery_sustain_ticks": 0,
+        "reserve_continuity_current_window": 0,
+        "reserve_continuity_longest_window": 0,
+        "reserve_shortage_active_prev": 0,
+        "reserve_refill_attempts": 0,
+        "reserve_refill_success": 0,
+        "reserve_refill_food_added_total": 0,
+        "reserve_refill_interval_ticks_total": 0,
+        "reserve_refill_interval_ticks_samples": 0,
+        "reserve_last_refill_tick": -1,
+        "reserve_refill_blocked_by_pressure": 0,
+        "reserve_refill_blocked_by_no_surplus": 0,
+        "reserve_refill_blocked_by_unstable_context": 0,
+        "reserve_refill_blocked_by_other": 0,
+        "reserve_draw_interval_ticks_total": 0,
+        "reserve_draw_interval_ticks_samples": 0,
+        "reserve_last_draw_tick": -1,
+        "settlement_food_shortage_events": 0,
+        "local_food_handoff_events": 0,
+        "local_food_handoff_units": 0,
+        "handoff_allowed_by_context_count": 0,
+        "handoff_blocked_by_group_priority_count": 0,
+        "handoff_blocked_by_cooldown_count": 0,
+        "handoff_blocked_by_same_unit_recently_count": 0,
+        "handoff_blocked_by_receiver_viability": 0,
+        "handoff_blocked_by_camp_fragility": 0,
+        "handoff_blocked_by_recent_rescue": 0,
+        "handoff_blocked_by_camp_fragility_when_receiver_critical_count": 0,
+        "handoff_blocked_by_camp_fragility_when_donor_safe_count": 0,
+        "handoff_blocked_by_camp_fragility_with_local_surplus_count": 0,
+        "handoff_blocked_by_camp_fragility_context_pressure_count": 0,
+        "handoff_blocked_by_camp_fragility_context_nonpressure_count": 0,
+        "handoff_blocked_by_camp_fragility_donor_food_sum": 0,
+        "handoff_blocked_by_camp_fragility_donor_food_samples": 0,
+        "handoff_blocked_by_camp_fragility_receiver_hunger_sum": 0.0,
+        "handoff_blocked_by_camp_fragility_receiver_hunger_samples": 0,
+        "handoff_blocked_by_camp_fragility_camp_food_sum": 0,
+        "handoff_blocked_by_camp_fragility_camp_food_samples": 0,
+        "local_food_handoff_prevented_by_low_surplus": 0,
+        "local_food_handoff_prevented_by_distance": 0,
+        "local_food_handoff_prevented_by_donor_risk": 0,
+        "hunger_relief_after_local_handoff_total": 0.0,
+        "hunger_relief_after_local_handoff_samples": 0,
+        "hunger_deaths_with_reserve_available": 0,
+        "hunger_deaths_without_reserve": 0,
+        "reserve_draw_hunger_sum": 0.0,
+        "reserve_draw_hunger_samples": 0,
+        "reserve_draw_events_during_food_stress": 0,
+        "reserve_draw_events_during_normal_conditions": 0,
+        "reserve_usage_after_failed_foraging_trip": 0,
         "food_acquisition_distance_total": 0,
         "food_acquisition_distance_samples": 0,
         "food_consumption_interval_ticks_total": 0,
@@ -682,6 +854,96 @@ def _default_settlement_progression_stats() -> Dict[str, Any]:
         "food_source_contention_events": 0,
         "food_source_depletion_events": 0,
         "food_respawned_total_observed": 0,
+        "foraging_trip_started_count": 0,
+        "foraging_trip_completed_count": 0,
+        "foraging_trip_zero_harvest_count": 0,
+        "foraging_trip_terminated_by_hunger_count": 0,
+        "foraging_trip_food_gained_total": 0,
+        "foraging_trip_movement_ticks_total": 0,
+        "foraging_trip_harvest_actions_total": 0,
+        "foraging_trip_retarget_count_total": 0,
+        "foraging_source_visit_count": 0,
+        "foraging_target_lock_duration_total": 0,
+        "foraging_target_lock_duration_samples": 0,
+        "foraging_commit_before_retarget_ticks_total": 0,
+        "foraging_commit_before_retarget_ticks_samples": 0,
+        "foraging_trip_move_before_first_harvest_total": 0,
+        "foraging_trip_move_before_first_harvest_samples": 0,
+        "foraging_trip_wasted_arrival_count": 0,
+        "foraging_arrival_depleted_source_count": 0,
+        "foraging_arrival_overcontested_count": 0,
+        "foraging_trip_efficiency_ratio_sum": 0.0,
+        "foraging_trip_efficiency_ratio_samples": 0,
+        "foraging_retarget_events": 0,
+        "foraging_retarget_events_pressure_low": 0,
+        "foraging_retarget_events_pressure_medium": 0,
+        "foraging_retarget_events_pressure_high": 0,
+        "foraging_trip_aborted_before_first_harvest_count": 0,
+        "foraging_trip_aborted_after_first_harvest_count": 0,
+        "foraging_trip_successful_count": 0,
+        "foraging_trip_post_first_harvest_units_total": 0,
+        "foraging_trip_post_first_harvest_units_samples": 0,
+        "foraging_trip_single_harvest_action_count": 0,
+        "foraging_trip_patch_dwell_after_first_harvest_ticks_total": 0,
+        "foraging_trip_patch_dwell_after_first_harvest_ticks_samples": 0,
+        "foraging_trip_ended_soon_after_first_harvest_count": 0,
+        "foraging_trip_max_consecutive_harvest_actions_total": 0,
+        "foraging_trip_max_consecutive_harvest_actions_samples": 0,
+        "foraging_trip_end_reason_task_switched": 0,
+        "foraging_trip_end_reason_hunger_death": 0,
+        "foraging_trip_end_reason_other": 0,
+        "foraging_trip_end_after_first_harvest_completed": 0,
+        "foraging_trip_end_after_first_harvest_task_switched": 0,
+        "foraging_trip_end_after_first_harvest_hunger_death": 0,
+        "foraging_trip_end_after_first_harvest_other": 0,
+        "post_first_harvest_task_switch_attempt_count": 0,
+        "post_first_harvest_task_switch_committed_count": 0,
+        "post_first_harvest_task_switch_blocked_count": 0,
+        "post_first_harvest_task_switch_attempt_source_survival_override": 0,
+        "post_first_harvest_task_switch_attempt_source_role_task_update": 0,
+        "post_first_harvest_task_switch_attempt_source_brain_retarget": 0,
+        "post_first_harvest_task_switch_attempt_source_commitment_clear": 0,
+        "post_first_harvest_task_switch_attempt_source_target_invalidated": 0,
+        "post_first_harvest_task_switch_attempt_source_inventory_logic": 0,
+        "post_first_harvest_task_switch_attempt_source_wander_fallback": 0,
+        "post_first_harvest_task_switch_attempt_source_unknown": 0,
+        "post_first_harvest_task_switch_committed_source_survival_override": 0,
+        "post_first_harvest_task_switch_committed_source_role_task_update": 0,
+        "post_first_harvest_task_switch_committed_source_brain_retarget": 0,
+        "post_first_harvest_task_switch_committed_source_commitment_clear": 0,
+        "post_first_harvest_task_switch_committed_source_target_invalidated": 0,
+        "post_first_harvest_task_switch_committed_source_inventory_logic": 0,
+        "post_first_harvest_task_switch_committed_source_wander_fallback": 0,
+        "post_first_harvest_task_switch_committed_source_unknown": 0,
+        "post_first_harvest_task_switch_blocked_source_survival_override": 0,
+        "post_first_harvest_task_switch_blocked_source_role_task_update": 0,
+        "post_first_harvest_task_switch_blocked_source_brain_retarget": 0,
+        "post_first_harvest_task_switch_blocked_source_commitment_clear": 0,
+        "post_first_harvest_task_switch_blocked_source_target_invalidated": 0,
+        "post_first_harvest_task_switch_blocked_source_inventory_logic": 0,
+        "post_first_harvest_task_switch_blocked_source_wander_fallback": 0,
+        "post_first_harvest_task_switch_blocked_source_unknown": 0,
+        "foraging_trip_success_pressure_low_count": 0,
+        "foraging_trip_success_pressure_medium_count": 0,
+        "foraging_trip_success_pressure_high_count": 0,
+        "foraging_trip_total_pressure_low_count": 0,
+        "foraging_trip_total_pressure_medium_count": 0,
+        "foraging_trip_total_pressure_high_count": 0,
+        "foraging_trip_efficiency_pressure_low_sum": 0.0,
+        "foraging_trip_efficiency_pressure_low_samples": 0,
+        "foraging_trip_efficiency_pressure_medium_sum": 0.0,
+        "foraging_trip_efficiency_pressure_medium_samples": 0,
+        "foraging_trip_efficiency_pressure_high_sum": 0.0,
+        "foraging_trip_efficiency_pressure_high_samples": 0,
+        "foraging_trip_efficiency_contention_low_sum": 0.0,
+        "foraging_trip_efficiency_contention_low_samples": 0,
+        "foraging_trip_efficiency_contention_medium_sum": 0.0,
+        "foraging_trip_efficiency_contention_medium_samples": 0,
+        "foraging_trip_efficiency_contention_high_sum": 0.0,
+        "foraging_trip_efficiency_contention_high_samples": 0,
+        "foraging_micro_retarget_events": 0,
+        "foraging_commitment_hold_overrides": 0,
+        "foraging_bonus_yield_units_total": 0,
         "food_seeking_ticks_total": 0,
         "agent_ticks_total": 0,
         "agent_food_inventory_total": 0,
@@ -762,11 +1024,123 @@ def _default_settlement_progression_stats() -> Dict[str, Any]:
         "construction_material_delivery_events": 0,
         "construction_material_delivery_to_active_site": 0,
         "construction_material_delivery_drift_events": 0,
+        "construction_material_delivery_wood_units": 0,
+        "construction_material_delivery_stone_units": 0,
+        "construction_material_delivery_food_units": 0,
+        "storage_deposit_food_units": 0,
+        "storage_deposit_wood_units": 0,
+        "storage_deposit_stone_units": 0,
+        "construction_site_nearest_wood_distance_total": 0,
+        "construction_site_nearest_wood_distance_samples": 0,
+        "construction_site_nearest_stone_distance_total": 0,
+        "construction_site_nearest_stone_distance_samples": 0,
+        "construction_site_viable_wood_sources_within_radius_total": 0,
+        "construction_site_viable_wood_sources_within_radius_samples": 0,
+        "construction_site_viable_stone_sources_within_radius_total": 0,
+        "construction_site_viable_stone_sources_within_radius_samples": 0,
+        "construction_site_zero_wood_sources_within_radius_ticks": 0,
+        "construction_site_zero_stone_sources_within_radius_ticks": 0,
+        "construction_site_local_wood_source_contention_total": 0.0,
+        "construction_site_local_wood_source_contention_samples": 0,
+        "construction_site_local_stone_source_contention_total": 0.0,
+        "construction_site_local_stone_source_contention_samples": 0,
+        "construction_site_ticks_since_last_delivery_total": 0,
+        "construction_site_ticks_since_last_delivery_samples": 0,
+        "construction_site_waiting_with_positive_wood_stock_ticks": 0,
+        "construction_site_waiting_with_positive_stone_stock_ticks": 0,
+        "construction_site_first_demand_to_first_delivery_total": 0,
+        "construction_site_first_demand_to_first_delivery_samples": 0,
+        "construction_site_material_inflow_rate_total": 0.0,
+        "construction_site_material_inflow_rate_samples": 0,
+        "construction_site_delivered_wood_units_total_live": 0,
+        "construction_site_delivered_stone_units_total_live": 0,
+        "construction_site_delivered_food_units_total_live": 0,
+        "active_builders_count": 0,
+        "active_haulers_count": 0,
+        "active_builders_nearest_wood_distance_total": 0,
+        "active_builders_nearest_wood_distance_samples": 0,
+        "active_builders_nearest_stone_distance_total": 0,
+        "active_builders_nearest_stone_distance_samples": 0,
+        "active_haulers_nearest_wood_distance_total": 0,
+        "active_haulers_nearest_wood_distance_samples": 0,
+        "active_haulers_nearest_stone_distance_total": 0,
+        "active_haulers_nearest_stone_distance_samples": 0,
         "construction_delivery_attempts": 0,
         "construction_delivery_successes": 0,
         "construction_delivery_failures": 0,
         "construction_delivery_to_site_events": 0,
         "construction_delivery_to_wrong_target_or_drift": 0,
+        "construction_delivery_source_binding_selected_count": 0,
+        "construction_delivery_source_binding_persisted_count": 0,
+        "construction_delivery_source_binding_refreshed_count": 0,
+        "construction_delivery_source_binding_missing_count": 0,
+        "construction_delivery_source_binding_unavailable_count": 0,
+        "construction_delivery_source_binding_lost_missing_source_count": 0,
+        "construction_delivery_source_binding_lost_ineligible_source_count": 0,
+        "construction_delivery_source_binding_lost_not_refreshed_count": 0,
+        "construction_delivery_prepickup_checks_count": 0,
+        "construction_delivery_prepickup_site_exists_count": 0,
+        "construction_delivery_prepickup_site_missing_count": 0,
+        "construction_delivery_prepickup_site_under_construction_count": 0,
+        "construction_delivery_prepickup_site_not_under_construction_count": 0,
+        "construction_delivery_prepickup_site_reachable_count": 0,
+        "construction_delivery_prepickup_site_unreachable_count": 0,
+        "construction_delivery_prepickup_site_demand_matches_material_count": 0,
+        "construction_delivery_prepickup_site_demand_mismatch_material_count": 0,
+        "construction_delivery_source_persistence_window_invoked_count": 0,
+        "construction_delivery_source_persistence_window_completed_count": 0,
+        "construction_delivery_source_persistence_window_broken_by_source_invalidity_count": 0,
+        "construction_delivery_source_persistence_window_broken_by_demand_mismatch_count": 0,
+        "construction_delivery_reservation_alignment_pass_count": 0,
+        "construction_delivery_reservation_alignment_fail_count": 0,
+        "construction_delivery_reservation_alignment_fail_material_wood_count": 0,
+        "construction_delivery_reservation_alignment_fail_material_stone_count": 0,
+        "construction_delivery_reservation_alignment_fail_material_food_count": 0,
+        "construction_delivery_reservation_alignment_fail_reason_site_missing_count": 0,
+        "construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count": 0,
+        "construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count": 0,
+        "construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count": 0,
+        "construction_delivery_reservation_alignment_fail_reason_source_ineligible_count": 0,
+        "construction_delivery_reservation_alignment_fail_reason_source_empty_count": 0,
+        "delivery_commitment_hold_invoked_count": 0,
+        "delivery_commitment_hold_completed_count": 0,
+        "delivery_commitment_hold_broken_by_survival_count": 0,
+        "delivery_commitment_hold_broken_by_invalid_site_count": 0,
+        "delivery_commitment_hold_broken_by_invalid_source_count": 0,
+        "construction_delivery_invalid_site_missing_site_count": 0,
+        "construction_delivery_invalid_site_not_under_construction_count": 0,
+        "construction_delivery_invalid_site_village_mismatch_count": 0,
+        "construction_delivery_invalid_site_construction_completed_count": 0,
+        "construction_delivery_invalid_site_no_path_to_site_count": 0,
+        "construction_delivery_invalid_site_demand_mismatch_count": 0,
+        "construction_delivery_invalid_site_other_count": 0,
+        "construction_delivery_invalid_source_no_source_available_count": 0,
+        "construction_delivery_invalid_source_source_depleted_count": 0,
+        "construction_delivery_invalid_source_reservation_invalidated_count": 0,
+        "construction_delivery_invalid_source_source_reassigned_count": 0,
+        "construction_delivery_invalid_source_linkage_mismatch_count": 0,
+        "construction_delivery_invalid_source_no_path_to_source_count": 0,
+        "construction_delivery_invalid_source_other_count": 0,
+        "construction_delivery_invalid_site_before_pickup_count": 0,
+        "construction_delivery_invalid_site_after_pickup_count": 0,
+        "construction_delivery_invalid_source_before_pickup_count": 0,
+        "construction_delivery_invalid_source_after_pickup_count": 0,
+        "construction_delivery_ticks_reservation_to_invalid_site_total": 0,
+        "construction_delivery_ticks_reservation_to_invalid_site_samples": 0,
+        "construction_delivery_ticks_reservation_to_invalid_source_total": 0,
+        "construction_delivery_ticks_reservation_to_invalid_source_samples": 0,
+        "construction_delivery_ticks_pickup_to_invalid_site_total": 0,
+        "construction_delivery_ticks_pickup_to_invalid_site_samples": 0,
+        "construction_delivery_ticks_pickup_to_invalid_source_total": 0,
+        "construction_delivery_ticks_pickup_to_invalid_source_samples": 0,
+        "construction_delivery_invalid_site_material_wood_count": 0,
+        "construction_delivery_invalid_site_material_stone_count": 0,
+        "construction_delivery_invalid_site_material_food_count": 0,
+        "construction_delivery_invalid_source_material_wood_count": 0,
+        "construction_delivery_invalid_source_material_stone_count": 0,
+        "construction_delivery_invalid_source_material_food_count": 0,
+        "construction_delivery_invalid_site_committed_site_mismatch_count": 0,
+        "construction_delivery_invalid_source_committed_source_missing_count": 0,
         "construction_delivery_distance_to_site_sum": 0,
         "construction_delivery_distance_to_site_samples": 0,
         "construction_delivery_distance_to_source_sum": 0,
@@ -1354,6 +1728,11 @@ class World:
         self._spawn_initial_food(NUM_FOOD)
         self._spawn_initial_wood(NUM_WOOD)
         self._spawn_initial_stone(NUM_STONE)
+        self.initial_resource_stock: Dict[str, int] = {
+            "food": int(len(self.food)),
+            "wood": int(len(self.wood)),
+            "stone": int(len(self.stone)),
+        }
 
         boot_agents = int(NUM_AGENTS if num_agents is None else num_agents)
         if boot_agents > 0:
@@ -1376,6 +1755,10 @@ class World:
         self.debug_construction_trace_max_sites: int = 2
         self._debug_construction_traced_agents: Set[str] = set()
         self._debug_construction_traced_sites: Set[str] = set()
+        self.debug_foraging_switch_trace_enabled: bool = False
+        self.debug_foraging_switch_trace_path: Optional[str] = None
+        self.debug_foraging_switch_trace_max_agents: int = 4
+        self._debug_foraging_switch_traced_agents: Set[str] = set()
 
     def record_llm_interaction(self) -> None:
         self.llm_interactions += 1
@@ -2845,6 +3228,86 @@ class World:
                 self.record_settlement_progression_metric("builder_redirected_to_storage_during_construction_count")
         try:
             path = str(getattr(self, "debug_construction_trace_path", "") or "")
+            if not path:
+                return
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(payload, sort_keys=True) + "\n")
+        except Exception:
+            pass
+
+    def record_foraging_switch_debug_event(
+        self,
+        agent: Optional[Agent],
+        event_name: str,
+        *,
+        prev_task: str = "",
+        new_task: str = "",
+        reason: str = "",
+        source_subsystem: str = "unknown",
+        ticks_since_first_harvest: int = -1,
+        within_exploitation_window: bool = False,
+        commitment_active: bool = False,
+        target_valid: bool = False,
+        local_food_available: int = 0,
+        nearest_food_distance: int = -1,
+    ) -> None:
+        if not bool(getattr(self, "debug_foraging_switch_trace_enabled", False)):
+            return
+        if agent is None:
+            return
+        agent_id = str(getattr(agent, "agent_id", ""))
+        if agent_id and agent_id not in self._debug_foraging_switch_traced_agents:
+            if len(self._debug_foraging_switch_traced_agents) >= int(max(1, self.debug_foraging_switch_trace_max_agents)):
+                return
+            self._debug_foraging_switch_traced_agents.add(agent_id)
+        payload: Dict[str, Any] = {
+            "tick": int(getattr(self, "tick", 0)),
+            "event_name": str(event_name),
+            "prev_task": str(prev_task or ""),
+            "new_task": str(new_task or ""),
+            "reason": str(reason or ""),
+            "source_subsystem": str(source_subsystem or "unknown"),
+            "agent_id": agent_id,
+            "x": int(getattr(agent, "x", 0)),
+            "y": int(getattr(agent, "y", 0)),
+            "pressure_regime": str(getattr(agent, "foraging_pressure_regime", "medium") or "medium"),
+            "pressure_ratio": round(float(getattr(agent, "foraging_pressure_ratio", 0.0) or 0.0), 4),
+            "hunger": round(float(getattr(agent, "hunger", 0.0)), 3),
+            "food_inventory": int(getattr(agent, "inventory", {}).get("food", 0)),
+            "harvest_count_on_trip": int(getattr(agent, "foraging_trip_harvest_actions", 0)),
+            "ticks_since_first_harvest": int(ticks_since_first_harvest),
+            "within_exploitation_window": bool(within_exploitation_window),
+            "commitment_active": bool(commitment_active),
+            "target_valid": bool(target_valid),
+            "local_food_available": int(local_food_available),
+            "nearest_food_distance": int(nearest_food_distance),
+            "task_target": list(getattr(agent, "task_target", ())) if isinstance(getattr(agent, "task_target", None), tuple) else [],
+        }
+        if hasattr(self, "record_settlement_progression_metric"):
+            event_key = str(event_name or "")
+            source = str(source_subsystem or "unknown")
+            if source not in {
+                "survival_override",
+                "role_task_update",
+                "brain_retarget",
+                "commitment_clear",
+                "target_invalidated",
+                "inventory_logic",
+                "wander_fallback",
+                "unknown",
+            }:
+                source = "unknown"
+            if event_key == "post_first_harvest_task_switch_attempt":
+                self.record_settlement_progression_metric("post_first_harvest_task_switch_attempt_count")
+                self.record_settlement_progression_metric(f"post_first_harvest_task_switch_attempt_source_{source}")
+            elif event_key == "post_first_harvest_task_switch_committed":
+                self.record_settlement_progression_metric("post_first_harvest_task_switch_committed_count")
+                self.record_settlement_progression_metric(f"post_first_harvest_task_switch_committed_source_{source}")
+            elif event_key == "post_first_harvest_task_switch_blocked":
+                self.record_settlement_progression_metric("post_first_harvest_task_switch_blocked_count")
+                self.record_settlement_progression_metric(f"post_first_harvest_task_switch_blocked_source_{source}")
+        try:
+            path = str(getattr(self, "debug_foraging_switch_trace_path", "") or "")
             if not path:
                 return
             with open(path, "a", encoding="utf-8") as fh:
@@ -4739,6 +5202,30 @@ class World:
                 return True
         return False
 
+    def current_total_food_in_reserves(self) -> int:
+        total = 0
+        for camp in (self.camps or {}).values():
+            if not isinstance(camp, dict):
+                continue
+            if not bool(camp.get("active", False)):
+                continue
+            total += max(0, int(camp.get("food_cache", 0)))
+        for building in (self.buildings or {}).values():
+            if not isinstance(building, dict):
+                continue
+            btype = str(building.get("type", ""))
+            if btype == "house":
+                total += max(0, int(building.get("domestic_food", 0)))
+                continue
+            if btype != "storage":
+                continue
+            if str(building.get("operational_state", "")) != "active":
+                continue
+            storage = building.get("storage", {})
+            if isinstance(storage, dict):
+                total += max(0, int(storage.get("food", 0)))
+        return int(max(0, total))
+
     def compute_local_food_pressure_for_agent(self, agent: Agent, *, max_distance: int = LOCAL_FOOD_PRESSURE_RADIUS) -> Dict[str, Any]:
         camp = self.nearest_active_camp_for_agent(agent, max_distance=max(1, int(max_distance)))
         if not isinstance(camp, dict):
@@ -4986,6 +5473,8 @@ class World:
         if near_complete:
             stats["near_complete_loop_completed"] = int(stats.get("near_complete_loop_completed", 0)) + 1
         self.camp_food_stats = stats
+        self.record_food_security_flow("group_feeding", amount=int(move_amount))
+        self.record_food_security_flow("reserve_accumulation", amount=int(move_amount))
         return int(move_amount)
 
     def try_deposit_food_to_nearby_house(self, agent: Agent, *, amount: int = 1, hunger_before: Optional[float] = None) -> int:
@@ -5023,6 +5512,8 @@ class World:
             stats["domestic_food_stored_total"] = int(stats.get("domestic_food_stored_total", 0)) + int(move_amount)
             stats["house_food_distribution_events"] = int(stats.get("house_food_distribution_events", 0)) + 1
             self.camp_food_stats = stats
+            self.record_food_security_flow("group_feeding", amount=int(move_amount))
+            self.record_food_security_flow("reserve_accumulation", amount=int(move_amount))
             self.record_food_patch_activity(int(house.get("x", agent.x)), int(house.get("y", agent.y)), amount=0.5 * float(move_amount))
             return int(move_amount)
         self.camp_food_stats = stats
@@ -5141,6 +5632,7 @@ class World:
                 progression.get("storage_relief_of_camp_pressure_events", 0)
             ) + int(move_amount)
         self.settlement_progression_stats = progression
+        self.record_food_security_flow("reserve_accumulation", amount=int(move_amount))
         village = self.get_village_by_id(getattr(agent, "village_id", None))
         if village is not None and hasattr(building_system, "_sync_village_storage_cache"):
             try:
@@ -5150,14 +5642,94 @@ class World:
         return int(move_amount)
 
     def try_deposit_food_to_local_buffers(self, agent: Agent, *, amount: int = 1, hunger_before: Optional[float] = None) -> int:
+        progression = (
+            self.settlement_progression_stats
+            if isinstance(self.settlement_progression_stats, dict)
+            else _default_settlement_progression_stats()
+        )
+        had_food_before = int(getattr(agent, "inventory", {}).get("food", 0))
+        if int(amount) > 0 and had_food_before > 0:
+            progression["reserve_refill_attempts"] = int(progression.get("reserve_refill_attempts", 0)) + 1
         moved = int(self.try_deposit_food_to_nearby_house(agent, amount=amount, hunger_before=hunger_before))
         if moved > 0:
+            progression["reserve_refill_success"] = int(progression.get("reserve_refill_success", 0)) + 1
+            progression["reserve_refill_food_added_total"] = int(progression.get("reserve_refill_food_added_total", 0)) + int(moved)
+            tick_now = int(getattr(self, "tick", 0))
+            last_tick = int(progression.get("reserve_last_refill_tick", -1))
+            if last_tick >= 0:
+                progression["reserve_refill_interval_ticks_total"] = int(
+                    progression.get("reserve_refill_interval_ticks_total", 0)
+                ) + max(0, tick_now - last_tick)
+                progression["reserve_refill_interval_ticks_samples"] = int(
+                    progression.get("reserve_refill_interval_ticks_samples", 0)
+                ) + 1
+            progression["reserve_last_refill_tick"] = int(tick_now)
+            self.settlement_progression_stats = progression
             return moved
         if isinstance(self.nearest_active_camp_for_agent(agent, max_distance=2), dict):
             moved = int(self.try_deposit_food_to_nearby_camp(agent, amount=amount, hunger_before=hunger_before))
             if moved > 0:
+                progression["reserve_refill_success"] = int(progression.get("reserve_refill_success", 0)) + 1
+                progression["reserve_refill_food_added_total"] = int(progression.get("reserve_refill_food_added_total", 0)) + int(moved)
+                tick_now = int(getattr(self, "tick", 0))
+                last_tick = int(progression.get("reserve_last_refill_tick", -1))
+                if last_tick >= 0:
+                    progression["reserve_refill_interval_ticks_total"] = int(
+                        progression.get("reserve_refill_interval_ticks_total", 0)
+                    ) + max(0, tick_now - last_tick)
+                    progression["reserve_refill_interval_ticks_samples"] = int(
+                        progression.get("reserve_refill_interval_ticks_samples", 0)
+                    ) + 1
+                progression["reserve_last_refill_tick"] = int(tick_now)
+                self.settlement_progression_stats = progression
                 return moved
-        return int(self._try_deposit_food_to_nearby_storage(agent, amount=amount, hunger_before=hunger_before))
+        moved = int(self._try_deposit_food_to_nearby_storage(agent, amount=amount, hunger_before=hunger_before))
+        if moved > 0:
+            progression["reserve_refill_success"] = int(progression.get("reserve_refill_success", 0)) + 1
+            progression["reserve_refill_food_added_total"] = int(progression.get("reserve_refill_food_added_total", 0)) + int(moved)
+            tick_now = int(getattr(self, "tick", 0))
+            last_tick = int(progression.get("reserve_last_refill_tick", -1))
+            if last_tick >= 0:
+                progression["reserve_refill_interval_ticks_total"] = int(
+                    progression.get("reserve_refill_interval_ticks_total", 0)
+                ) + max(0, tick_now - last_tick)
+                progression["reserve_refill_interval_ticks_samples"] = int(
+                    progression.get("reserve_refill_interval_ticks_samples", 0)
+                ) + 1
+            progression["reserve_last_refill_tick"] = int(tick_now)
+            self.settlement_progression_stats = progression
+            return int(moved)
+        if int(amount) > 0 and had_food_before > 0:
+            pressure = self.compute_local_food_pressure_for_agent(agent, max_distance=10)
+            if not isinstance(pressure, dict):
+                pressure = {}
+            supply = int(pressure.get("near_food_sources", 0)) + int(pressure.get("camp_food", 0)) + int(
+                pressure.get("house_food_nearby", 0)
+            )
+            demand = int(pressure.get("nearby_needy_agents", 0))
+            has_surplus = bool(supply >= max(2, demand + 1))
+            stable_context = bool(
+                str(getattr(agent, "village_affiliation_status", "")) in {"attached", "resident"}
+                or isinstance(self.nearest_active_camp_for_agent(agent, max_distance=2), dict)
+            )
+            if bool(pressure.get("pressure_active", False)):
+                progression["reserve_refill_blocked_by_pressure"] = int(
+                    progression.get("reserve_refill_blocked_by_pressure", 0)
+                ) + 1
+            elif not has_surplus:
+                progression["reserve_refill_blocked_by_no_surplus"] = int(
+                    progression.get("reserve_refill_blocked_by_no_surplus", 0)
+                ) + 1
+            elif not stable_context:
+                progression["reserve_refill_blocked_by_unstable_context"] = int(
+                    progression.get("reserve_refill_blocked_by_unstable_context", 0)
+                ) + 1
+            else:
+                progression["reserve_refill_blocked_by_other"] = int(
+                    progression.get("reserve_refill_blocked_by_other", 0)
+                ) + 1
+        self.settlement_progression_stats = progression
+        return int(moved)
 
     def record_food_consumption(self, source: str, *, amount: int = 1, agent: Optional[Agent] = None) -> None:
         qty = max(0, int(amount))
@@ -5176,9 +5748,292 @@ class World:
         elif src == "wild_direct":
             stats["food_consumed_from_wild_direct"] = int(stats.get("food_consumed_from_wild_direct", 0)) + qty
         self.camp_food_stats = stats
+        progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
+        if src == "inventory" and isinstance(agent, Agent):
+            last_handoff_tick = int(getattr(agent, "last_local_handoff_received_tick", -10_000))
+            if int(getattr(self, "tick", 0)) - last_handoff_tick <= 60:
+                hunger_pre = float(
+                    getattr(agent, "last_local_handoff_hunger_pre", float(getattr(agent, "hunger", 0.0)))
+                )
+                hunger_now = float(getattr(agent, "hunger", 0.0))
+                hunger_relief = max(0.0, hunger_now - hunger_pre)
+                if hunger_relief > 0.0:
+                    progression["hunger_relief_after_local_handoff_total"] = float(
+                        progression.get("hunger_relief_after_local_handoff_total", 0.0)
+                    ) + float(hunger_relief)
+                    progression["hunger_relief_after_local_handoff_samples"] = int(
+                        progression.get("hunger_relief_after_local_handoff_samples", 0)
+                    ) + 1
+                    setattr(agent, "last_local_handoff_hunger_pre", hunger_now)
+        self.settlement_progression_stats = progression
+        if src in {"inventory", "wild_direct"}:
+            self.record_food_security_flow("self_feeding", amount=qty)
+        elif src in {"camp", "domestic", "storage"}:
+            self.record_food_security_flow("reserve_draw", amount=qty)
+            progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
+            if isinstance(agent, Agent):
+                progression["reserve_draw_hunger_sum"] = float(progression.get("reserve_draw_hunger_sum", 0.0)) + float(
+                    getattr(agent, "hunger", 0.0)
+                )
+                progression["reserve_draw_hunger_samples"] = int(progression.get("reserve_draw_hunger_samples", 0)) + 1
+                tick_now = int(getattr(self, "tick", 0))
+                last_draw_tick = int(progression.get("reserve_last_draw_tick", -1))
+                if last_draw_tick >= 0:
+                    progression["reserve_draw_interval_ticks_total"] = int(
+                        progression.get("reserve_draw_interval_ticks_total", 0)
+                    ) + max(0, tick_now - last_draw_tick)
+                    progression["reserve_draw_interval_ticks_samples"] = int(
+                        progression.get("reserve_draw_interval_ticks_samples", 0)
+                    ) + 1
+                progression["reserve_last_draw_tick"] = int(tick_now)
+                if hasattr(self, "compute_local_food_pressure_for_agent"):
+                    try:
+                        pressure = self.compute_local_food_pressure_for_agent(agent, max_distance=10)
+                    except Exception:
+                        pressure = {}
+                else:
+                    pressure = {}
+                if isinstance(pressure, dict) and bool(pressure.get("pressure_active", False)):
+                    progression["reserve_draw_events_during_food_stress"] = int(
+                        progression.get("reserve_draw_events_during_food_stress", 0)
+                    ) + 1
+                else:
+                    progression["reserve_draw_events_during_normal_conditions"] = int(
+                        progression.get("reserve_draw_events_during_normal_conditions", 0)
+                    ) + 1
+                last_failed = int(getattr(agent, "last_failed_foraging_trip_tick", -10_000))
+                if int(getattr(self, "tick", 0)) - last_failed <= 40:
+                    progression["reserve_usage_after_failed_foraging_trip"] = int(
+                        progression.get("reserve_usage_after_failed_foraging_trip", 0)
+                    ) + 1
+            self.settlement_progression_stats = progression
         if isinstance(agent, Agent):
             self.record_agent_food_relief(agent, source=src)
             self.record_behavior_activity("consume_food", x=int(agent.x), y=int(agent.y), agent=agent, count=qty)
+
+    def record_food_security_flow(self, flow_type: str, *, amount: int = 1) -> None:
+        qty = max(0, int(amount))
+        if qty <= 0:
+            return
+        progression = (
+            self.settlement_progression_stats
+            if isinstance(self.settlement_progression_stats, dict)
+            else _default_settlement_progression_stats()
+        )
+        flow = str(flow_type or "")
+        if flow == "self_feeding":
+            progression["food_self_feeding_events"] = int(progression.get("food_self_feeding_events", 0)) + 1
+            progression["food_self_feeding_units"] = int(progression.get("food_self_feeding_units", 0)) + qty
+        elif flow == "group_feeding":
+            progression["food_group_feeding_events"] = int(progression.get("food_group_feeding_events", 0)) + 1
+            progression["food_group_feeding_units"] = int(progression.get("food_group_feeding_units", 0)) + qty
+        elif flow == "reserve_accumulation":
+            progression["food_reserve_accumulation_events"] = int(
+                progression.get("food_reserve_accumulation_events", 0)
+            ) + 1
+            progression["food_reserve_accumulation_units"] = int(
+                progression.get("food_reserve_accumulation_units", 0)
+            ) + qty
+        elif flow == "reserve_draw":
+            progression["food_reserve_draw_events"] = int(progression.get("food_reserve_draw_events", 0)) + 1
+            progression["food_reserve_draw_units"] = int(progression.get("food_reserve_draw_units", 0)) + qty
+        self.settlement_progression_stats = progression
+
+    def run_local_food_handoff_pass(self) -> None:
+        progression = (
+            self.settlement_progression_stats
+            if isinstance(self.settlement_progression_stats, dict)
+            else _default_settlement_progression_stats()
+        )
+        alive_agents = [a for a in (self.agents or []) if getattr(a, "alive", False)]
+        if not alive_agents:
+            self.settlement_progression_stats = progression
+            return
+        tick_now = int(getattr(self, "tick", 0))
+        for donor in alive_agents:
+            donor_food = int(getattr(donor, "inventory", {}).get("food", 0))
+            donor_hunger = float(getattr(donor, "hunger", 100.0))
+            donor_camp = self.nearest_active_camp_for_agent(donor, max_distance=6)
+            last_donor_handoff_tick = int(getattr(donor, "last_local_handoff_donor_tick", -10_000))
+            if tick_now - last_donor_handoff_tick < int(LOCAL_HANDOFF_COOLDOWN_TICKS):
+                progression["handoff_blocked_by_cooldown_count"] = int(
+                    progression.get("handoff_blocked_by_cooldown_count", 0)
+                ) + 1
+                continue
+            needy_any = False
+            receiver_candidate: Optional[Agent] = None
+            best_need_score = -1.0
+            for receiver in alive_agents:
+                if receiver is donor:
+                    continue
+                rx = int(getattr(receiver, "x", 0))
+                ry = int(getattr(receiver, "y", 0))
+                dist = abs(int(getattr(donor, "x", 0)) - rx) + abs(int(getattr(donor, "y", 0)) - ry)
+                receiver_hunger = float(getattr(receiver, "hunger", 100.0))
+                receiver_food = int(getattr(receiver, "inventory", {}).get("food", 0))
+                is_needy = bool(
+                    receiver_hunger < float(LOCAL_HANDOFF_RECEIVER_HUNGER_THRESHOLD)
+                    and receiver_food <= 0
+                )
+                if not is_needy:
+                    continue
+                last_rescue_tick = int(getattr(receiver, "last_local_handoff_received_tick", -10_000))
+                if tick_now - last_rescue_tick < int(LOCAL_HANDOFF_RECENT_RESCUE_TICKS):
+                    progression["handoff_blocked_by_recent_rescue"] = int(
+                        progression.get("handoff_blocked_by_recent_rescue", 0)
+                    ) + 1
+                    continue
+                has_adjacent_food = False
+                rx_i, ry_i = int(rx), int(ry)
+                for fx, fy in self.food:
+                    if abs(int(fx) - rx_i) + abs(int(fy) - ry_i) <= 1:
+                        has_adjacent_food = True
+                        break
+                receiver_task = str(getattr(receiver, "task", "") or "")
+                receiver_target = getattr(receiver, "task_target", None)
+                receiver_has_viable_food_task = False
+                if (
+                    receiver_task == "gather_food_wild"
+                    and isinstance(receiver_target, tuple)
+                    and len(receiver_target) == 2
+                ):
+                    tx, ty = int(receiver_target[0]), int(receiver_target[1])
+                    target_distance = abs(int(tx) - rx_i) + abs(int(ty) - ry_i)
+                    receiver_has_viable_food_task = bool((tx, ty) in self.food and target_distance <= 1)
+                if (
+                    (has_adjacent_food or receiver_has_viable_food_task)
+                    and receiver_hunger > float(LOCAL_HANDOFF_RECEIVER_CRITICAL_HUNGER_OVERRIDE)
+                ):
+                    progression["handoff_blocked_by_receiver_viability"] = int(
+                        progression.get("handoff_blocked_by_receiver_viability", 0)
+                    ) + 1
+                    continue
+                needy_any = True
+                if dist > int(LOCAL_HANDOFF_MAX_DISTANCE):
+                    continue
+                receiver_camp = self.nearest_active_camp_for_agent(receiver, max_distance=6)
+                if isinstance(donor_camp, dict):
+                    donor_camp_id = str(donor_camp.get("camp_id", ""))
+                    receiver_camp_id = str(receiver_camp.get("camp_id", "")) if isinstance(receiver_camp, dict) else ""
+                    if donor_camp_id != receiver_camp_id:
+                        progression["handoff_blocked_by_group_priority_count"] = int(
+                            progression.get("handoff_blocked_by_group_priority_count", 0)
+                        ) + 1
+                        continue
+                need_score = (
+                    (float(LOCAL_HANDOFF_RECEIVER_HUNGER_THRESHOLD) - receiver_hunger)
+                    + (2.0 if receiver_food <= 0 else 0.0)
+                )
+                if need_score > best_need_score:
+                    best_need_score = float(need_score)
+                    receiver_candidate = receiver
+
+            if not needy_any:
+                continue
+            if donor_food < int(LOCAL_HANDOFF_DONOR_MIN_FOOD):
+                progression["local_food_handoff_prevented_by_low_surplus"] = int(
+                    progression.get("local_food_handoff_prevented_by_low_surplus", 0)
+                ) + 1
+                continue
+            if donor_hunger < float(LOCAL_HANDOFF_DONOR_MIN_HUNGER):
+                progression["local_food_handoff_prevented_by_donor_risk"] = int(
+                    progression.get("local_food_handoff_prevented_by_donor_risk", 0)
+                ) + 1
+                continue
+            if isinstance(donor_camp, dict) and int(donor_camp.get("food_cache", 0)) < 2:
+                camp_food_now = int(donor_camp.get("food_cache", 0))
+                progression["handoff_blocked_by_camp_fragility"] = int(
+                    progression.get("handoff_blocked_by_camp_fragility", 0)
+                ) + 1
+                if receiver_hunger <= float(LOCAL_HANDOFF_RECEIVER_CRITICAL_HUNGER_OVERRIDE):
+                    progression["handoff_blocked_by_camp_fragility_when_receiver_critical_count"] = int(
+                        progression.get("handoff_blocked_by_camp_fragility_when_receiver_critical_count", 0)
+                    ) + 1
+                if donor_hunger >= float(LOCAL_HANDOFF_DONOR_MIN_HUNGER):
+                    progression["handoff_blocked_by_camp_fragility_when_donor_safe_count"] = int(
+                        progression.get("handoff_blocked_by_camp_fragility_when_donor_safe_count", 0)
+                    ) + 1
+                donor_pressure_ctx = self.compute_local_food_pressure_for_agent(donor, max_distance=8)
+                pressure_active = bool(
+                    isinstance(donor_pressure_ctx, dict) and donor_pressure_ctx.get("pressure_active", False)
+                )
+                if pressure_active:
+                    progression["handoff_blocked_by_camp_fragility_context_pressure_count"] = int(
+                        progression.get("handoff_blocked_by_camp_fragility_context_pressure_count", 0)
+                    ) + 1
+                else:
+                    progression["handoff_blocked_by_camp_fragility_context_nonpressure_count"] = int(
+                        progression.get("handoff_blocked_by_camp_fragility_context_nonpressure_count", 0)
+                    ) + 1
+                near_food = int(donor_pressure_ctx.get("near_food_sources", 0)) if isinstance(donor_pressure_ctx, dict) else 0
+                nearby_needy = int(donor_pressure_ctx.get("nearby_needy_agents", 0)) if isinstance(donor_pressure_ctx, dict) else 0
+                has_local_surplus = bool(donor_food >= 4 or (near_food >= 2 and nearby_needy <= 1))
+                if has_local_surplus:
+                    progression["handoff_blocked_by_camp_fragility_with_local_surplus_count"] = int(
+                        progression.get("handoff_blocked_by_camp_fragility_with_local_surplus_count", 0)
+                    ) + 1
+                progression["handoff_blocked_by_camp_fragility_donor_food_sum"] = int(
+                    progression.get("handoff_blocked_by_camp_fragility_donor_food_sum", 0)
+                ) + int(donor_food)
+                progression["handoff_blocked_by_camp_fragility_donor_food_samples"] = int(
+                    progression.get("handoff_blocked_by_camp_fragility_donor_food_samples", 0)
+                ) + 1
+                progression["handoff_blocked_by_camp_fragility_receiver_hunger_sum"] = float(
+                    progression.get("handoff_blocked_by_camp_fragility_receiver_hunger_sum", 0.0)
+                ) + float(receiver_hunger)
+                progression["handoff_blocked_by_camp_fragility_receiver_hunger_samples"] = int(
+                    progression.get("handoff_blocked_by_camp_fragility_receiver_hunger_samples", 0)
+                ) + 1
+                progression["handoff_blocked_by_camp_fragility_camp_food_sum"] = int(
+                    progression.get("handoff_blocked_by_camp_fragility_camp_food_sum", 0)
+                ) + int(camp_food_now)
+                progression["handoff_blocked_by_camp_fragility_camp_food_samples"] = int(
+                    progression.get("handoff_blocked_by_camp_fragility_camp_food_samples", 0)
+                ) + 1
+                continue
+            donor_pressure = self.compute_local_food_pressure_for_agent(donor, max_distance=8)
+            if (
+                isinstance(donor_pressure, dict)
+                and bool(donor_pressure.get("pressure_active", False))
+                and (
+                    bool(donor_pressure.get("unmet_pressure", False))
+                    or (
+                        int(donor_pressure.get("camp_food", 0)) <= 0
+                        and int(donor_pressure.get("nearby_needy_agents", 0)) >= 3
+                    )
+                )
+            ):
+                progression["handoff_blocked_by_group_priority_count"] = int(
+                    progression.get("handoff_blocked_by_group_priority_count", 0)
+                ) + 1
+                continue
+            if receiver_candidate is None:
+                progression["local_food_handoff_prevented_by_distance"] = int(
+                    progression.get("local_food_handoff_prevented_by_distance", 0)
+                ) + 1
+                continue
+            donor_id = str(getattr(donor, "id", id(donor)))
+            last_from = str(getattr(receiver_candidate, "last_local_handoff_from_agent_id", ""))
+            last_recv_tick = int(getattr(receiver_candidate, "last_local_handoff_received_tick", -10_000))
+            if last_from == donor_id and (tick_now - last_recv_tick) < int(LOCAL_HANDOFF_PAIR_COOLDOWN_TICKS):
+                progression["handoff_blocked_by_same_unit_recently_count"] = int(
+                    progression.get("handoff_blocked_by_same_unit_recently_count", 0)
+                ) + 1
+                continue
+
+            donor.inventory["food"] = max(0, int(donor.inventory.get("food", 0)) - 1)
+            receiver_candidate.inventory["food"] = int(receiver_candidate.inventory.get("food", 0)) + 1
+            setattr(donor, "last_local_handoff_donor_tick", tick_now)
+            setattr(receiver_candidate, "last_local_handoff_received_tick", tick_now)
+            setattr(receiver_candidate, "last_local_handoff_from_agent_id", donor_id)
+            setattr(receiver_candidate, "last_local_handoff_hunger_pre", float(getattr(receiver_candidate, "hunger", 100.0)))
+            progression["handoff_allowed_by_context_count"] = int(
+                progression.get("handoff_allowed_by_context_count", 0)
+            ) + 1
+            progression["local_food_handoff_events"] = int(progression.get("local_food_handoff_events", 0)) + 1
+            progression["local_food_handoff_units"] = int(progression.get("local_food_handoff_units", 0)) + 1
+            self.record_behavior_activity("local_food_handoff", x=int(getattr(donor, "x", 0)), y=int(getattr(donor, "y", 0)), agent=donor)
+        self.settlement_progression_stats = progression
 
     def record_food_search_failure(self, agent: Optional[Agent], *, resource_type: str = "food") -> None:
         if str(resource_type or "") != "food":
@@ -6411,6 +7266,8 @@ class World:
             inv[resource] = have - qty
             buf[resource] = int(buf.get(resource, 0)) + qty
             moved += qty
+            self.record_settlement_progression_metric(f"construction_material_delivery_{resource}_units", int(qty))
+            site[f"construction_delivered_{resource}_units"] = int(site.get(f"construction_delivered_{resource}_units", 0)) + int(qty)
         if moved <= 0:
             return 0
         site["construction_buffer"] = buf
@@ -6473,6 +7330,323 @@ class World:
         alive_agents = [a for a in (self.agents or []) if getattr(a, "alive", False)]
         alive_count = int(len(alive_agents))
         stats["population_alive"] = int(alive_count)
+        reserve_total_now = int(self.current_total_food_in_reserves())
+        stats["reserve_total_food_observed_sum"] = int(stats.get("reserve_total_food_observed_sum", 0)) + int(reserve_total_now)
+        stats["reserve_total_food_observed_samples"] = int(stats.get("reserve_total_food_observed_samples", 0)) + 1
+        stats["reserve_total_food_observed_max"] = int(
+            max(int(stats.get("reserve_total_food_observed_max", 0)), int(reserve_total_now))
+        )
+        reserve_prev = int(stats.get("_reserve_total_food_prev_tick", -1))
+        if reserve_prev >= 0:
+            if reserve_total_now > reserve_prev:
+                stats["reserve_fill_events"] = int(stats.get("reserve_fill_events", 0)) + 1
+            elif reserve_total_now < reserve_prev:
+                stats["reserve_depletion_events"] = int(stats.get("reserve_depletion_events", 0)) + 1
+        stats["_reserve_total_food_prev_tick"] = int(reserve_total_now)
+        reserve_threshold = max(3, int(round(float(max(1, alive_count)) * 0.15)))
+        if reserve_total_now >= reserve_threshold:
+            stats["ticks_reserve_above_threshold"] = int(stats.get("ticks_reserve_above_threshold", 0)) + 1
+            current_window = int(stats.get("reserve_continuity_current_window", 0)) + 1
+            stats["reserve_continuity_current_window"] = int(current_window)
+            stats["reserve_continuity_longest_window"] = int(
+                max(int(stats.get("reserve_continuity_longest_window", 0)), int(current_window))
+            )
+            if reserve_prev <= 0:
+                stats["reserve_recovery_cycles"] = int(stats.get("reserve_recovery_cycles", 0)) + 1
+        else:
+            stats["reserve_continuity_current_window"] = 0
+        sustain_threshold_ticks = 20
+        tracking_active = bool(int(stats.get("reserve_recovery_tracking_active", 0)))
+        refill_started = bool(int(stats.get("reserve_recovery_refill_started", 0)))
+        sustain_ticks = int(stats.get("reserve_recovery_sustain_ticks", 0))
+        if reserve_total_now <= 0:
+            if reserve_prev > 0:
+                tracking_active = True
+                refill_started = False
+                sustain_ticks = 0
+        elif tracking_active and not refill_started:
+            refill_started = True
+            stats["reserve_partial_recovery_cycles"] = int(stats.get("reserve_partial_recovery_cycles", 0)) + 1
+        if tracking_active and refill_started:
+            if reserve_total_now >= reserve_threshold:
+                sustain_ticks += 1
+                if sustain_ticks >= sustain_threshold_ticks:
+                    stats["reserve_full_recovery_cycles"] = int(stats.get("reserve_full_recovery_cycles", 0)) + 1
+                    tracking_active = False
+                    refill_started = False
+                    sustain_ticks = 0
+            elif reserve_total_now <= 0:
+                stats["reserve_failed_recovery_attempts"] = int(stats.get("reserve_failed_recovery_attempts", 0)) + 1
+                tracking_active = False
+                refill_started = False
+                sustain_ticks = 0
+            else:
+                sustain_ticks = 0
+        stats["reserve_recovery_tracking_active"] = 1 if tracking_active else 0
+        stats["reserve_recovery_refill_started"] = 1 if refill_started else 0
+        stats["reserve_recovery_sustain_ticks"] = int(max(0, sustain_ticks))
+        if reserve_total_now <= 0:
+            stats["ticks_reserve_empty"] = int(stats.get("ticks_reserve_empty", 0)) + 1
+        hungry_agents = int(sum(1 for a in alive_agents if float(getattr(a, "hunger", 100.0)) < 35.0))
+        shortage_active = bool(reserve_total_now <= 0 and hungry_agents > 0)
+        shortage_prev = bool(int(stats.get("reserve_shortage_active_prev", 0)))
+        if shortage_active and not shortage_prev:
+            stats["settlement_food_shortage_events"] = int(stats.get("settlement_food_shortage_events", 0)) + 1
+        stats["reserve_shortage_active_prev"] = 1 if shortage_active else 0
+        layer_counts = {
+            "self_feeding": 0,
+            "group_feeding": 0,
+            "reserve_accumulation": 0,
+            "none": 0,
+        }
+        reserve_candidate_tasks = {"food_logistics", "camp_supply_food", "village_logistics"}
+        reserve_candidate_count = 0
+        reserve_eligible_count = 0
+        for a in alive_agents:
+            layer = str(getattr(a, "food_security_layer", "none") or "none")
+            if layer not in layer_counts:
+                layer = "none"
+            layer_counts[layer] = int(layer_counts[layer]) + 1
+            prev_layer = str(getattr(a, "_food_security_layer_prev", "none") or "none")
+            if prev_layer not in layer_counts:
+                prev_layer = "none"
+            if prev_layer != layer:
+                stats["food_security_layer_transition_count"] = int(
+                    stats.get("food_security_layer_transition_count", 0)
+                ) + 1
+            transition_key = f"food_security_layer_transition_{prev_layer}_to_{layer}"
+            stats[transition_key] = int(stats.get(transition_key, 0)) + 1
+            setattr(a, "_food_security_layer_prev", layer)
+            task_name = str(getattr(a, "task", "") or "")
+            if task_name in reserve_candidate_tasks:
+                reserve_candidate_count += 1
+                stats["food_security_reserve_prepolicy_candidate_count"] = int(
+                    stats.get("food_security_reserve_prepolicy_candidate_count", 0)
+                ) + 1
+                stats["food_security_reserve_entry_checks"] = int(
+                    stats.get("food_security_reserve_entry_checks", 0)
+                ) + 1
+                stats["food_security_reserve_selection_considered_count"] = int(
+                    stats.get("food_security_reserve_selection_considered_count", 0)
+                ) + 1
+                pressure = {}
+                if hasattr(self, "compute_local_food_pressure_for_agent"):
+                    try:
+                        pressure = self.compute_local_food_pressure_for_agent(a, max_distance=10)
+                    except Exception:
+                        pressure = {}
+                supply = 0
+                demand = 0
+                pressure_active = False
+                if isinstance(pressure, dict):
+                    supply = int(pressure.get("near_food_sources", 0)) + int(pressure.get("camp_food", 0)) + int(pressure.get("house_food_nearby", 0))
+                    demand = int(pressure.get("nearby_needy_agents", 0))
+                    pressure_active = bool(pressure.get("pressure_active", False))
+                has_local_surplus = bool(supply >= max(2, demand + 1))
+                stable_context = bool(
+                    str(getattr(a, "village_affiliation_status", "")) in {"attached", "resident"}
+                    or isinstance(self.nearest_active_camp_for_agent(a, max_distance=2), dict)
+                )
+                stats["food_security_reserve_final_decision_observed_count"] = int(
+                    stats.get("food_security_reserve_final_decision_observed_count", 0)
+                ) + 1
+                stats["food_security_reserve_final_decision_candidate_count"] = int(
+                    stats.get("food_security_reserve_final_decision_candidate_count", 0)
+                ) + 1
+                if has_local_surplus:
+                    stats["food_security_reserve_final_decision_candidate_survived_prepolicy_count"] = int(
+                        stats.get("food_security_reserve_final_decision_candidate_survived_prepolicy_count", 0)
+                    ) + 1
+                if has_local_surplus and stable_context:
+                    stats["food_security_reserve_final_decision_candidate_survived_postpolicy_count"] = int(
+                        stats.get("food_security_reserve_final_decision_candidate_survived_postpolicy_count", 0)
+                    ) + 1
+                selected_task_key = str(task_name if task_name in reserve_candidate_tasks else "other")
+                if selected_task_key not in {"food_logistics", "village_logistics", "camp_supply_food"}:
+                    selected_task_key = "other"
+                stats[f"food_security_reserve_final_selected_task_{selected_task_key}_count"] = int(
+                    stats.get(f"food_security_reserve_final_selected_task_{selected_task_key}_count", 0)
+                ) + 1
+                selected_layer_key = str(layer if layer in {"reserve_accumulation", "group_feeding", "self_feeding"} else "none")
+                stats[f"food_security_reserve_final_selected_layer_{selected_layer_key}_count"] = int(
+                    stats.get(f"food_security_reserve_final_selected_layer_{selected_layer_key}_count", 0)
+                ) + 1
+
+                winner_subsystem = "unknown"
+                override_reason = "other"
+                if not has_local_surplus:
+                    winner_subsystem = "policy_ranking"
+                    override_reason = "no_surplus"
+                elif not stable_context:
+                    winner_subsystem = "final_gate"
+                    override_reason = "unstable_context"
+                elif layer == "reserve_accumulation":
+                    winner_subsystem = "policy_ranking"
+                    override_reason = "reserve_selected"
+                elif layer == "group_feeding":
+                    if pressure_active:
+                        winner_subsystem = "contextual_override"
+                        override_reason = "group_feeding_pressure_override"
+                    elif task_name == "village_logistics":
+                        winner_subsystem = "task_layer_routing"
+                        override_reason = "village_logistics_group_routing"
+                    elif task_name == "camp_supply_food":
+                        winner_subsystem = "task_layer_routing"
+                        override_reason = "camp_supply_group_routing"
+                    else:
+                        winner_subsystem = "role_task_update"
+                        override_reason = "group_feeding_role_update"
+                elif layer == "self_feeding":
+                    winner_subsystem = "role_task_update"
+                    override_reason = "self_feeding_override"
+                else:
+                    winner_subsystem = "unknown"
+                    override_reason = "other"
+
+                stats[f"food_security_reserve_final_winner_subsystem_{winner_subsystem}_count"] = int(
+                    stats.get(f"food_security_reserve_final_winner_subsystem_{winner_subsystem}_count", 0)
+                ) + 1
+                override_reason_key = (
+                    override_reason
+                    if override_reason in {
+                        "group_feeding_pressure_override",
+                        "village_logistics_group_routing",
+                        "camp_supply_group_routing",
+                        "unstable_context",
+                        "no_surplus",
+                    }
+                    else "other"
+                )
+                stats[f"food_security_reserve_final_override_reason_{override_reason_key}_count"] = int(
+                    stats.get(f"food_security_reserve_final_override_reason_{override_reason_key}_count", 0)
+                ) + 1
+
+                if has_local_surplus and stable_context:
+                    reserve_eligible_count += 1
+                    stats["food_security_reserve_postpolicy_candidate_count"] = int(
+                        stats.get("food_security_reserve_postpolicy_candidate_count", 0)
+                    ) + 1
+                    stats["food_security_reserve_entry_condition_met_count"] = int(
+                        stats.get("food_security_reserve_entry_condition_met_count", 0)
+                    ) + 1
+                if layer == "reserve_accumulation":
+                    stats["food_security_reserve_final_decision_candidate_chosen_count"] = int(
+                        stats.get("food_security_reserve_final_decision_candidate_chosen_count", 0)
+                    ) + 1
+                    stats["food_security_reserve_selection_chosen_count"] = int(
+                        stats.get("food_security_reserve_selection_chosen_count", 0)
+                    ) + 1
+                    stats["food_security_reserve_final_activation_count"] = int(
+                        stats.get("food_security_reserve_final_activation_count", 0)
+                    ) + 1
+                    stats["food_security_reserve_entry_activated_count"] = int(
+                        stats.get("food_security_reserve_entry_activated_count", 0)
+                    ) + 1
+                else:
+                    stats["food_security_reserve_final_decision_candidate_lost_count"] = int(
+                        stats.get("food_security_reserve_final_decision_candidate_lost_count", 0)
+                    ) + 1
+                    stats["food_security_reserve_selection_rejected_count"] = int(
+                        stats.get("food_security_reserve_selection_rejected_count", 0)
+                    ) + 1
+                    if not has_local_surplus:
+                        stats["food_security_reserve_entry_blocked_no_surplus"] = int(
+                            stats.get("food_security_reserve_entry_blocked_no_surplus", 0)
+                        ) + 1
+                        stats["food_security_reserve_selection_rejected_by_no_surplus_count"] = int(
+                            stats.get("food_security_reserve_selection_rejected_by_no_surplus_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_final_selection_lost_to_no_surplus_count"] = int(
+                            stats.get("food_security_reserve_final_selection_lost_to_no_surplus_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_loss_stage_policy_ranking_count"] = int(
+                            stats.get("food_security_reserve_loss_stage_policy_ranking_count", 0)
+                        ) + 1
+                    elif not stable_context:
+                        stats["food_security_reserve_entry_blocked_unstable_context"] = int(
+                            stats.get("food_security_reserve_entry_blocked_unstable_context", 0)
+                        ) + 1
+                        stats["food_security_reserve_selection_rejected_by_unstable_context_count"] = int(
+                            stats.get("food_security_reserve_selection_rejected_by_unstable_context_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_final_selection_lost_to_unstable_context_count"] = int(
+                            stats.get("food_security_reserve_final_selection_lost_to_unstable_context_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_loss_stage_final_gate_count"] = int(
+                            stats.get("food_security_reserve_loss_stage_final_gate_count", 0)
+                        ) + 1
+                    elif pressure_active and layer == "group_feeding":
+                        stats["food_security_reserve_entry_blocked_group_feeding_dominance"] = int(
+                            stats.get("food_security_reserve_entry_blocked_group_feeding_dominance", 0)
+                        ) + 1
+                        stats["food_security_reserve_selection_rejected_by_group_feeding_count"] = int(
+                            stats.get("food_security_reserve_selection_rejected_by_group_feeding_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_final_selection_lost_to_group_feeding_count"] = int(
+                            stats.get("food_security_reserve_final_selection_lost_to_group_feeding_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_final_selection_winner_group_feeding_count"] = int(
+                            stats.get("food_security_reserve_final_selection_winner_group_feeding_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_loss_stage_final_override_count"] = int(
+                            stats.get("food_security_reserve_loss_stage_final_override_count", 0)
+                        ) + 1
+                    elif layer == "self_feeding":
+                        stats["food_security_reserve_final_selection_lost_to_self_feeding_count"] = int(
+                            stats.get("food_security_reserve_final_selection_lost_to_self_feeding_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_final_selection_winner_self_feeding_count"] = int(
+                            stats.get("food_security_reserve_final_selection_winner_self_feeding_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_loss_stage_final_override_count"] = int(
+                            stats.get("food_security_reserve_loss_stage_final_override_count", 0)
+                        ) + 1
+                    else:
+                        stats["food_security_reserve_selection_rejected_by_other_count"] = int(
+                            stats.get("food_security_reserve_selection_rejected_by_other_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_final_selection_lost_to_other_count"] = int(
+                            stats.get("food_security_reserve_final_selection_lost_to_other_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_final_selection_winner_other_count"] = int(
+                            stats.get("food_security_reserve_final_selection_winner_other_count", 0)
+                        ) + 1
+                        stats["food_security_reserve_loss_stage_final_override_count"] = int(
+                            stats.get("food_security_reserve_loss_stage_final_override_count", 0)
+                        ) + 1
+        stats["food_security_layer_self_feeding_ticks_total"] = int(
+            stats.get("food_security_layer_self_feeding_ticks_total", 0)
+        ) + int(layer_counts["self_feeding"])
+        stats["food_security_layer_group_feeding_ticks_total"] = int(
+            stats.get("food_security_layer_group_feeding_ticks_total", 0)
+        ) + int(layer_counts["group_feeding"])
+        stats["food_security_layer_reserve_accumulation_ticks_total"] = int(
+            stats.get("food_security_layer_reserve_accumulation_ticks_total", 0)
+        ) + int(layer_counts["reserve_accumulation"])
+        stats["food_security_layer_none_ticks_total"] = int(
+            stats.get("food_security_layer_none_ticks_total", 0)
+        ) + int(layer_counts["none"])
+        stats["food_security_layer_agents_self_feeding_total"] = int(
+            stats.get("food_security_layer_agents_self_feeding_total", 0)
+        ) + int(layer_counts["self_feeding"])
+        stats["food_security_layer_agents_group_feeding_total"] = int(
+            stats.get("food_security_layer_agents_group_feeding_total", 0)
+        ) + int(layer_counts["group_feeding"])
+        stats["food_security_layer_agents_reserve_accumulation_total"] = int(
+            stats.get("food_security_layer_agents_reserve_accumulation_total", 0)
+        ) + int(layer_counts["reserve_accumulation"])
+        stats["food_security_layer_agents_none_total"] = int(
+            stats.get("food_security_layer_agents_none_total", 0)
+        ) + int(layer_counts["none"])
+        stats["food_security_layer_samples"] = int(stats.get("food_security_layer_samples", 0)) + 1
+        if reserve_candidate_count <= 0:
+            stats["food_security_reserve_entry_blocked_no_qualifying_task"] = int(
+                stats.get("food_security_reserve_entry_blocked_no_qualifying_task", 0)
+            ) + 1
+        elif reserve_eligible_count > 0 and int(layer_counts["reserve_accumulation"]) <= 0:
+            stats["food_security_reserve_entry_blocked_group_feeding_dominance"] = int(
+                stats.get("food_security_reserve_entry_blocked_group_feeding_dominance", 0)
+            ) + 1
         food_inventory_total_tick = int(
             sum(
                 int(getattr(a, "inventory", {}).get("food", 0))
@@ -6655,6 +7829,43 @@ class World:
         housing_diag = self.compute_housing_construction_diagnostics_snapshot()
         hglobal = housing_diag.get("global", {}) if isinstance(housing_diag, dict) else {}
         stats["houses_completed_count"] = int(hglobal.get("houses_completed_count", 0))
+        wood_on_map_now = int(len(self.wood))
+        stone_on_map_now = int(len(self.stone))
+        wood_in_agents_now = int(
+            sum(
+                int(getattr(a, "inventory", {}).get("wood", 0))
+                for a in (self.agents or [])
+                if getattr(a, "alive", False) and isinstance(getattr(a, "inventory", {}), dict)
+            )
+        )
+        stone_in_agents_now = int(
+            sum(
+                int(getattr(a, "inventory", {}).get("stone", 0))
+                for a in (self.agents or [])
+                if getattr(a, "alive", False) and isinstance(getattr(a, "inventory", {}), dict)
+            )
+        )
+        wood_in_storage_now = 0
+        stone_in_storage_now = 0
+        wood_in_construction_buffers_now = 0
+        stone_in_construction_buffers_now = 0
+
+        def _nearest_distance_to_sources(x: int, y: int, sources: Set[Coord]) -> int:
+            if not sources:
+                return -1
+            best = None
+            for sx, sy in sources:
+                d = abs(int(x) - int(sx)) + abs(int(y) - int(sy))
+                if best is None or d < best:
+                    best = d
+            return int(best) if best is not None else -1
+
+        def _count_sources_within_radius(x: int, y: int, sources: Set[Coord], radius: int) -> int:
+            if not sources:
+                return 0
+            r = max(0, int(radius))
+            return int(sum(1 for sx, sy in sources if abs(int(x) - int(sx)) + abs(int(y) - int(sy)) <= r))
+
         active_sites = 0
         partial_sites = 0
         near_complete_sites = 0
@@ -6675,6 +7886,31 @@ class World:
         work_ticks_per_builder_samples = 0
         active_age_ticks_total = 0
         active_age_ticks_samples = 0
+        site_nearest_wood_dist_total = 0
+        site_nearest_wood_dist_samples = 0
+        site_nearest_stone_dist_total = 0
+        site_nearest_stone_dist_samples = 0
+        site_viable_wood_total = 0
+        site_viable_wood_samples = 0
+        site_viable_stone_total = 0
+        site_viable_stone_samples = 0
+        site_zero_wood_ticks = 0
+        site_zero_stone_ticks = 0
+        site_local_wood_contention_total = 0.0
+        site_local_wood_contention_samples = 0
+        site_local_stone_contention_total = 0.0
+        site_local_stone_contention_samples = 0
+        site_ticks_since_last_delivery_total = 0
+        site_ticks_since_last_delivery_samples = 0
+        site_waiting_positive_wood_stock_ticks = 0
+        site_waiting_positive_stone_stock_ticks = 0
+        site_first_demand_to_first_delivery_total = 0
+        site_first_demand_to_first_delivery_samples = 0
+        site_material_inflow_rate_total = 0.0
+        site_material_inflow_rate_samples = 0
+        site_delivered_wood_units_live = 0
+        site_delivered_stone_units_live = 0
+        site_delivered_food_units_live = 0
         state_counts = {
             "planned": 0,
             "supplying": 0,
@@ -6683,6 +7919,13 @@ class World:
             "paused": 0,
             "completed": 0,
         }
+        for _b in (self.buildings or {}).values():
+            if not isinstance(_b, dict):
+                continue
+            if str(_b.get("type", "")) == "storage":
+                _st = _b.get("storage", {}) if isinstance(_b.get("storage"), dict) else {}
+                wood_in_storage_now += int(_st.get("wood", 0))
+                stone_in_storage_now += int(_st.get("stone", 0))
         for b in (self.buildings or {}).values():
             if not isinstance(b, dict):
                 continue
@@ -6720,14 +7963,81 @@ class World:
             outstanding = 0
             if isinstance(needs, dict):
                 outstanding = int(needs.get("wood", 0)) + int(needs.get("stone", 0)) + int(needs.get("food", 0))
+            buf = b.get("construction_buffer", {}) if isinstance(b.get("construction_buffer", {}), dict) else {}
+            wood_in_construction_buffers_now += int(buf.get("wood", 0))
+            stone_in_construction_buffers_now += int(buf.get("stone", 0))
             req = b.get("construction_request", {}) if isinstance(b.get("construction_request", {}), dict) else {}
             required_total = int(req.get("wood_needed", 0)) + int(req.get("stone_needed", 0)) + int(req.get("food_needed", 0))
             delivered_total = int(b.get("construction_delivered_units", 0))
+            delivered_wood_total = int(b.get("construction_delivered_wood_units", 0))
+            delivered_stone_total = int(b.get("construction_delivered_stone_units", 0))
+            delivered_food_total = int(b.get("construction_delivered_food_units", 0))
             live_required_total += max(0, required_total)
             live_delivered_total += max(0, delivered_total)
             live_remaining_total += max(0, outstanding)
+            site_delivered_wood_units_live += max(0, delivered_wood_total)
+            site_delivered_stone_units_live += max(0, delivered_stone_total)
+            site_delivered_food_units_live += max(0, delivered_food_total)
             if outstanding > 0 and outstanding <= 2:
                 near_complete_sites += 1
+            bx = int(b.get("x", 0))
+            by = int(b.get("y", 0))
+            nearest_wood = _nearest_distance_to_sources(bx, by, self.wood)
+            nearest_stone = _nearest_distance_to_sources(bx, by, self.stone)
+            if nearest_wood >= 0:
+                site_nearest_wood_dist_total += int(nearest_wood)
+                site_nearest_wood_dist_samples += 1
+            if nearest_stone >= 0:
+                site_nearest_stone_dist_total += int(nearest_stone)
+                site_nearest_stone_dist_samples += 1
+            nearby_wood_sources = _count_sources_within_radius(bx, by, self.wood, radius=8)
+            nearby_stone_sources = _count_sources_within_radius(bx, by, self.stone, radius=8)
+            site_viable_wood_total += int(nearby_wood_sources)
+            site_viable_wood_samples += 1
+            site_viable_stone_total += int(nearby_stone_sources)
+            site_viable_stone_samples += 1
+            if nearby_wood_sources <= 0:
+                site_zero_wood_ticks += 1
+            if nearby_stone_sources <= 0:
+                site_zero_stone_ticks += 1
+            nearby_harvesters = 0
+            nearby_miners = 0
+            for _a in (self.agents or []):
+                if not getattr(_a, "alive", False):
+                    continue
+                ad = abs(int(getattr(_a, "x", 0)) - bx) + abs(int(getattr(_a, "y", 0)) - by)
+                if ad > 8:
+                    continue
+                atask = str(getattr(_a, "task", ""))
+                if atask in {"lumber_cycle", "gather_materials"}:
+                    nearby_harvesters += 1
+                if atask in {"mine_cycle", "gather_materials"}:
+                    nearby_miners += 1
+            if nearby_wood_sources > 0:
+                site_local_wood_contention_total += float(nearby_harvesters) / float(max(1, nearby_wood_sources))
+                site_local_wood_contention_samples += 1
+            if nearby_stone_sources > 0:
+                site_local_stone_contention_total += float(nearby_miners) / float(max(1, nearby_stone_sources))
+                site_local_stone_contention_samples += 1
+            now_tick = int(getattr(self, "tick", 0))
+            last_delivery_tick = int(b.get("construction_last_delivery_tick", -1))
+            if last_delivery_tick >= 0:
+                site_ticks_since_last_delivery_total += max(0, now_tick - last_delivery_tick)
+                site_ticks_since_last_delivery_samples += 1
+            first_demand_tick = int(b.get("construction_last_demand_tick", b.get("construction_created_tick", -1)))
+            first_delivery_tick = int(b.get("construction_first_delivery_tick", -1))
+            if (
+                first_demand_tick >= 0
+                and first_delivery_tick >= first_demand_tick
+                and not bool(b.get("construction_first_demand_to_first_delivery_recorded", False))
+            ):
+                site_first_demand_to_first_delivery_total += int(first_delivery_tick - first_demand_tick)
+                site_first_demand_to_first_delivery_samples += 1
+                b["construction_first_demand_to_first_delivery_recorded"] = True
+            created_tick = int(b.get("construction_created_tick", now_tick))
+            age_ticks = max(1, now_tick - created_tick + 1)
+            site_material_inflow_rate_total += float(max(0, delivered_total)) / float(age_ticks)
+            site_material_inflow_rate_samples += 1
             if outstanding <= 0:
                 stats["construction_site_buildable_ticks_total"] = int(stats.get("construction_site_buildable_ticks_total", 0)) + 1
                 if progress <= 0:
@@ -6741,6 +8051,12 @@ class World:
             if outstanding > 0:
                 stats["construction_site_waiting_for_material_ticks"] = int(stats.get("construction_site_waiting_for_material_ticks", 0)) + 1
                 waiting_material_ticks_total += 1
+                wood_available_now = int(wood_on_map_now + wood_in_agents_now + wood_in_storage_now + wood_in_construction_buffers_now)
+                stone_available_now = int(stone_on_map_now + stone_in_agents_now + stone_in_storage_now + stone_in_construction_buffers_now)
+                if wood_available_now > 0:
+                    site_waiting_positive_wood_stock_ticks += 1
+                if stone_available_now > 0:
+                    site_waiting_positive_stone_stock_ticks += 1
                 if btype == "storage":
                     stats["storage_waiting_for_material_ticks"] = int(stats.get("storage_waiting_for_material_ticks", 0)) + 1
                 elif btype == "house":
@@ -6788,6 +8104,126 @@ class World:
         stats["construction_site_delivery_to_work_gap_samples"] = int(stats.get("construction_site_delivery_to_work_gap_samples", 0)) + int(delivery_to_work_gap_samples)
         stats["construction_site_active_age_ticks_total"] = int(stats.get("construction_site_active_age_ticks_total", 0)) + int(active_age_ticks_total)
         stats["construction_site_active_age_ticks_samples"] = int(stats.get("construction_site_active_age_ticks_samples", 0)) + int(active_age_ticks_samples)
+        stats["construction_site_nearest_wood_distance_total"] = int(
+            stats.get("construction_site_nearest_wood_distance_total", 0)
+        ) + int(site_nearest_wood_dist_total)
+        stats["construction_site_nearest_wood_distance_samples"] = int(
+            stats.get("construction_site_nearest_wood_distance_samples", 0)
+        ) + int(site_nearest_wood_dist_samples)
+        stats["construction_site_nearest_stone_distance_total"] = int(
+            stats.get("construction_site_nearest_stone_distance_total", 0)
+        ) + int(site_nearest_stone_dist_total)
+        stats["construction_site_nearest_stone_distance_samples"] = int(
+            stats.get("construction_site_nearest_stone_distance_samples", 0)
+        ) + int(site_nearest_stone_dist_samples)
+        stats["construction_site_viable_wood_sources_within_radius_total"] = int(
+            stats.get("construction_site_viable_wood_sources_within_radius_total", 0)
+        ) + int(site_viable_wood_total)
+        stats["construction_site_viable_wood_sources_within_radius_samples"] = int(
+            stats.get("construction_site_viable_wood_sources_within_radius_samples", 0)
+        ) + int(site_viable_wood_samples)
+        stats["construction_site_viable_stone_sources_within_radius_total"] = int(
+            stats.get("construction_site_viable_stone_sources_within_radius_total", 0)
+        ) + int(site_viable_stone_total)
+        stats["construction_site_viable_stone_sources_within_radius_samples"] = int(
+            stats.get("construction_site_viable_stone_sources_within_radius_samples", 0)
+        ) + int(site_viable_stone_samples)
+        stats["construction_site_zero_wood_sources_within_radius_ticks"] = int(
+            stats.get("construction_site_zero_wood_sources_within_radius_ticks", 0)
+        ) + int(site_zero_wood_ticks)
+        stats["construction_site_zero_stone_sources_within_radius_ticks"] = int(
+            stats.get("construction_site_zero_stone_sources_within_radius_ticks", 0)
+        ) + int(site_zero_stone_ticks)
+        stats["construction_site_local_wood_source_contention_total"] = float(
+            stats.get("construction_site_local_wood_source_contention_total", 0.0)
+        ) + float(site_local_wood_contention_total)
+        stats["construction_site_local_wood_source_contention_samples"] = int(
+            stats.get("construction_site_local_wood_source_contention_samples", 0)
+        ) + int(site_local_wood_contention_samples)
+        stats["construction_site_local_stone_source_contention_total"] = float(
+            stats.get("construction_site_local_stone_source_contention_total", 0.0)
+        ) + float(site_local_stone_contention_total)
+        stats["construction_site_local_stone_source_contention_samples"] = int(
+            stats.get("construction_site_local_stone_source_contention_samples", 0)
+        ) + int(site_local_stone_contention_samples)
+        stats["construction_site_ticks_since_last_delivery_total"] = int(
+            stats.get("construction_site_ticks_since_last_delivery_total", 0)
+        ) + int(site_ticks_since_last_delivery_total)
+        stats["construction_site_ticks_since_last_delivery_samples"] = int(
+            stats.get("construction_site_ticks_since_last_delivery_samples", 0)
+        ) + int(site_ticks_since_last_delivery_samples)
+        stats["construction_site_waiting_with_positive_wood_stock_ticks"] = int(
+            stats.get("construction_site_waiting_with_positive_wood_stock_ticks", 0)
+        ) + int(site_waiting_positive_wood_stock_ticks)
+        stats["construction_site_waiting_with_positive_stone_stock_ticks"] = int(
+            stats.get("construction_site_waiting_with_positive_stone_stock_ticks", 0)
+        ) + int(site_waiting_positive_stone_stock_ticks)
+        stats["construction_site_first_demand_to_first_delivery_total"] = int(
+            stats.get("construction_site_first_demand_to_first_delivery_total", 0)
+        ) + int(site_first_demand_to_first_delivery_total)
+        stats["construction_site_first_demand_to_first_delivery_samples"] = int(
+            stats.get("construction_site_first_demand_to_first_delivery_samples", 0)
+        ) + int(site_first_demand_to_first_delivery_samples)
+        stats["construction_site_material_inflow_rate_total"] = float(
+            stats.get("construction_site_material_inflow_rate_total", 0.0)
+        ) + float(site_material_inflow_rate_total)
+        stats["construction_site_material_inflow_rate_samples"] = int(
+            stats.get("construction_site_material_inflow_rate_samples", 0)
+        ) + int(site_material_inflow_rate_samples)
+        stats["construction_site_delivered_wood_units_total_live"] = int(site_delivered_wood_units_live)
+        stats["construction_site_delivered_stone_units_total_live"] = int(site_delivered_stone_units_live)
+        stats["construction_site_delivered_food_units_total_live"] = int(site_delivered_food_units_live)
+
+        active_builders = [
+            a
+            for a in (self.agents or [])
+            if getattr(a, "alive", False)
+            and str(getattr(a, "role", "")) == "builder"
+            and str(getattr(a, "task", "")) in {"build_house", "build_storage", "gather_materials"}
+        ]
+        active_haulers = [
+            a
+            for a in (self.agents or [])
+            if getattr(a, "alive", False)
+            and str(getattr(a, "role", "")) == "hauler"
+            and str(getattr(a, "task", "")) in {"food_logistics", "village_logistics", "gather_materials"}
+        ]
+        stats["active_builders_count"] = int(len(active_builders))
+        stats["active_haulers_count"] = int(len(active_haulers))
+        for _a in active_builders:
+            bdist_wood = _nearest_distance_to_sources(int(getattr(_a, "x", 0)), int(getattr(_a, "y", 0)), self.wood)
+            bdist_stone = _nearest_distance_to_sources(int(getattr(_a, "x", 0)), int(getattr(_a, "y", 0)), self.stone)
+            if bdist_wood >= 0:
+                stats["active_builders_nearest_wood_distance_total"] = int(
+                    stats.get("active_builders_nearest_wood_distance_total", 0)
+                ) + int(bdist_wood)
+                stats["active_builders_nearest_wood_distance_samples"] = int(
+                    stats.get("active_builders_nearest_wood_distance_samples", 0)
+                ) + 1
+            if bdist_stone >= 0:
+                stats["active_builders_nearest_stone_distance_total"] = int(
+                    stats.get("active_builders_nearest_stone_distance_total", 0)
+                ) + int(bdist_stone)
+                stats["active_builders_nearest_stone_distance_samples"] = int(
+                    stats.get("active_builders_nearest_stone_distance_samples", 0)
+                ) + 1
+        for _a in active_haulers:
+            hdist_wood = _nearest_distance_to_sources(int(getattr(_a, "x", 0)), int(getattr(_a, "y", 0)), self.wood)
+            hdist_stone = _nearest_distance_to_sources(int(getattr(_a, "x", 0)), int(getattr(_a, "y", 0)), self.stone)
+            if hdist_wood >= 0:
+                stats["active_haulers_nearest_wood_distance_total"] = int(
+                    stats.get("active_haulers_nearest_wood_distance_total", 0)
+                ) + int(hdist_wood)
+                stats["active_haulers_nearest_wood_distance_samples"] = int(
+                    stats.get("active_haulers_nearest_wood_distance_samples", 0)
+                ) + 1
+            if hdist_stone >= 0:
+                stats["active_haulers_nearest_stone_distance_total"] = int(
+                    stats.get("active_haulers_nearest_stone_distance_total", 0)
+                ) + int(hdist_stone)
+                stats["active_haulers_nearest_stone_distance_samples"] = int(
+                    stats.get("active_haulers_nearest_stone_distance_samples", 0)
+                ) + 1
         stats["construction_build_state_planned_count"] = int(state_counts.get("planned", 0))
         stats["construction_build_state_supplying_count"] = int(state_counts.get("supplying", 0))
         stats["construction_build_state_buildable_count"] = int(state_counts.get("buildable", 0))
@@ -6842,6 +8278,21 @@ class World:
         work_ticks_per_builder_samples = int(stats.get("construction_site_work_ticks_per_builder_samples", 0))
         delivery_to_work_gap_samples = int(stats.get("construction_site_delivery_to_work_gap_samples", 0))
         active_age_ticks_samples = int(stats.get("construction_site_active_age_ticks_samples", 0))
+        site_nearest_wood_samples = int(stats.get("construction_site_nearest_wood_distance_samples", 0))
+        site_nearest_stone_samples = int(stats.get("construction_site_nearest_stone_distance_samples", 0))
+        site_viable_wood_samples = int(stats.get("construction_site_viable_wood_sources_within_radius_samples", 0))
+        site_viable_stone_samples = int(stats.get("construction_site_viable_stone_sources_within_radius_samples", 0))
+        site_local_wood_contention_samples = int(stats.get("construction_site_local_wood_source_contention_samples", 0))
+        site_local_stone_contention_samples = int(stats.get("construction_site_local_stone_source_contention_samples", 0))
+        site_last_delivery_samples = int(stats.get("construction_site_ticks_since_last_delivery_samples", 0))
+        site_first_demand_to_first_delivery_samples = int(
+            stats.get("construction_site_first_demand_to_first_delivery_samples", 0)
+        )
+        site_material_inflow_samples = int(stats.get("construction_site_material_inflow_rate_samples", 0))
+        active_builder_wood_samples = int(stats.get("active_builders_nearest_wood_distance_samples", 0))
+        active_builder_stone_samples = int(stats.get("active_builders_nearest_stone_distance_samples", 0))
+        active_hauler_wood_samples = int(stats.get("active_haulers_nearest_wood_distance_samples", 0))
+        active_hauler_stone_samples = int(stats.get("active_haulers_nearest_stone_distance_samples", 0))
         first_food_latency_samples = int(stats.get("time_spawn_to_first_food_acquisition_samples", 0))
         high_hunger_latency_samples = int(stats.get("time_high_hunger_to_eat_samples", 0))
         acquisition_interval_samples = int(stats.get("food_acquisition_interval_ticks_samples", 0))
@@ -6853,6 +8304,16 @@ class World:
         basin_ratio_samples = int(stats.get("local_food_basin_pressure_ratio_samples", 0))
         basin_compete_samples = int(stats.get("local_food_basin_competing_agents_samples", 0))
         basin_distance_samples = int(stats.get("local_food_basin_nearest_food_distance_samples", 0))
+        layer_samples = int(stats.get("food_security_layer_samples", 0))
+        reserve_samples = int(stats.get("reserve_total_food_observed_samples", 0))
+        reserve_draw_hunger_samples = int(stats.get("reserve_draw_hunger_samples", 0))
+        layer_total_ticks = max(
+            1,
+            int(stats.get("food_security_layer_self_feeding_ticks_total", 0))
+            + int(stats.get("food_security_layer_group_feeding_ticks_total", 0))
+            + int(stats.get("food_security_layer_reserve_accumulation_ticks_total", 0))
+            + int(stats.get("food_security_layer_none_ticks_total", 0)),
+        )
         dead_age_list = stats.get("_dead_agent_ages_sorted", [])
         if not isinstance(dead_age_list, list):
             dead_age_list = []
@@ -6931,6 +8392,629 @@ class World:
             "food_source_depletion_events": int(stats.get("food_source_depletion_events", 0)),
             "food_respawned_total_observed": int(stats.get("food_respawned_total_observed", 0)),
             "food_acquisition_events_total": int(stats.get("food_acquisition_events_total", 0)),
+            "food_self_feeding_events": int(stats.get("food_self_feeding_events", 0)),
+            "food_self_feeding_units": int(stats.get("food_self_feeding_units", 0)),
+            "food_group_feeding_events": int(stats.get("food_group_feeding_events", 0)),
+            "food_group_feeding_units": int(stats.get("food_group_feeding_units", 0)),
+            "food_reserve_accumulation_events": int(stats.get("food_reserve_accumulation_events", 0)),
+            "food_reserve_accumulation_units": int(stats.get("food_reserve_accumulation_units", 0)),
+            "food_reserve_draw_events": int(stats.get("food_reserve_draw_events", 0)),
+            "food_reserve_draw_units": int(stats.get("food_reserve_draw_units", 0)),
+            "food_reserve_balance_units": int(stats.get("food_reserve_accumulation_units", 0))
+            - int(stats.get("food_reserve_draw_units", 0)),
+            "total_food_in_reserves": int(stats.get("_reserve_total_food_prev_tick", 0)),
+            "avg_food_in_reserves": round(
+                float(stats.get("reserve_total_food_observed_sum", 0))
+                / float(max(1, reserve_samples)),
+                4,
+            ),
+            "max_food_in_reserves": int(stats.get("reserve_total_food_observed_max", 0)),
+            "reserve_fill_events": int(stats.get("reserve_fill_events", 0)),
+            "reserve_depletion_events": int(stats.get("reserve_depletion_events", 0)),
+            "ticks_reserve_above_threshold": int(stats.get("ticks_reserve_above_threshold", 0)),
+            "ticks_reserve_empty": int(stats.get("ticks_reserve_empty", 0)),
+            "reserve_recovery_cycles": int(stats.get("reserve_recovery_cycles", 0)),
+            "reserve_partial_recovery_cycles": int(stats.get("reserve_partial_recovery_cycles", 0)),
+            "reserve_full_recovery_cycles": int(stats.get("reserve_full_recovery_cycles", 0)),
+            "reserve_failed_recovery_attempts": int(stats.get("reserve_failed_recovery_attempts", 0)),
+            "reserve_refill_attempts": int(stats.get("reserve_refill_attempts", 0)),
+            "reserve_refill_success": int(stats.get("reserve_refill_success", 0)),
+            "avg_food_added_per_refill": round(
+                float(stats.get("reserve_refill_food_added_total", 0))
+                / float(max(1, int(stats.get("reserve_refill_success", 0)))),
+                4,
+            ),
+            "ticks_between_reserve_refills": round(
+                float(stats.get("reserve_refill_interval_ticks_total", 0))
+                / float(max(1, int(stats.get("reserve_refill_interval_ticks_samples", 0)))),
+                4,
+            ),
+            "avg_food_draw_per_event": round(
+                float(stats.get("food_reserve_draw_units", 0))
+                / float(max(1, int(stats.get("food_reserve_draw_events", 0)))),
+                4,
+            ),
+            "ticks_between_reserve_draws": round(
+                float(stats.get("reserve_draw_interval_ticks_total", 0))
+                / float(max(1, int(stats.get("reserve_draw_interval_ticks_samples", 0)))),
+                4,
+            ),
+            "reserve_draw_after_failed_foraging_trip": int(
+                stats.get("reserve_usage_after_failed_foraging_trip", 0)
+            ),
+            "reserve_draw_under_pressure": int(
+                stats.get("reserve_draw_events_during_food_stress", 0)
+            ),
+            "reserve_draw_under_normal_conditions": int(
+                stats.get("reserve_draw_events_during_normal_conditions", 0)
+            ),
+            "reserve_refill_blocked_by_pressure": int(
+                stats.get("reserve_refill_blocked_by_pressure", 0)
+            ),
+            "reserve_refill_blocked_by_no_surplus": int(
+                stats.get("reserve_refill_blocked_by_no_surplus", 0)
+            ),
+            "reserve_refill_blocked_by_unstable_context": int(
+                stats.get("reserve_refill_blocked_by_unstable_context", 0)
+            ),
+            "local_food_handoff_events": int(stats.get("local_food_handoff_events", 0)),
+            "local_food_handoff_units": int(stats.get("local_food_handoff_units", 0)),
+            "handoff_allowed_by_context_count": int(
+                stats.get("handoff_allowed_by_context_count", 0)
+            ),
+            "handoff_blocked_by_group_priority_count": int(
+                stats.get("handoff_blocked_by_group_priority_count", 0)
+            ),
+            "handoff_blocked_by_cooldown_count": int(
+                stats.get("handoff_blocked_by_cooldown_count", 0)
+            ),
+            "handoff_blocked_by_same_unit_recently_count": int(
+                stats.get("handoff_blocked_by_same_unit_recently_count", 0)
+            ),
+            "handoff_blocked_by_receiver_viability": int(
+                stats.get("handoff_blocked_by_receiver_viability", 0)
+            ),
+            "handoff_blocked_by_camp_fragility": int(
+                stats.get("handoff_blocked_by_camp_fragility", 0)
+            ),
+            "handoff_blocked_by_recent_rescue": int(
+                stats.get("handoff_blocked_by_recent_rescue", 0)
+            ),
+            "handoff_blocked_by_camp_fragility_when_receiver_critical_count": int(
+                stats.get("handoff_blocked_by_camp_fragility_when_receiver_critical_count", 0)
+            ),
+            "handoff_blocked_by_camp_fragility_when_donor_safe_count": int(
+                stats.get("handoff_blocked_by_camp_fragility_when_donor_safe_count", 0)
+            ),
+            "handoff_blocked_by_camp_fragility_with_local_surplus_count": int(
+                stats.get("handoff_blocked_by_camp_fragility_with_local_surplus_count", 0)
+            ),
+            "handoff_blocked_by_camp_fragility_context_pressure_count": int(
+                stats.get("handoff_blocked_by_camp_fragility_context_pressure_count", 0)
+            ),
+            "handoff_blocked_by_camp_fragility_context_nonpressure_count": int(
+                stats.get("handoff_blocked_by_camp_fragility_context_nonpressure_count", 0)
+            ),
+            "avg_handoff_blocked_by_camp_fragility_donor_food": round(
+                float(stats.get("handoff_blocked_by_camp_fragility_donor_food_sum", 0))
+                / float(max(1, int(stats.get("handoff_blocked_by_camp_fragility_donor_food_samples", 0)))),
+                4,
+            ),
+            "avg_handoff_blocked_by_camp_fragility_receiver_hunger": round(
+                float(stats.get("handoff_blocked_by_camp_fragility_receiver_hunger_sum", 0.0))
+                / float(max(1, int(stats.get("handoff_blocked_by_camp_fragility_receiver_hunger_samples", 0)))),
+                4,
+            ),
+            "avg_handoff_blocked_by_camp_fragility_camp_food": round(
+                float(stats.get("handoff_blocked_by_camp_fragility_camp_food_sum", 0))
+                / float(max(1, int(stats.get("handoff_blocked_by_camp_fragility_camp_food_samples", 0)))),
+                4,
+            ),
+            "local_food_handoff_prevented_by_low_surplus": int(
+                stats.get("local_food_handoff_prevented_by_low_surplus", 0)
+            ),
+            "local_food_handoff_prevented_by_distance": int(
+                stats.get("local_food_handoff_prevented_by_distance", 0)
+            ),
+            "local_food_handoff_prevented_by_donor_risk": int(
+                stats.get("local_food_handoff_prevented_by_donor_risk", 0)
+            ),
+            "hunger_relief_after_local_handoff": round(
+                float(stats.get("hunger_relief_after_local_handoff_total", 0.0))
+                / float(max(1, int(stats.get("hunger_relief_after_local_handoff_samples", 0)))),
+                4,
+            ),
+            "average_settlement_food_buffer": round(
+                float(stats.get("reserve_total_food_observed_sum", 0))
+                / float(max(1, reserve_samples)),
+                4,
+            ),
+            "longest_reserve_continuity_window": int(stats.get("reserve_continuity_longest_window", 0)),
+            "settlement_food_shortage_events": int(stats.get("settlement_food_shortage_events", 0)),
+            "hunger_deaths_with_reserve_available": int(stats.get("hunger_deaths_with_reserve_available", 0)),
+            "hunger_deaths_without_reserve": int(stats.get("hunger_deaths_without_reserve", 0)),
+            "avg_agent_hunger_when_reserve_used": round(
+                float(stats.get("reserve_draw_hunger_sum", 0.0))
+                / float(max(1, reserve_draw_hunger_samples)),
+                4,
+            ),
+            "reserve_draw_events_during_food_stress": int(stats.get("reserve_draw_events_during_food_stress", 0)),
+            "reserve_draw_events_during_normal_conditions": int(
+                stats.get("reserve_draw_events_during_normal_conditions", 0)
+            ),
+            "reserve_usage_after_failed_foraging_trip": int(
+                stats.get("reserve_usage_after_failed_foraging_trip", 0)
+            ),
+            "food_security_layer_transition_count": int(stats.get("food_security_layer_transition_count", 0)),
+            "food_security_layer_transition_none_to_self_feeding": int(
+                stats.get("food_security_layer_transition_none_to_self_feeding", 0)
+            ),
+            "food_security_layer_transition_none_to_group_feeding": int(
+                stats.get("food_security_layer_transition_none_to_group_feeding", 0)
+            ),
+            "food_security_layer_transition_none_to_reserve_accumulation": int(
+                stats.get("food_security_layer_transition_none_to_reserve_accumulation", 0)
+            ),
+            "food_security_layer_transition_none_to_none": int(
+                stats.get("food_security_layer_transition_none_to_none", 0)
+            ),
+            "food_security_layer_transition_self_feeding_to_self_feeding": int(
+                stats.get("food_security_layer_transition_self_feeding_to_self_feeding", 0)
+            ),
+            "food_security_layer_transition_self_feeding_to_group_feeding": int(
+                stats.get("food_security_layer_transition_self_feeding_to_group_feeding", 0)
+            ),
+            "food_security_layer_transition_self_feeding_to_reserve_accumulation": int(
+                stats.get("food_security_layer_transition_self_feeding_to_reserve_accumulation", 0)
+            ),
+            "food_security_layer_transition_self_feeding_to_none": int(
+                stats.get("food_security_layer_transition_self_feeding_to_none", 0)
+            ),
+            "food_security_layer_transition_group_feeding_to_self_feeding": int(
+                stats.get("food_security_layer_transition_group_feeding_to_self_feeding", 0)
+            ),
+            "food_security_layer_transition_group_feeding_to_group_feeding": int(
+                stats.get("food_security_layer_transition_group_feeding_to_group_feeding", 0)
+            ),
+            "food_security_layer_transition_group_feeding_to_reserve_accumulation": int(
+                stats.get("food_security_layer_transition_group_feeding_to_reserve_accumulation", 0)
+            ),
+            "food_security_layer_transition_group_feeding_to_none": int(
+                stats.get("food_security_layer_transition_group_feeding_to_none", 0)
+            ),
+            "food_security_layer_transition_reserve_accumulation_to_self_feeding": int(
+                stats.get("food_security_layer_transition_reserve_accumulation_to_self_feeding", 0)
+            ),
+            "food_security_layer_transition_reserve_accumulation_to_group_feeding": int(
+                stats.get("food_security_layer_transition_reserve_accumulation_to_group_feeding", 0)
+            ),
+            "food_security_layer_transition_reserve_accumulation_to_reserve_accumulation": int(
+                stats.get("food_security_layer_transition_reserve_accumulation_to_reserve_accumulation", 0)
+            ),
+            "food_security_layer_transition_reserve_accumulation_to_none": int(
+                stats.get("food_security_layer_transition_reserve_accumulation_to_none", 0)
+            ),
+            "food_security_reserve_entry_checks": int(stats.get("food_security_reserve_entry_checks", 0)),
+            "food_security_reserve_entry_condition_met_count": int(
+                stats.get("food_security_reserve_entry_condition_met_count", 0)
+            ),
+            "food_security_reserve_entry_activated_count": int(
+                stats.get("food_security_reserve_entry_activated_count", 0)
+            ),
+            "food_security_reserve_entry_blocked_no_surplus": int(
+                stats.get("food_security_reserve_entry_blocked_no_surplus", 0)
+            ),
+            "food_security_reserve_entry_blocked_no_qualifying_task": int(
+                stats.get("food_security_reserve_entry_blocked_no_qualifying_task", 0)
+            ),
+            "food_security_reserve_entry_blocked_unstable_context": int(
+                stats.get("food_security_reserve_entry_blocked_unstable_context", 0)
+            ),
+            "food_security_reserve_entry_blocked_group_feeding_dominance": int(
+                stats.get("food_security_reserve_entry_blocked_group_feeding_dominance", 0)
+            ),
+            "food_security_reserve_prepolicy_candidate_count": int(
+                stats.get("food_security_reserve_prepolicy_candidate_count", 0)
+            ),
+            "food_security_reserve_postpolicy_candidate_count": int(
+                stats.get("food_security_reserve_postpolicy_candidate_count", 0)
+            ),
+            "food_security_reserve_final_activation_count": int(
+                stats.get("food_security_reserve_final_activation_count", 0)
+            ),
+            "food_security_reserve_selection_considered_count": int(
+                stats.get("food_security_reserve_selection_considered_count", 0)
+            ),
+            "food_security_reserve_selection_chosen_count": int(
+                stats.get("food_security_reserve_selection_chosen_count", 0)
+            ),
+            "food_security_reserve_selection_rejected_count": int(
+                stats.get("food_security_reserve_selection_rejected_count", 0)
+            ),
+            "food_security_reserve_selection_rejected_by_group_feeding_count": int(
+                stats.get("food_security_reserve_selection_rejected_by_group_feeding_count", 0)
+            ),
+            "food_security_reserve_selection_rejected_by_unstable_context_count": int(
+                stats.get("food_security_reserve_selection_rejected_by_unstable_context_count", 0)
+            ),
+            "food_security_reserve_selection_rejected_by_no_surplus_count": int(
+                stats.get("food_security_reserve_selection_rejected_by_no_surplus_count", 0)
+            ),
+            "food_security_reserve_selection_rejected_by_other_count": int(
+                stats.get("food_security_reserve_selection_rejected_by_other_count", 0)
+            ),
+            "food_security_reserve_final_selection_lost_to_self_feeding_count": int(
+                stats.get("food_security_reserve_final_selection_lost_to_self_feeding_count", 0)
+            ),
+            "food_security_reserve_final_selection_lost_to_group_feeding_count": int(
+                stats.get("food_security_reserve_final_selection_lost_to_group_feeding_count", 0)
+            ),
+            "food_security_reserve_final_selection_lost_to_unstable_context_count": int(
+                stats.get("food_security_reserve_final_selection_lost_to_unstable_context_count", 0)
+            ),
+            "food_security_reserve_final_selection_lost_to_no_surplus_count": int(
+                stats.get("food_security_reserve_final_selection_lost_to_no_surplus_count", 0)
+            ),
+            "food_security_reserve_final_selection_lost_to_other_count": int(
+                stats.get("food_security_reserve_final_selection_lost_to_other_count", 0)
+            ),
+            "food_security_reserve_final_selection_winner_self_feeding_count": int(
+                stats.get("food_security_reserve_final_selection_winner_self_feeding_count", 0)
+            ),
+            "food_security_reserve_final_selection_winner_group_feeding_count": int(
+                stats.get("food_security_reserve_final_selection_winner_group_feeding_count", 0)
+            ),
+            "food_security_reserve_final_selection_winner_other_count": int(
+                stats.get("food_security_reserve_final_selection_winner_other_count", 0)
+            ),
+            "food_security_reserve_loss_stage_policy_ranking_count": int(
+                stats.get("food_security_reserve_loss_stage_policy_ranking_count", 0)
+            ),
+            "food_security_reserve_loss_stage_final_gate_count": int(
+                stats.get("food_security_reserve_loss_stage_final_gate_count", 0)
+            ),
+            "food_security_reserve_loss_stage_final_override_count": int(
+                stats.get("food_security_reserve_loss_stage_final_override_count", 0)
+            ),
+            "food_security_reserve_final_decision_observed_count": int(
+                stats.get("food_security_reserve_final_decision_observed_count", 0)
+            ),
+            "food_security_reserve_final_decision_candidate_count": int(
+                stats.get("food_security_reserve_final_decision_candidate_count", 0)
+            ),
+            "food_security_reserve_final_decision_candidate_survived_prepolicy_count": int(
+                stats.get("food_security_reserve_final_decision_candidate_survived_prepolicy_count", 0)
+            ),
+            "food_security_reserve_final_decision_candidate_survived_postpolicy_count": int(
+                stats.get("food_security_reserve_final_decision_candidate_survived_postpolicy_count", 0)
+            ),
+            "food_security_reserve_final_decision_candidate_lost_count": int(
+                stats.get("food_security_reserve_final_decision_candidate_lost_count", 0)
+            ),
+            "food_security_reserve_final_decision_candidate_chosen_count": int(
+                stats.get("food_security_reserve_final_decision_candidate_chosen_count", 0)
+            ),
+            "food_security_reserve_final_selected_task_food_logistics_count": int(
+                stats.get("food_security_reserve_final_selected_task_food_logistics_count", 0)
+            ),
+            "food_security_reserve_final_selected_task_village_logistics_count": int(
+                stats.get("food_security_reserve_final_selected_task_village_logistics_count", 0)
+            ),
+            "food_security_reserve_final_selected_task_camp_supply_food_count": int(
+                stats.get("food_security_reserve_final_selected_task_camp_supply_food_count", 0)
+            ),
+            "food_security_reserve_final_selected_task_other_count": int(
+                stats.get("food_security_reserve_final_selected_task_other_count", 0)
+            ),
+            "food_security_reserve_final_selected_layer_reserve_accumulation_count": int(
+                stats.get("food_security_reserve_final_selected_layer_reserve_accumulation_count", 0)
+            ),
+            "food_security_reserve_final_selected_layer_group_feeding_count": int(
+                stats.get("food_security_reserve_final_selected_layer_group_feeding_count", 0)
+            ),
+            "food_security_reserve_final_selected_layer_self_feeding_count": int(
+                stats.get("food_security_reserve_final_selected_layer_self_feeding_count", 0)
+            ),
+            "food_security_reserve_final_selected_layer_none_count": int(
+                stats.get("food_security_reserve_final_selected_layer_none_count", 0)
+            ),
+            "food_security_reserve_final_winner_subsystem_policy_ranking_count": int(
+                stats.get("food_security_reserve_final_winner_subsystem_policy_ranking_count", 0)
+            ),
+            "food_security_reserve_final_winner_subsystem_role_task_update_count": int(
+                stats.get("food_security_reserve_final_winner_subsystem_role_task_update_count", 0)
+            ),
+            "food_security_reserve_final_winner_subsystem_final_gate_count": int(
+                stats.get("food_security_reserve_final_winner_subsystem_final_gate_count", 0)
+            ),
+            "food_security_reserve_final_winner_subsystem_final_override_count": int(
+                stats.get("food_security_reserve_final_winner_subsystem_final_override_count", 0)
+            ),
+            "food_security_reserve_final_winner_subsystem_task_layer_routing_count": int(
+                stats.get("food_security_reserve_final_winner_subsystem_task_layer_routing_count", 0)
+            ),
+            "food_security_reserve_final_winner_subsystem_contextual_override_count": int(
+                stats.get("food_security_reserve_final_winner_subsystem_contextual_override_count", 0)
+            ),
+            "food_security_reserve_final_winner_subsystem_unknown_count": int(
+                stats.get("food_security_reserve_final_winner_subsystem_unknown_count", 0)
+            ),
+            "food_security_reserve_final_override_reason_group_feeding_pressure_override_count": int(
+                stats.get("food_security_reserve_final_override_reason_group_feeding_pressure_override_count", 0)
+            ),
+            "food_security_reserve_final_override_reason_village_logistics_group_routing_count": int(
+                stats.get("food_security_reserve_final_override_reason_village_logistics_group_routing_count", 0)
+            ),
+            "food_security_reserve_final_override_reason_camp_supply_group_routing_count": int(
+                stats.get("food_security_reserve_final_override_reason_camp_supply_group_routing_count", 0)
+            ),
+            "food_security_reserve_final_override_reason_unstable_context_count": int(
+                stats.get("food_security_reserve_final_override_reason_unstable_context_count", 0)
+            ),
+            "food_security_reserve_final_override_reason_no_surplus_count": int(
+                stats.get("food_security_reserve_final_override_reason_no_surplus_count", 0)
+            ),
+            "food_security_reserve_final_override_reason_other_count": int(
+                stats.get("food_security_reserve_final_override_reason_other_count", 0)
+            ),
+            "reserve_final_tiebreak_invoked_count": int(
+                stats.get("reserve_final_tiebreak_invoked_count", 0)
+            ),
+            "reserve_final_tiebreak_won_count": int(
+                stats.get("reserve_final_tiebreak_won_count", 0)
+            ),
+            "reserve_final_tiebreak_lost_count": int(
+                stats.get("reserve_final_tiebreak_lost_count", 0)
+            ),
+            "reserve_final_tiebreak_blocked_by_pressure_count": int(
+                stats.get("reserve_final_tiebreak_blocked_by_pressure_count", 0)
+            ),
+            "reserve_final_tiebreak_blocked_by_unstable_context_count": int(
+                stats.get("reserve_final_tiebreak_blocked_by_unstable_context_count", 0)
+            ),
+            "reserve_final_tiebreak_blocked_by_no_surplus_count": int(
+                stats.get("reserve_final_tiebreak_blocked_by_no_surplus_count", 0)
+            ),
+            "ratio_food_security_layer_self_feeding": round(
+                float(stats.get("food_security_layer_self_feeding_ticks_total", 0))
+                / float(layer_total_ticks),
+                4,
+            ),
+            "ratio_food_security_layer_group_feeding": round(
+                float(stats.get("food_security_layer_group_feeding_ticks_total", 0))
+                / float(layer_total_ticks),
+                4,
+            ),
+            "ratio_food_security_layer_reserve_accumulation": round(
+                float(stats.get("food_security_layer_reserve_accumulation_ticks_total", 0))
+                / float(layer_total_ticks),
+                4,
+            ),
+            "ratio_food_security_layer_none": round(
+                float(stats.get("food_security_layer_none_ticks_total", 0))
+                / float(layer_total_ticks),
+                4,
+            ),
+            "avg_agents_in_food_security_layer_self_feeding": round(
+                float(stats.get("food_security_layer_agents_self_feeding_total", 0))
+                / float(max(1, layer_samples)),
+                4,
+            ),
+            "avg_agents_in_food_security_layer_group_feeding": round(
+                float(stats.get("food_security_layer_agents_group_feeding_total", 0))
+                / float(max(1, layer_samples)),
+                4,
+            ),
+            "avg_agents_in_food_security_layer_reserve_accumulation": round(
+                float(stats.get("food_security_layer_agents_reserve_accumulation_total", 0))
+                / float(max(1, layer_samples)),
+                4,
+            ),
+            "avg_agents_in_food_security_layer_none": round(
+                float(stats.get("food_security_layer_agents_none_total", 0))
+                / float(max(1, layer_samples)),
+                4,
+            ),
+            "foraging_trip_started_count": int(stats.get("foraging_trip_started_count", 0)),
+            "foraging_trip_completed_count": int(stats.get("foraging_trip_completed_count", 0)),
+            "foraging_trip_zero_harvest_count": int(stats.get("foraging_trip_zero_harvest_count", 0)),
+            "foraging_trip_terminated_by_hunger_count": int(stats.get("foraging_trip_terminated_by_hunger_count", 0)),
+            "foraging_trip_wasted_arrival_count": int(stats.get("foraging_trip_wasted_arrival_count", 0)),
+            "foraging_arrival_depleted_source_count": int(stats.get("foraging_arrival_depleted_source_count", 0)),
+            "foraging_arrival_overcontested_count": int(stats.get("foraging_arrival_overcontested_count", 0)),
+            "foraging_source_visit_count": int(stats.get("foraging_source_visit_count", 0)),
+            "avg_foraging_trip_food_gained": round(
+                float(stats.get("foraging_trip_food_gained_total", 0))
+                / float(max(1, int(stats.get("foraging_trip_completed_count", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_move_before_first_harvest": round(
+                float(stats.get("foraging_trip_move_before_first_harvest_total", 0))
+                / float(max(1, int(stats.get("foraging_trip_move_before_first_harvest_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_harvest_actions": round(
+                float(stats.get("foraging_trip_harvest_actions_total", 0))
+                / float(max(1, int(stats.get("foraging_trip_completed_count", 0)))),
+                4,
+            ),
+            "avg_harvest_actions_per_visited_source": round(
+                float(stats.get("foraging_trip_harvest_actions_total", 0))
+                / float(max(1, int(stats.get("foraging_source_visit_count", 0)))),
+                4,
+            ),
+            "avg_visits_per_source_before_depletion": round(
+                float(stats.get("foraging_source_visit_count", 0))
+                / float(max(1, int(stats.get("food_source_depletion_events", 0)))),
+                4,
+            ),
+            "foraging_zero_harvest_trip_ratio": round(
+                float(stats.get("foraging_trip_zero_harvest_count", 0))
+                / float(max(1, int(stats.get("foraging_trip_completed_count", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_retarget_count": round(
+                float(stats.get("foraging_trip_retarget_count_total", 0))
+                / float(max(1, int(stats.get("foraging_trip_completed_count", 0)))),
+                4,
+            ),
+            "avg_foraging_target_lock_duration": round(
+                float(stats.get("foraging_target_lock_duration_total", 0))
+                / float(max(1, int(stats.get("foraging_target_lock_duration_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_commit_before_retarget_ticks": round(
+                float(stats.get("foraging_commit_before_retarget_ticks_total", 0))
+                / float(max(1, int(stats.get("foraging_commit_before_retarget_ticks_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_efficiency_ratio": round(
+                float(stats.get("foraging_trip_efficiency_ratio_sum", 0.0))
+                / float(max(1, int(stats.get("foraging_trip_efficiency_ratio_samples", 0)))),
+                4,
+            ),
+            "foraging_retarget_events": int(stats.get("foraging_retarget_events", 0)),
+            "foraging_retarget_events_pressure_low": int(stats.get("foraging_retarget_events_pressure_low", 0)),
+            "foraging_retarget_events_pressure_medium": int(stats.get("foraging_retarget_events_pressure_medium", 0)),
+            "foraging_retarget_events_pressure_high": int(stats.get("foraging_retarget_events_pressure_high", 0)),
+            "foraging_trip_aborted_before_first_harvest_count": int(
+                stats.get("foraging_trip_aborted_before_first_harvest_count", 0)
+            ),
+            "foraging_trip_aborted_after_first_harvest_count": int(
+                stats.get("foraging_trip_aborted_after_first_harvest_count", 0)
+            ),
+            "foraging_trip_successful_count": int(stats.get("foraging_trip_successful_count", 0)),
+            "avg_foraging_trip_food_gained_after_first_harvest": round(
+                float(stats.get("foraging_trip_post_first_harvest_units_total", 0))
+                / float(max(1, int(stats.get("foraging_trip_post_first_harvest_units_samples", 0)))),
+                4,
+            ),
+            "foraging_trip_single_harvest_action_count": int(stats.get("foraging_trip_single_harvest_action_count", 0)),
+            "foraging_trip_single_harvest_action_ratio": round(
+                float(stats.get("foraging_trip_single_harvest_action_count", 0))
+                / float(max(1, int(stats.get("foraging_trip_successful_count", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_consecutive_harvest_actions_on_patch": round(
+                float(stats.get("foraging_trip_max_consecutive_harvest_actions_total", 0))
+                / float(max(1, int(stats.get("foraging_trip_max_consecutive_harvest_actions_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_patch_dwell_after_first_harvest_ticks": round(
+                float(stats.get("foraging_trip_patch_dwell_after_first_harvest_ticks_total", 0))
+                / float(max(1, int(stats.get("foraging_trip_patch_dwell_after_first_harvest_ticks_samples", 0)))),
+                4,
+            ),
+            "foraging_trip_ended_soon_after_first_harvest_count": int(
+                stats.get("foraging_trip_ended_soon_after_first_harvest_count", 0)
+            ),
+            "foraging_trip_ended_soon_after_first_harvest_ratio": round(
+                float(stats.get("foraging_trip_ended_soon_after_first_harvest_count", 0))
+                / float(max(1, int(stats.get("foraging_trip_successful_count", 0)))),
+                4,
+            ),
+            "foraging_trip_end_after_first_harvest_completed": int(
+                stats.get("foraging_trip_end_after_first_harvest_completed", 0)
+            ),
+            "foraging_trip_end_after_first_harvest_task_switched": int(
+                stats.get("foraging_trip_end_after_first_harvest_task_switched", 0)
+            ),
+            "foraging_trip_end_after_first_harvest_hunger_death": int(
+                stats.get("foraging_trip_end_after_first_harvest_hunger_death", 0)
+            ),
+            "foraging_trip_end_after_first_harvest_other": int(
+                stats.get("foraging_trip_end_after_first_harvest_other", 0)
+            ),
+            "post_first_harvest_task_switch_attempt_count": int(
+                stats.get("post_first_harvest_task_switch_attempt_count", 0)
+            ),
+            "post_first_harvest_task_switch_committed_count": int(
+                stats.get("post_first_harvest_task_switch_committed_count", 0)
+            ),
+            "post_first_harvest_task_switch_blocked_count": int(
+                stats.get("post_first_harvest_task_switch_blocked_count", 0)
+            ),
+            "post_first_harvest_task_switch_attempt_source_survival_override": int(
+                stats.get("post_first_harvest_task_switch_attempt_source_survival_override", 0)
+            ),
+            "post_first_harvest_task_switch_attempt_source_role_task_update": int(
+                stats.get("post_first_harvest_task_switch_attempt_source_role_task_update", 0)
+            ),
+            "post_first_harvest_task_switch_attempt_source_inventory_logic": int(
+                stats.get("post_first_harvest_task_switch_attempt_source_inventory_logic", 0)
+            ),
+            "post_first_harvest_task_switch_attempt_source_wander_fallback": int(
+                stats.get("post_first_harvest_task_switch_attempt_source_wander_fallback", 0)
+            ),
+            "post_first_harvest_task_switch_attempt_source_target_invalidated": int(
+                stats.get("post_first_harvest_task_switch_attempt_source_target_invalidated", 0)
+            ),
+            "post_first_harvest_task_switch_attempt_source_unknown": int(
+                stats.get("post_first_harvest_task_switch_attempt_source_unknown", 0)
+            ),
+            "post_first_harvest_task_switch_committed_source_role_task_update": int(
+                stats.get("post_first_harvest_task_switch_committed_source_role_task_update", 0)
+            ),
+            "post_first_harvest_task_switch_committed_source_inventory_logic": int(
+                stats.get("post_first_harvest_task_switch_committed_source_inventory_logic", 0)
+            ),
+            "post_first_harvest_task_switch_committed_source_target_invalidated": int(
+                stats.get("post_first_harvest_task_switch_committed_source_target_invalidated", 0)
+            ),
+            "post_first_harvest_task_switch_committed_source_unknown": int(
+                stats.get("post_first_harvest_task_switch_committed_source_unknown", 0)
+            ),
+            "foraging_trip_end_reason_task_switched": int(stats.get("foraging_trip_end_reason_task_switched", 0)),
+            "foraging_trip_end_reason_hunger_death": int(stats.get("foraging_trip_end_reason_hunger_death", 0)),
+            "foraging_trip_end_reason_other": int(stats.get("foraging_trip_end_reason_other", 0)),
+            "foraging_trip_success_rate_pressure_low": round(
+                float(stats.get("foraging_trip_success_pressure_low_count", 0))
+                / float(max(1, int(stats.get("foraging_trip_total_pressure_low_count", 0)))),
+                4,
+            ),
+            "foraging_trip_success_rate_pressure_medium": round(
+                float(stats.get("foraging_trip_success_pressure_medium_count", 0))
+                / float(max(1, int(stats.get("foraging_trip_total_pressure_medium_count", 0)))),
+                4,
+            ),
+            "foraging_trip_success_rate_pressure_high": round(
+                float(stats.get("foraging_trip_success_pressure_high_count", 0))
+                / float(max(1, int(stats.get("foraging_trip_total_pressure_high_count", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_efficiency_pressure_low": round(
+                float(stats.get("foraging_trip_efficiency_pressure_low_sum", 0.0))
+                / float(max(1, int(stats.get("foraging_trip_efficiency_pressure_low_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_efficiency_pressure_medium": round(
+                float(stats.get("foraging_trip_efficiency_pressure_medium_sum", 0.0))
+                / float(max(1, int(stats.get("foraging_trip_efficiency_pressure_medium_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_efficiency_pressure_high": round(
+                float(stats.get("foraging_trip_efficiency_pressure_high_sum", 0.0))
+                / float(max(1, int(stats.get("foraging_trip_efficiency_pressure_high_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_efficiency_contention_low": round(
+                float(stats.get("foraging_trip_efficiency_contention_low_sum", 0.0))
+                / float(max(1, int(stats.get("foraging_trip_efficiency_contention_low_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_efficiency_contention_medium": round(
+                float(stats.get("foraging_trip_efficiency_contention_medium_sum", 0.0))
+                / float(max(1, int(stats.get("foraging_trip_efficiency_contention_medium_samples", 0)))),
+                4,
+            ),
+            "avg_foraging_trip_efficiency_contention_high": round(
+                float(stats.get("foraging_trip_efficiency_contention_high_sum", 0.0))
+                / float(max(1, int(stats.get("foraging_trip_efficiency_contention_high_samples", 0)))),
+                4,
+            ),
+            "foraging_micro_retarget_events": int(stats.get("foraging_micro_retarget_events", 0)),
+            "foraging_commitment_hold_overrides": int(stats.get("foraging_commitment_hold_overrides", 0)),
+            "foraging_bonus_yield_units_total": int(stats.get("foraging_bonus_yield_units_total", 0)),
             "avg_foraging_yield_per_trip": round(
                 float((self.production_metrics if isinstance(self.production_metrics, dict) else {}).get("total_food_gathered", 0))
                 / float(max(1, int(stats.get("food_acquisition_events_total", 0)))),
@@ -7027,11 +9111,222 @@ class World:
             "construction_material_delivery_events": int(stats.get("construction_material_delivery_events", 0)),
             "construction_material_delivery_to_active_site": int(stats.get("construction_material_delivery_to_active_site", 0)),
             "construction_material_delivery_drift_events": int(stats.get("construction_material_delivery_drift_events", 0)),
+            "construction_material_delivery_wood_units": int(stats.get("construction_material_delivery_wood_units", 0)),
+            "construction_material_delivery_stone_units": int(stats.get("construction_material_delivery_stone_units", 0)),
+            "construction_material_delivery_food_units": int(stats.get("construction_material_delivery_food_units", 0)),
+            "storage_deposit_food_units": int(stats.get("storage_deposit_food_units", 0)),
+            "storage_deposit_wood_units": int(stats.get("storage_deposit_wood_units", 0)),
+            "storage_deposit_stone_units": int(stats.get("storage_deposit_stone_units", 0)),
             "construction_delivery_attempts": int(stats.get("construction_delivery_attempts", 0)),
             "construction_delivery_successes": int(stats.get("construction_delivery_successes", 0)),
             "construction_delivery_failures": int(stats.get("construction_delivery_failures", 0)),
             "construction_delivery_to_site_events": int(stats.get("construction_delivery_to_site_events", 0)),
             "construction_delivery_to_wrong_target_or_drift": int(stats.get("construction_delivery_to_wrong_target_or_drift", 0)),
+            "construction_delivery_source_binding_selected_count": int(
+                stats.get("construction_delivery_source_binding_selected_count", 0)
+            ),
+            "construction_delivery_source_binding_persisted_count": int(
+                stats.get("construction_delivery_source_binding_persisted_count", 0)
+            ),
+            "construction_delivery_source_binding_refreshed_count": int(
+                stats.get("construction_delivery_source_binding_refreshed_count", 0)
+            ),
+            "construction_delivery_source_binding_missing_count": int(
+                stats.get("construction_delivery_source_binding_missing_count", 0)
+            ),
+            "construction_delivery_source_binding_unavailable_count": int(
+                stats.get("construction_delivery_source_binding_unavailable_count", 0)
+            ),
+            "construction_delivery_source_binding_lost_missing_source_count": int(
+                stats.get("construction_delivery_source_binding_lost_missing_source_count", 0)
+            ),
+            "construction_delivery_source_binding_lost_ineligible_source_count": int(
+                stats.get("construction_delivery_source_binding_lost_ineligible_source_count", 0)
+            ),
+            "construction_delivery_source_binding_lost_not_refreshed_count": int(
+                stats.get("construction_delivery_source_binding_lost_not_refreshed_count", 0)
+            ),
+            "construction_delivery_prepickup_checks_count": int(
+                stats.get("construction_delivery_prepickup_checks_count", 0)
+            ),
+            "construction_delivery_prepickup_site_exists_count": int(
+                stats.get("construction_delivery_prepickup_site_exists_count", 0)
+            ),
+            "construction_delivery_prepickup_site_missing_count": int(
+                stats.get("construction_delivery_prepickup_site_missing_count", 0)
+            ),
+            "construction_delivery_prepickup_site_under_construction_count": int(
+                stats.get("construction_delivery_prepickup_site_under_construction_count", 0)
+            ),
+            "construction_delivery_prepickup_site_not_under_construction_count": int(
+                stats.get("construction_delivery_prepickup_site_not_under_construction_count", 0)
+            ),
+            "construction_delivery_prepickup_site_reachable_count": int(
+                stats.get("construction_delivery_prepickup_site_reachable_count", 0)
+            ),
+            "construction_delivery_prepickup_site_unreachable_count": int(
+                stats.get("construction_delivery_prepickup_site_unreachable_count", 0)
+            ),
+            "construction_delivery_prepickup_site_demand_matches_material_count": int(
+                stats.get("construction_delivery_prepickup_site_demand_matches_material_count", 0)
+            ),
+            "construction_delivery_prepickup_site_demand_mismatch_material_count": int(
+                stats.get("construction_delivery_prepickup_site_demand_mismatch_material_count", 0)
+            ),
+            "construction_delivery_source_persistence_window_invoked_count": int(
+                stats.get("construction_delivery_source_persistence_window_invoked_count", 0)
+            ),
+            "construction_delivery_source_persistence_window_completed_count": int(
+                stats.get("construction_delivery_source_persistence_window_completed_count", 0)
+            ),
+            "construction_delivery_source_persistence_window_broken_by_source_invalidity_count": int(
+                stats.get("construction_delivery_source_persistence_window_broken_by_source_invalidity_count", 0)
+            ),
+            "construction_delivery_source_persistence_window_broken_by_demand_mismatch_count": int(
+                stats.get("construction_delivery_source_persistence_window_broken_by_demand_mismatch_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_pass_count": int(
+                stats.get("construction_delivery_reservation_alignment_pass_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_material_wood_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_material_wood_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_material_stone_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_material_stone_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_material_food_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_material_food_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_site_missing_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_reason_site_missing_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_source_ineligible_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_reason_source_ineligible_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_source_empty_count": int(
+                stats.get("construction_delivery_reservation_alignment_fail_reason_source_empty_count", 0)
+            ),
+            "delivery_commitment_hold_invoked_count": int(stats.get("delivery_commitment_hold_invoked_count", 0)),
+            "delivery_commitment_hold_completed_count": int(stats.get("delivery_commitment_hold_completed_count", 0)),
+            "delivery_commitment_hold_broken_by_survival_count": int(
+                stats.get("delivery_commitment_hold_broken_by_survival_count", 0)
+            ),
+            "delivery_commitment_hold_broken_by_invalid_site_count": int(
+                stats.get("delivery_commitment_hold_broken_by_invalid_site_count", 0)
+            ),
+            "delivery_commitment_hold_broken_by_invalid_source_count": int(
+                stats.get("delivery_commitment_hold_broken_by_invalid_source_count", 0)
+            ),
+            "construction_delivery_invalid_site_missing_site_count": int(
+                stats.get("construction_delivery_invalid_site_missing_site_count", 0)
+            ),
+            "construction_delivery_invalid_site_not_under_construction_count": int(
+                stats.get("construction_delivery_invalid_site_not_under_construction_count", 0)
+            ),
+            "construction_delivery_invalid_site_village_mismatch_count": int(
+                stats.get("construction_delivery_invalid_site_village_mismatch_count", 0)
+            ),
+            "construction_delivery_invalid_site_construction_completed_count": int(
+                stats.get("construction_delivery_invalid_site_construction_completed_count", 0)
+            ),
+            "construction_delivery_invalid_site_no_path_to_site_count": int(
+                stats.get("construction_delivery_invalid_site_no_path_to_site_count", 0)
+            ),
+            "construction_delivery_invalid_site_demand_mismatch_count": int(
+                stats.get("construction_delivery_invalid_site_demand_mismatch_count", 0)
+            ),
+            "construction_delivery_invalid_site_other_count": int(
+                stats.get("construction_delivery_invalid_site_other_count", 0)
+            ),
+            "construction_delivery_invalid_source_no_source_available_count": int(
+                stats.get("construction_delivery_invalid_source_no_source_available_count", 0)
+            ),
+            "construction_delivery_invalid_source_source_depleted_count": int(
+                stats.get("construction_delivery_invalid_source_source_depleted_count", 0)
+            ),
+            "construction_delivery_invalid_source_reservation_invalidated_count": int(
+                stats.get("construction_delivery_invalid_source_reservation_invalidated_count", 0)
+            ),
+            "construction_delivery_invalid_source_source_reassigned_count": int(
+                stats.get("construction_delivery_invalid_source_source_reassigned_count", 0)
+            ),
+            "construction_delivery_invalid_source_linkage_mismatch_count": int(
+                stats.get("construction_delivery_invalid_source_linkage_mismatch_count", 0)
+            ),
+            "construction_delivery_invalid_source_no_path_to_source_count": int(
+                stats.get("construction_delivery_invalid_source_no_path_to_source_count", 0)
+            ),
+            "construction_delivery_invalid_source_other_count": int(
+                stats.get("construction_delivery_invalid_source_other_count", 0)
+            ),
+            "construction_delivery_invalid_site_before_pickup_count": int(
+                stats.get("construction_delivery_invalid_site_before_pickup_count", 0)
+            ),
+            "construction_delivery_invalid_site_after_pickup_count": int(
+                stats.get("construction_delivery_invalid_site_after_pickup_count", 0)
+            ),
+            "construction_delivery_invalid_source_before_pickup_count": int(
+                stats.get("construction_delivery_invalid_source_before_pickup_count", 0)
+            ),
+            "construction_delivery_invalid_source_after_pickup_count": int(
+                stats.get("construction_delivery_invalid_source_after_pickup_count", 0)
+            ),
+            "construction_delivery_ticks_reservation_to_invalid_site_avg": round(
+                float(stats.get("construction_delivery_ticks_reservation_to_invalid_site_total", 0))
+                / float(max(1, int(stats.get("construction_delivery_ticks_reservation_to_invalid_site_samples", 0)))),
+                4,
+            ),
+            "construction_delivery_ticks_reservation_to_invalid_source_avg": round(
+                float(stats.get("construction_delivery_ticks_reservation_to_invalid_source_total", 0))
+                / float(max(1, int(stats.get("construction_delivery_ticks_reservation_to_invalid_source_samples", 0)))),
+                4,
+            ),
+            "construction_delivery_ticks_pickup_to_invalid_site_avg": round(
+                float(stats.get("construction_delivery_ticks_pickup_to_invalid_site_total", 0))
+                / float(max(1, int(stats.get("construction_delivery_ticks_pickup_to_invalid_site_samples", 0)))),
+                4,
+            ),
+            "construction_delivery_ticks_pickup_to_invalid_source_avg": round(
+                float(stats.get("construction_delivery_ticks_pickup_to_invalid_source_total", 0))
+                / float(max(1, int(stats.get("construction_delivery_ticks_pickup_to_invalid_source_samples", 0)))),
+                4,
+            ),
+            "construction_delivery_invalid_site_material_wood_count": int(
+                stats.get("construction_delivery_invalid_site_material_wood_count", 0)
+            ),
+            "construction_delivery_invalid_site_material_stone_count": int(
+                stats.get("construction_delivery_invalid_site_material_stone_count", 0)
+            ),
+            "construction_delivery_invalid_site_material_food_count": int(
+                stats.get("construction_delivery_invalid_site_material_food_count", 0)
+            ),
+            "construction_delivery_invalid_source_material_wood_count": int(
+                stats.get("construction_delivery_invalid_source_material_wood_count", 0)
+            ),
+            "construction_delivery_invalid_source_material_stone_count": int(
+                stats.get("construction_delivery_invalid_source_material_stone_count", 0)
+            ),
+            "construction_delivery_invalid_source_material_food_count": int(
+                stats.get("construction_delivery_invalid_source_material_food_count", 0)
+            ),
+            "construction_delivery_invalid_site_committed_site_mismatch_count": int(
+                stats.get("construction_delivery_invalid_site_committed_site_mismatch_count", 0)
+            ),
+            "construction_delivery_invalid_source_committed_source_missing_count": int(
+                stats.get("construction_delivery_invalid_source_committed_source_missing_count", 0)
+            ),
             "construction_delivery_avg_distance_to_site": round(
                 float(stats.get("construction_delivery_distance_to_site_sum", 0))
                 / float(max(1, int(stats.get("construction_delivery_distance_to_site_samples", 0)))),
@@ -7178,6 +9473,94 @@ class World:
                 / float(max(1, active_age_ticks_samples)),
                 4,
             ),
+            "construction_site_nearest_wood_distance_avg": round(
+                float(stats.get("construction_site_nearest_wood_distance_total", 0))
+                / float(max(1, site_nearest_wood_samples)),
+                4,
+            ),
+            "construction_site_nearest_stone_distance_avg": round(
+                float(stats.get("construction_site_nearest_stone_distance_total", 0))
+                / float(max(1, site_nearest_stone_samples)),
+                4,
+            ),
+            "construction_site_viable_wood_sources_within_radius_avg": round(
+                float(stats.get("construction_site_viable_wood_sources_within_radius_total", 0))
+                / float(max(1, site_viable_wood_samples)),
+                4,
+            ),
+            "construction_site_viable_stone_sources_within_radius_avg": round(
+                float(stats.get("construction_site_viable_stone_sources_within_radius_total", 0))
+                / float(max(1, site_viable_stone_samples)),
+                4,
+            ),
+            "construction_site_zero_wood_sources_within_radius_ticks": int(
+                stats.get("construction_site_zero_wood_sources_within_radius_ticks", 0)
+            ),
+            "construction_site_zero_stone_sources_within_radius_ticks": int(
+                stats.get("construction_site_zero_stone_sources_within_radius_ticks", 0)
+            ),
+            "construction_site_local_wood_source_contention_avg": round(
+                float(stats.get("construction_site_local_wood_source_contention_total", 0.0))
+                / float(max(1, site_local_wood_contention_samples)),
+                4,
+            ),
+            "construction_site_local_stone_source_contention_avg": round(
+                float(stats.get("construction_site_local_stone_source_contention_total", 0.0))
+                / float(max(1, site_local_stone_contention_samples)),
+                4,
+            ),
+            "construction_site_ticks_since_last_delivery_avg": round(
+                float(stats.get("construction_site_ticks_since_last_delivery_total", 0))
+                / float(max(1, site_last_delivery_samples)),
+                4,
+            ),
+            "construction_site_waiting_with_positive_wood_stock_ticks": int(
+                stats.get("construction_site_waiting_with_positive_wood_stock_ticks", 0)
+            ),
+            "construction_site_waiting_with_positive_stone_stock_ticks": int(
+                stats.get("construction_site_waiting_with_positive_stone_stock_ticks", 0)
+            ),
+            "construction_site_first_demand_to_first_delivery_avg": round(
+                float(stats.get("construction_site_first_demand_to_first_delivery_total", 0))
+                / float(max(1, site_first_demand_to_first_delivery_samples)),
+                4,
+            ),
+            "construction_site_material_inflow_rate_avg": round(
+                float(stats.get("construction_site_material_inflow_rate_total", 0.0))
+                / float(max(1, site_material_inflow_samples)),
+                4,
+            ),
+            "construction_site_delivered_wood_units_total_live": int(
+                stats.get("construction_site_delivered_wood_units_total_live", 0)
+            ),
+            "construction_site_delivered_stone_units_total_live": int(
+                stats.get("construction_site_delivered_stone_units_total_live", 0)
+            ),
+            "construction_site_delivered_food_units_total_live": int(
+                stats.get("construction_site_delivered_food_units_total_live", 0)
+            ),
+            "active_builders_count": int(stats.get("active_builders_count", 0)),
+            "active_haulers_count": int(stats.get("active_haulers_count", 0)),
+            "active_builders_nearest_wood_distance_avg": round(
+                float(stats.get("active_builders_nearest_wood_distance_total", 0))
+                / float(max(1, active_builder_wood_samples)),
+                4,
+            ),
+            "active_builders_nearest_stone_distance_avg": round(
+                float(stats.get("active_builders_nearest_stone_distance_total", 0))
+                / float(max(1, active_builder_stone_samples)),
+                4,
+            ),
+            "active_haulers_nearest_wood_distance_avg": round(
+                float(stats.get("active_haulers_nearest_wood_distance_total", 0))
+                / float(max(1, active_hauler_wood_samples)),
+                4,
+            ),
+            "active_haulers_nearest_stone_distance_avg": round(
+                float(stats.get("active_haulers_nearest_stone_distance_total", 0))
+                / float(max(1, active_hauler_stone_samples)),
+                4,
+            ),
             "construction_site_first_builder_arrival_delay_avg": round(
                 float(stats.get("construction_site_first_builder_arrival_delay_total", 0))
                 / float(max(1, site_first_arrival_samples)),
@@ -7264,27 +9647,59 @@ class World:
         production = self.production_metrics if isinstance(self.production_metrics, dict) else _default_world_production_metrics()
         respawn = self.resource_respawn_stats if isinstance(self.resource_respawn_stats, dict) else _default_resource_respawn_stats()
         progression = self.compute_settlement_progression_snapshot()
+        stats = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else {}
+        camp_food = self.camp_food_stats if isinstance(self.camp_food_stats, dict) else {}
+        initial_stock = self.initial_resource_stock if isinstance(getattr(self, "initial_resource_stock", {}), dict) else {}
 
-        wood_on_map = int(len(self.wood))
-        wood_in_agents = int(
-            sum(
-                int(getattr(a, "inventory", {}).get("wood", 0))
-                for a in (self.agents or [])
-                if getattr(a, "alive", False) and isinstance(getattr(a, "inventory", {}), dict)
+        def _resource_stock(resource: str) -> Dict[str, int]:
+            on_map = int(len(getattr(self, resource, set())))
+            in_agents = int(
+                sum(
+                    int(getattr(a, "inventory", {}).get(resource, 0))
+                    for a in (self.agents or [])
+                    if getattr(a, "alive", False) and isinstance(getattr(a, "inventory", {}), dict)
+                )
             )
-        )
-        wood_in_storage = 0
-        wood_in_construction_buffers = 0
+            in_storage = 0
+            in_construction = 0
+            in_camps = 0
+            for b in (self.buildings or {}).values():
+                if not isinstance(b, dict):
+                    continue
+                btype = str(b.get("type", ""))
+                st = b.get("storage", {}) if isinstance(b.get("storage"), dict) else {}
+                if btype == "storage":
+                    in_storage += int(st.get(resource, 0))
+                if btype in {"house", "storage"} and str(b.get("operational_state", "")) == "under_construction":
+                    buf = b.get("construction_buffer", {}) if isinstance(b.get("construction_buffer", {}), dict) else {}
+                    in_construction += int(buf.get(resource, 0))
+            if resource == "food":
+                for camp in (self.camps or {}).values():
+                    if not isinstance(camp, dict):
+                        continue
+                    in_camps += int(camp.get("food_cache", 0))
+            available_world_total = int(on_map + in_agents + in_storage + in_construction + in_camps)
+            return {
+                "on_map": int(on_map),
+                "in_agents": int(in_agents),
+                "in_storage": int(in_storage),
+                "in_construction_buffers": int(in_construction),
+                "in_camps": int(in_camps),
+                "available_world_total": int(available_world_total),
+            }
+
+        wood_stock = _resource_stock("wood")
+        stone_stock = _resource_stock("stone")
+        food_stock = _resource_stock("food")
+
         active_sites = 0
         partial_sites = 0
         stalled_sites = 0
         outstanding_wood_total = 0
+        outstanding_stone_total = 0
         for b in (self.buildings or {}).values():
             if not isinstance(b, dict):
                 continue
-            if str(b.get("type", "")) == "storage":
-                st = b.get("storage", {}) if isinstance(b.get("storage"), dict) else {}
-                wood_in_storage += int(st.get("wood", 0))
             if str(b.get("type", "")) not in {"house", "storage"}:
                 continue
             if str(b.get("operational_state", "")) != "under_construction":
@@ -7296,8 +9711,6 @@ class World:
                 partial_sites += 1
             if int(b.get("builder_waiting_tick", -10_000)) >= int(self.tick) - 24:
                 stalled_sites += 1
-            buf = b.get("construction_buffer", {}) if isinstance(b.get("construction_buffer", {}), dict) else {}
-            wood_in_construction_buffers += int(buf.get("wood", 0))
             if hasattr(building_system, "get_outstanding_construction_needs"):
                 try:
                     needs = building_system.get_outstanding_construction_needs(b)
@@ -7305,6 +9718,7 @@ class World:
                     needs = {}
                 if isinstance(needs, dict):
                     outstanding_wood_total += int(needs.get("wood", 0))
+                    outstanding_stone_total += int(needs.get("stone", 0))
 
         workforce = self.workforce_realization_stats if isinstance(self.workforce_realization_stats, dict) else {}
         by_role_blocks = workforce.get("block_reasons_by_role", {}) if isinstance(workforce.get("block_reasons_by_role", {}), dict) else {}
@@ -7320,27 +9734,141 @@ class World:
         material_delivery_failures = int(delivery_fail_reasons.get("no_resource_available", 0)) + int(
             delivery_fail_reasons.get("no_source_storage", 0)
         )
+        construction_delivery_failure_no_source_available = int(delivery_fail_reasons.get("no_source_storage", 0))
+        construction_delivery_failure_source_depleted = int(delivery_fail_reasons.get("source_depleted", 0)) + int(
+            delivery_fail_reasons.get("no_resource_available", 0)
+        )
+        construction_delivery_failure_reservation_invalidated = int(delivery_fail_reasons.get("reservation_lost", 0))
+        construction_delivery_failure_no_path_to_source = int(delivery_fail_reasons.get("no_path_to_source", 0)) + int(
+            delivery_fail_reasons.get("path_failed", 0)
+        )
+        construction_delivery_failure_no_path_to_site = int(delivery_fail_reasons.get("no_path_to_site", 0)) + int(
+            delivery_fail_reasons.get("site_not_in_range", 0)
+        )
+        construction_delivery_failure_arrival_failed = int(delivery_fail_reasons.get("arrival_failed", 0))
+        construction_delivery_failure_retargeted_before_delivery = int(
+            delivery_fail_reasons.get("retargeted_before_delivery", 0)
+        ) + int(delivery_fail_reasons.get("no_delivery_target", 0))
+        construction_delivery_failure_interrupted_by_other_priority = int(
+            delivery_fail_reasons.get("interrupted_by_other_priority", 0)
+        ) + int(delivery_fail_reasons.get("task_replaced", 0))
+        construction_delivery_failure_unknown = int(delivery_fail_reasons.get("unknown_failure", 0))
 
         houses_completed = int(progression.get("houses_completed_count", 0))
         storage_completed = int(progression.get("storage_completed_count", 0))
         wood_consumed_for_construction_total = int(houses_completed * int(HOUSE_WOOD_COST)) + int(
             storage_completed * int(getattr(building_system, "STORAGE_WOOD_COST", 0))
         )
-        wood_available_world_total = int(wood_on_map + wood_in_agents + wood_in_storage + wood_in_construction_buffers)
+        stone_consumed_for_construction_total = int(houses_completed * int(HOUSE_STONE_COST)) + int(
+            storage_completed * int(getattr(building_system, "STORAGE_STONE_COST", 0))
+        )
+        wood_available_world_total = int(wood_stock.get("available_world_total", 0))
+        stone_available_world_total = int(stone_stock.get("available_world_total", 0))
+        food_available_world_total = int(food_stock.get("available_world_total", 0))
         avg_local_wood_pressure = float(outstanding_wood_total) / float(max(1, wood_available_world_total))
+        avg_local_stone_pressure = float(outstanding_stone_total) / float(max(1, stone_available_world_total))
         wood_shortage_events = int(shortage_blocks + material_delivery_failures)
+        construction_delivery_wood_units = int(stats.get("construction_material_delivery_wood_units", 0))
+        construction_delivery_stone_units = int(stats.get("construction_material_delivery_stone_units", 0))
+        construction_delivery_food_units = int(stats.get("construction_material_delivery_food_units", 0))
+        storage_deposit_food_units = int(stats.get("storage_deposit_food_units", 0))
+        storage_deposit_wood_units = int(stats.get("storage_deposit_wood_units", 0))
+        storage_deposit_stone_units = int(stats.get("storage_deposit_stone_units", 0))
+        food_consumed_total_observed = int(
+            int(camp_food.get("food_consumed_from_inventory", 0))
+            + int(camp_food.get("food_consumed_from_camp", 0))
+            + int(camp_food.get("food_consumed_from_domestic", 0))
+            + int(camp_food.get("food_consumed_from_storage", 0))
+            + int(camp_food.get("food_consumed_from_wild_direct", 0))
+        )
 
         return {
+            "resource_conservation_raw_material_fabrication_detected": 0,
+            "food_initial_world_stock_estimate": int(initial_stock.get("food", 0)),
+            "wood_initial_world_stock_estimate": int(initial_stock.get("wood", 0)),
+            "stone_initial_world_stock_estimate": int(initial_stock.get("stone", 0)),
+            "food_available_world_total": int(food_available_world_total),
+            "food_available_on_map": int(food_stock.get("on_map", 0)),
+            "food_in_agent_inventories": int(food_stock.get("in_agents", 0)),
+            "food_in_storage_buildings": int(food_stock.get("in_storage", 0)),
+            "food_in_camp_buffers": int(food_stock.get("in_camps", 0)),
+            "food_in_construction_buffers": int(food_stock.get("in_construction_buffers", 0)),
+            "food_gathered_total": int(production.get("total_food_gathered", 0)),
+            "food_respawned_total": int(respawn.get("food_respawned_total", 0)),
+            "food_consumed_total_observed": int(food_consumed_total_observed),
+            "food_transported_to_camp_total": int(camp_food.get("camp_food_deposits", 0)),
+            "food_transported_to_storage_total": int(storage_deposit_food_units),
+            "food_transported_to_construction_total": int(construction_delivery_food_units),
+            "food_deposited_total": int(
+                int(camp_food.get("camp_food_deposits", 0))
+                + int(storage_deposit_food_units)
+                + int(construction_delivery_food_units)
+            ),
+            "food_reserve_buffered_total": int(
+                int(food_stock.get("in_storage", 0)) + int(food_stock.get("in_camps", 0))
+            ),
             "wood_available_world_total": int(wood_available_world_total),
-            "wood_available_on_map": int(wood_on_map),
-            "wood_in_agent_inventories": int(wood_in_agents),
-            "wood_in_storage_buildings": int(wood_in_storage),
-            "wood_in_construction_buffers": int(wood_in_construction_buffers),
+            "wood_available_on_map": int(wood_stock.get("on_map", 0)),
+            "wood_in_agent_inventories": int(wood_stock.get("in_agents", 0)),
+            "wood_in_storage_buildings": int(wood_stock.get("in_storage", 0)),
+            "wood_in_construction_buffers": int(wood_stock.get("in_construction_buffers", 0)),
             "wood_gathered_total": int(production.get("total_wood_gathered", 0)),
             "wood_respawned_total": int(respawn.get("wood_respawned_total", 0)),
             "wood_consumed_for_construction_total": int(wood_consumed_for_construction_total),
+            "wood_transported_to_storage_total": int(storage_deposit_wood_units),
+            "wood_transported_to_construction_total": int(construction_delivery_wood_units),
+            "wood_deposited_total": int(storage_deposit_wood_units + construction_delivery_wood_units),
+            "wood_reserve_buffered_total": int(wood_stock.get("in_storage", 0)),
             "wood_shortage_events": int(wood_shortage_events),
             "avg_local_wood_pressure": round(float(avg_local_wood_pressure), 4),
+            "wood_outstanding_construction_demand_units": int(outstanding_wood_total),
+            "wood_supply_demand_gap_units": int(wood_available_world_total - outstanding_wood_total),
+            "wood_respawn_to_extraction_ratio": round(
+                float(respawn.get("wood_respawned_total", 0)) / float(max(1, int(production.get("total_wood_gathered", 0)))),
+                4,
+            ),
+            "wood_extraction_to_initial_stock_ratio": round(
+                float(int(production.get("total_wood_gathered", 0))) / float(max(1, int(initial_stock.get("wood", 0)))),
+                4,
+            ),
+            "stone_available_world_total": int(stone_available_world_total),
+            "stone_available_on_map": int(stone_stock.get("on_map", 0)),
+            "stone_in_agent_inventories": int(stone_stock.get("in_agents", 0)),
+            "stone_in_storage_buildings": int(stone_stock.get("in_storage", 0)),
+            "stone_in_construction_buffers": int(stone_stock.get("in_construction_buffers", 0)),
+            "stone_gathered_total": int(production.get("total_stone_gathered", 0)),
+            "stone_respawned_total": int(respawn.get("stone_respawned_total", 0)),
+            "stone_consumed_for_construction_total": int(stone_consumed_for_construction_total),
+            "stone_transported_to_storage_total": int(storage_deposit_stone_units),
+            "stone_transported_to_construction_total": int(construction_delivery_stone_units),
+            "stone_deposited_total": int(storage_deposit_stone_units + construction_delivery_stone_units),
+            "stone_reserve_buffered_total": int(stone_stock.get("in_storage", 0)),
+            "avg_local_stone_pressure": round(float(avg_local_stone_pressure), 4),
+            "stone_outstanding_construction_demand_units": int(outstanding_stone_total),
+            "stone_supply_demand_gap_units": int(stone_available_world_total - outstanding_stone_total),
+            "stone_respawn_to_extraction_ratio": round(
+                float(respawn.get("stone_respawned_total", 0)) / float(max(1, int(production.get("total_stone_gathered", 0)))),
+                4,
+            ),
+            "stone_extraction_to_initial_stock_ratio": round(
+                float(int(production.get("total_stone_gathered", 0))) / float(max(1, int(initial_stock.get("stone", 0)))),
+                4,
+            ),
+            "material_transport_observed_total": int(
+                int(camp_food.get("camp_food_deposits", 0))
+                + int(storage_deposit_food_units)
+                + int(storage_deposit_wood_units)
+                + int(storage_deposit_stone_units)
+                + int(construction_delivery_wood_units)
+                + int(construction_delivery_stone_units)
+                + int(construction_delivery_food_units)
+            ),
+            "construction_material_delivery_wood_units": int(construction_delivery_wood_units),
+            "construction_material_delivery_stone_units": int(construction_delivery_stone_units),
+            "construction_material_delivery_food_units": int(construction_delivery_food_units),
+            "storage_deposit_food_units": int(storage_deposit_food_units),
+            "storage_deposit_wood_units": int(storage_deposit_wood_units),
+            "storage_deposit_stone_units": int(storage_deposit_stone_units),
             "construction_sites_created": int(progression.get("construction_sites_created", 0)),
             "construction_sites_created_house": int(progression.get("construction_sites_created_house", 0)),
             "construction_sites_created_storage": int(progression.get("construction_sites_created_storage", 0)),
@@ -7361,6 +9889,222 @@ class World:
             "construction_delivery_to_wrong_target_or_drift": int(
                 progression.get("construction_delivery_to_wrong_target_or_drift", 0)
             ),
+            "construction_delivery_source_binding_selected_count": int(
+                progression.get("construction_delivery_source_binding_selected_count", 0)
+            ),
+            "construction_delivery_source_binding_persisted_count": int(
+                progression.get("construction_delivery_source_binding_persisted_count", 0)
+            ),
+            "construction_delivery_source_binding_refreshed_count": int(
+                progression.get("construction_delivery_source_binding_refreshed_count", 0)
+            ),
+            "construction_delivery_source_binding_missing_count": int(
+                progression.get("construction_delivery_source_binding_missing_count", 0)
+            ),
+            "construction_delivery_source_binding_unavailable_count": int(
+                progression.get("construction_delivery_source_binding_unavailable_count", 0)
+            ),
+            "construction_delivery_source_binding_lost_missing_source_count": int(
+                progression.get("construction_delivery_source_binding_lost_missing_source_count", 0)
+            ),
+            "construction_delivery_source_binding_lost_ineligible_source_count": int(
+                progression.get("construction_delivery_source_binding_lost_ineligible_source_count", 0)
+            ),
+            "construction_delivery_source_binding_lost_not_refreshed_count": int(
+                progression.get("construction_delivery_source_binding_lost_not_refreshed_count", 0)
+            ),
+            "construction_delivery_prepickup_checks_count": int(
+                progression.get("construction_delivery_prepickup_checks_count", 0)
+            ),
+            "construction_delivery_prepickup_site_exists_count": int(
+                progression.get("construction_delivery_prepickup_site_exists_count", 0)
+            ),
+            "construction_delivery_prepickup_site_missing_count": int(
+                progression.get("construction_delivery_prepickup_site_missing_count", 0)
+            ),
+            "construction_delivery_prepickup_site_under_construction_count": int(
+                progression.get("construction_delivery_prepickup_site_under_construction_count", 0)
+            ),
+            "construction_delivery_prepickup_site_not_under_construction_count": int(
+                progression.get("construction_delivery_prepickup_site_not_under_construction_count", 0)
+            ),
+            "construction_delivery_prepickup_site_reachable_count": int(
+                progression.get("construction_delivery_prepickup_site_reachable_count", 0)
+            ),
+            "construction_delivery_prepickup_site_unreachable_count": int(
+                progression.get("construction_delivery_prepickup_site_unreachable_count", 0)
+            ),
+            "construction_delivery_prepickup_site_demand_matches_material_count": int(
+                progression.get("construction_delivery_prepickup_site_demand_matches_material_count", 0)
+            ),
+            "construction_delivery_prepickup_site_demand_mismatch_material_count": int(
+                progression.get("construction_delivery_prepickup_site_demand_mismatch_material_count", 0)
+            ),
+            "construction_delivery_source_persistence_window_invoked_count": int(
+                progression.get("construction_delivery_source_persistence_window_invoked_count", 0)
+            ),
+            "construction_delivery_source_persistence_window_completed_count": int(
+                progression.get("construction_delivery_source_persistence_window_completed_count", 0)
+            ),
+            "construction_delivery_source_persistence_window_broken_by_source_invalidity_count": int(
+                progression.get("construction_delivery_source_persistence_window_broken_by_source_invalidity_count", 0)
+            ),
+            "construction_delivery_source_persistence_window_broken_by_demand_mismatch_count": int(
+                progression.get("construction_delivery_source_persistence_window_broken_by_demand_mismatch_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_pass_count": int(
+                progression.get("construction_delivery_reservation_alignment_pass_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_material_wood_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_material_wood_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_material_stone_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_material_stone_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_material_food_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_material_food_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_site_missing_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_reason_site_missing_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_reason_site_not_under_construction_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_reason_reservation_invalid_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_source_ineligible_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_reason_source_ineligible_count", 0)
+            ),
+            "construction_delivery_reservation_alignment_fail_reason_source_empty_count": int(
+                progression.get("construction_delivery_reservation_alignment_fail_reason_source_empty_count", 0)
+            ),
+            "delivery_commitment_hold_invoked_count": int(
+                progression.get("delivery_commitment_hold_invoked_count", 0)
+            ),
+            "delivery_commitment_hold_completed_count": int(
+                progression.get("delivery_commitment_hold_completed_count", 0)
+            ),
+            "delivery_commitment_hold_broken_by_survival_count": int(
+                progression.get("delivery_commitment_hold_broken_by_survival_count", 0)
+            ),
+            "delivery_commitment_hold_broken_by_invalid_site_count": int(
+                progression.get("delivery_commitment_hold_broken_by_invalid_site_count", 0)
+            ),
+            "delivery_commitment_hold_broken_by_invalid_source_count": int(
+                progression.get("delivery_commitment_hold_broken_by_invalid_source_count", 0)
+            ),
+            "construction_delivery_invalid_site_missing_site_count": int(
+                progression.get("construction_delivery_invalid_site_missing_site_count", 0)
+            ),
+            "construction_delivery_invalid_site_not_under_construction_count": int(
+                progression.get("construction_delivery_invalid_site_not_under_construction_count", 0)
+            ),
+            "construction_delivery_invalid_site_village_mismatch_count": int(
+                progression.get("construction_delivery_invalid_site_village_mismatch_count", 0)
+            ),
+            "construction_delivery_invalid_site_construction_completed_count": int(
+                progression.get("construction_delivery_invalid_site_construction_completed_count", 0)
+            ),
+            "construction_delivery_invalid_site_no_path_to_site_count": int(
+                progression.get("construction_delivery_invalid_site_no_path_to_site_count", 0)
+            ),
+            "construction_delivery_invalid_site_demand_mismatch_count": int(
+                progression.get("construction_delivery_invalid_site_demand_mismatch_count", 0)
+            ),
+            "construction_delivery_invalid_site_other_count": int(
+                progression.get("construction_delivery_invalid_site_other_count", 0)
+            ),
+            "construction_delivery_invalid_source_no_source_available_count": int(
+                progression.get("construction_delivery_invalid_source_no_source_available_count", 0)
+            ),
+            "construction_delivery_invalid_source_source_depleted_count": int(
+                progression.get("construction_delivery_invalid_source_source_depleted_count", 0)
+            ),
+            "construction_delivery_invalid_source_reservation_invalidated_count": int(
+                progression.get("construction_delivery_invalid_source_reservation_invalidated_count", 0)
+            ),
+            "construction_delivery_invalid_source_source_reassigned_count": int(
+                progression.get("construction_delivery_invalid_source_source_reassigned_count", 0)
+            ),
+            "construction_delivery_invalid_source_linkage_mismatch_count": int(
+                progression.get("construction_delivery_invalid_source_linkage_mismatch_count", 0)
+            ),
+            "construction_delivery_invalid_source_no_path_to_source_count": int(
+                progression.get("construction_delivery_invalid_source_no_path_to_source_count", 0)
+            ),
+            "construction_delivery_invalid_source_other_count": int(
+                progression.get("construction_delivery_invalid_source_other_count", 0)
+            ),
+            "construction_delivery_invalid_site_before_pickup_count": int(
+                progression.get("construction_delivery_invalid_site_before_pickup_count", 0)
+            ),
+            "construction_delivery_invalid_site_after_pickup_count": int(
+                progression.get("construction_delivery_invalid_site_after_pickup_count", 0)
+            ),
+            "construction_delivery_invalid_source_before_pickup_count": int(
+                progression.get("construction_delivery_invalid_source_before_pickup_count", 0)
+            ),
+            "construction_delivery_invalid_source_after_pickup_count": int(
+                progression.get("construction_delivery_invalid_source_after_pickup_count", 0)
+            ),
+            "construction_delivery_ticks_reservation_to_invalid_site_avg": float(
+                progression.get("construction_delivery_ticks_reservation_to_invalid_site_avg", 0.0)
+            ),
+            "construction_delivery_ticks_reservation_to_invalid_source_avg": float(
+                progression.get("construction_delivery_ticks_reservation_to_invalid_source_avg", 0.0)
+            ),
+            "construction_delivery_ticks_pickup_to_invalid_site_avg": float(
+                progression.get("construction_delivery_ticks_pickup_to_invalid_site_avg", 0.0)
+            ),
+            "construction_delivery_ticks_pickup_to_invalid_source_avg": float(
+                progression.get("construction_delivery_ticks_pickup_to_invalid_source_avg", 0.0)
+            ),
+            "construction_delivery_invalid_site_material_wood_count": int(
+                progression.get("construction_delivery_invalid_site_material_wood_count", 0)
+            ),
+            "construction_delivery_invalid_site_material_stone_count": int(
+                progression.get("construction_delivery_invalid_site_material_stone_count", 0)
+            ),
+            "construction_delivery_invalid_site_material_food_count": int(
+                progression.get("construction_delivery_invalid_site_material_food_count", 0)
+            ),
+            "construction_delivery_invalid_source_material_wood_count": int(
+                progression.get("construction_delivery_invalid_source_material_wood_count", 0)
+            ),
+            "construction_delivery_invalid_source_material_stone_count": int(
+                progression.get("construction_delivery_invalid_source_material_stone_count", 0)
+            ),
+            "construction_delivery_invalid_source_material_food_count": int(
+                progression.get("construction_delivery_invalid_source_material_food_count", 0)
+            ),
+            "construction_delivery_invalid_site_committed_site_mismatch_count": int(
+                progression.get("construction_delivery_invalid_site_committed_site_mismatch_count", 0)
+            ),
+            "construction_delivery_invalid_source_committed_source_missing_count": int(
+                progression.get("construction_delivery_invalid_source_committed_source_missing_count", 0)
+            ),
+            "construction_delivery_failure_no_source_available": int(construction_delivery_failure_no_source_available),
+            "construction_delivery_failure_source_depleted": int(construction_delivery_failure_source_depleted),
+            "construction_delivery_failure_reservation_invalidated": int(
+                construction_delivery_failure_reservation_invalidated
+            ),
+            "construction_delivery_failure_no_path_to_source": int(construction_delivery_failure_no_path_to_source),
+            "construction_delivery_failure_no_path_to_site": int(construction_delivery_failure_no_path_to_site),
+            "construction_delivery_failure_arrival_failed": int(construction_delivery_failure_arrival_failed),
+            "construction_delivery_failure_retargeted_before_delivery": int(
+                construction_delivery_failure_retargeted_before_delivery
+            ),
+            "construction_delivery_failure_interrupted_by_other_priority": int(
+                construction_delivery_failure_interrupted_by_other_priority
+            ),
+            "construction_delivery_failure_unknown": int(construction_delivery_failure_unknown),
             "construction_delivery_avg_distance_to_site": float(
                 progression.get("construction_delivery_avg_distance_to_site", 0.0)
             ),
@@ -7505,6 +10249,68 @@ class World:
             ),
             "construction_site_active_age_ticks_avg": float(
                 progression.get("construction_site_active_age_ticks_avg", 0.0)
+            ),
+            "construction_site_nearest_wood_distance_avg": float(
+                progression.get("construction_site_nearest_wood_distance_avg", 0.0)
+            ),
+            "construction_site_nearest_stone_distance_avg": float(
+                progression.get("construction_site_nearest_stone_distance_avg", 0.0)
+            ),
+            "construction_site_viable_wood_sources_within_radius_avg": float(
+                progression.get("construction_site_viable_wood_sources_within_radius_avg", 0.0)
+            ),
+            "construction_site_viable_stone_sources_within_radius_avg": float(
+                progression.get("construction_site_viable_stone_sources_within_radius_avg", 0.0)
+            ),
+            "construction_site_zero_wood_sources_within_radius_ticks": int(
+                progression.get("construction_site_zero_wood_sources_within_radius_ticks", 0)
+            ),
+            "construction_site_zero_stone_sources_within_radius_ticks": int(
+                progression.get("construction_site_zero_stone_sources_within_radius_ticks", 0)
+            ),
+            "construction_site_local_wood_source_contention_avg": float(
+                progression.get("construction_site_local_wood_source_contention_avg", 0.0)
+            ),
+            "construction_site_local_stone_source_contention_avg": float(
+                progression.get("construction_site_local_stone_source_contention_avg", 0.0)
+            ),
+            "construction_site_ticks_since_last_delivery_avg": float(
+                progression.get("construction_site_ticks_since_last_delivery_avg", 0.0)
+            ),
+            "construction_site_waiting_with_positive_wood_stock_ticks": int(
+                progression.get("construction_site_waiting_with_positive_wood_stock_ticks", 0)
+            ),
+            "construction_site_waiting_with_positive_stone_stock_ticks": int(
+                progression.get("construction_site_waiting_with_positive_stone_stock_ticks", 0)
+            ),
+            "construction_site_first_demand_to_first_delivery_avg": float(
+                progression.get("construction_site_first_demand_to_first_delivery_avg", 0.0)
+            ),
+            "construction_site_material_inflow_rate_avg": float(
+                progression.get("construction_site_material_inflow_rate_avg", 0.0)
+            ),
+            "construction_site_delivered_wood_units_total_live": int(
+                progression.get("construction_site_delivered_wood_units_total_live", 0)
+            ),
+            "construction_site_delivered_stone_units_total_live": int(
+                progression.get("construction_site_delivered_stone_units_total_live", 0)
+            ),
+            "construction_site_delivered_food_units_total_live": int(
+                progression.get("construction_site_delivered_food_units_total_live", 0)
+            ),
+            "active_builders_count": int(progression.get("active_builders_count", 0)),
+            "active_haulers_count": int(progression.get("active_haulers_count", 0)),
+            "active_builders_nearest_wood_distance_avg": float(
+                progression.get("active_builders_nearest_wood_distance_avg", 0.0)
+            ),
+            "active_builders_nearest_stone_distance_avg": float(
+                progression.get("active_builders_nearest_stone_distance_avg", 0.0)
+            ),
+            "active_haulers_nearest_wood_distance_avg": float(
+                progression.get("active_haulers_nearest_wood_distance_avg", 0.0)
+            ),
+            "active_haulers_nearest_stone_distance_avg": float(
+                progression.get("active_haulers_nearest_stone_distance_avg", 0.0)
             ),
             "construction_site_first_builder_arrival_delay_avg": float(
                 progression.get("construction_site_first_builder_arrival_delay_avg", 0.0)
@@ -8472,6 +11278,15 @@ class World:
         reason_key = str(reason or "unknown").strip().lower()
         if reason_key == "hunger":
             progression["population_deaths_hunger_count"] = int(progression.get("population_deaths_hunger_count", 0)) + 1
+            reserve_available = int(self.current_total_food_in_reserves()) > 0
+            if reserve_available:
+                progression["hunger_deaths_with_reserve_available"] = int(
+                    progression.get("hunger_deaths_with_reserve_available", 0)
+                ) + 1
+            else:
+                progression["hunger_deaths_without_reserve"] = int(
+                    progression.get("hunger_deaths_without_reserve", 0)
+                ) + 1
             first_food_relief_tick = int(getattr(agent, "first_food_relief_tick", -1))
             if first_food_relief_tick < 0:
                 progression["hunger_deaths_before_first_food_acquisition"] = int(
@@ -9204,9 +12019,100 @@ class World:
             if hasattr(self, "record_settlement_progression_metric"):
                 self.record_settlement_progression_metric("food_source_depletion_events")
                 self.record_settlement_progression_metric("food_harvest_ticks_total")
+            if bool(getattr(agent, "foraging_trip_active", False)):
+                first_harvest_tick = int(getattr(agent, "foraging_trip_first_harvest_tick", -1))
+                if first_harvest_tick < 0:
+                    move_ticks_before = int(getattr(agent, "foraging_trip_move_ticks", 0))
+                    if hasattr(self, "record_settlement_progression_metric"):
+                        self.record_settlement_progression_metric("foraging_trip_move_before_first_harvest_total", move_ticks_before)
+                        self.record_settlement_progression_metric("foraging_trip_move_before_first_harvest_samples")
+                    setattr(agent, "foraging_trip_first_harvest_tick", int(getattr(self, "tick", 0)))
+                    regime = str(getattr(agent, "foraging_pressure_regime", "medium"))
+                    exploit_ticks = 0
+                    exploit_harvest_actions = 0
+                    if regime == "high":
+                        exploit_ticks = 18
+                        exploit_harvest_actions = 5
+                    elif regime == "medium":
+                        exploit_ticks = 12
+                        exploit_harvest_actions = 4
+                    elif regime == "low":
+                        exploit_ticks = 6
+                        exploit_harvest_actions = 2
+                    if exploit_ticks > 0 and exploit_harvest_actions > 0:
+                        setattr(agent, "foraging_patch_exploit_until_tick", int(getattr(self, "tick", 0)) + int(exploit_ticks))
+                        setattr(agent, "foraging_patch_exploit_target_harvest_actions", int(exploit_harvest_actions))
+                        setattr(agent, "foraging_patch_exploit_anchor", (int(agent.x), int(agent.y)))
             if agent.inventory_space() > 0:
                 agent.inventory["food"] = agent.inventory.get("food", 0) + 1
                 self.record_agent_food_inventory_acquired(agent, amount=1, source="wild_direct")
+            if bool(getattr(agent, "foraging_trip_active", False)):
+                setattr(agent, "foraging_trip_harvest_units", int(getattr(agent, "foraging_trip_harvest_units", 0)) + 1)
+                setattr(agent, "foraging_trip_harvest_actions", int(getattr(agent, "foraging_trip_harvest_actions", 0)) + 1)
+                last_pos = getattr(agent, "foraging_trip_last_harvest_pos", None)
+                current_pos = (int(agent.x), int(agent.y))
+                if isinstance(last_pos, tuple) and len(last_pos) == 2 and (int(last_pos[0]), int(last_pos[1])) == current_pos:
+                    streak = int(getattr(agent, "foraging_trip_current_consecutive_harvest_actions", 0)) + 1
+                else:
+                    streak = 1
+                setattr(agent, "foraging_trip_last_harvest_pos", current_pos)
+                setattr(agent, "foraging_trip_current_consecutive_harvest_actions", int(streak))
+                setattr(
+                    agent,
+                    "foraging_trip_max_consecutive_harvest_actions",
+                    max(int(getattr(agent, "foraging_trip_max_consecutive_harvest_actions", 0)), int(streak)),
+                )
+                if int(getattr(agent, "foraging_patch_exploit_target_harvest_actions", 0)) > 0:
+                    current_tick = int(getattr(self, "tick", 0))
+                    current_until = int(getattr(agent, "foraging_patch_exploit_until_tick", -1))
+                    setattr(agent, "foraging_patch_exploit_until_tick", max(current_until, current_tick + 4))
+            bonus_food = 0
+            if str(getattr(agent, "task", "")) == "gather_food_wild" and self._is_in_food_patch(int(agent.x), int(agent.y)):
+                nearby_foragers = 0
+                for other in self.agents:
+                    if not getattr(other, "alive", False):
+                        continue
+                    if str(getattr(other, "agent_id", "")) == str(getattr(agent, "agent_id", "")):
+                        continue
+                    if str(getattr(other, "task", "")) not in {"gather_food_wild", "farm_cycle"}:
+                        continue
+                    if abs(int(getattr(other, "x", 0)) - int(agent.x)) + abs(int(getattr(other, "y", 0)) - int(agent.y)) <= 2:
+                        nearby_foragers += 1
+                if nearby_foragers <= 1 and random.random() < 0.10:
+                    bonus_food = 1
+            if bonus_food > 0 and int(getattr(agent, "inventory_space", lambda: 0)()) > 0:
+                agent.inventory["food"] = int(agent.inventory.get("food", 0)) + int(bonus_food)
+                self.record_agent_food_inventory_acquired(agent, amount=int(bonus_food), source="wild_bonus")
+                if bool(getattr(agent, "foraging_trip_active", False)):
+                    setattr(
+                        agent,
+                        "foraging_trip_harvest_units",
+                        int(getattr(agent, "foraging_trip_harvest_units", 0)) + int(bonus_food),
+                    )
+                    setattr(
+                        agent,
+                        "foraging_trip_harvest_actions",
+                        int(getattr(agent, "foraging_trip_harvest_actions", 0)) + 1,
+                    )
+                    last_pos = getattr(agent, "foraging_trip_last_harvest_pos", None)
+                    current_pos = (int(agent.x), int(agent.y))
+                    if isinstance(last_pos, tuple) and len(last_pos) == 2 and (int(last_pos[0]), int(last_pos[1])) == current_pos:
+                        streak = int(getattr(agent, "foraging_trip_current_consecutive_harvest_actions", 0)) + 1
+                    else:
+                        streak = 1
+                    setattr(agent, "foraging_trip_last_harvest_pos", current_pos)
+                    setattr(agent, "foraging_trip_current_consecutive_harvest_actions", int(streak))
+                    setattr(
+                        agent,
+                        "foraging_trip_max_consecutive_harvest_actions",
+                        max(int(getattr(agent, "foraging_trip_max_consecutive_harvest_actions", 0)), int(streak)),
+                    )
+                    if int(getattr(agent, "foraging_patch_exploit_target_harvest_actions", 0)) > 0:
+                        current_tick = int(getattr(self, "tick", 0))
+                        current_until = int(getattr(agent, "foraging_patch_exploit_until_tick", -1))
+                        setattr(agent, "foraging_patch_exploit_until_tick", max(current_until, current_tick + 4))
+                if hasattr(self, "record_settlement_progression_metric"):
+                    self.record_settlement_progression_metric("foraging_bonus_yield_units_total", int(bonus_food))
             agent.hunger += FOOD_EAT_GAIN
             if agent.hunger > 100:
                 agent.hunger = 100
@@ -9415,6 +12321,7 @@ class World:
         self.agents = [a for a in self.agents if a.alive]
         self.record_movement_congestion_snapshot()
         self.update_proto_communities_and_camps()
+        self.run_local_food_handoff_pass()
 
         if len(self.agents) > MAX_AGENTS:
             extra = len(self.agents) - MAX_AGENTS

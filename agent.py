@@ -55,6 +55,30 @@ EAT_TRIGGER_BASE_THRESHOLD = 50
 CONSTRUCTION_SITE_STICKINESS_TICKS = 18
 CONSTRUCTION_SITE_RECENT_ACTIVITY_TICKS = 40
 CONSTRUCTION_SITE_JUST_WORKED_GRACE_TICKS = 8
+FORAGING_TARGET_LOCK_TICKS = 6
+FORAGING_PRESSURE_HYSTERESIS = {
+    "high": {"stay_high_min_ratio": 1.15, "drop_to_low_ratio": 0.72},
+    "low": {"stay_low_max_ratio": 0.90, "rise_to_high_min_ratio": 1.45},
+    "medium": {"rise_to_high_min_ratio": 1.45, "drop_to_low_ratio": 0.72},
+}
+FORAGING_POST_HARVEST_CONTINUE_TASKS = {
+    "food_logistics",
+    "village_logistics",
+    "build_house",
+    "build_storage",
+    "gather_materials",
+    "farm_cycle",
+}
+# These tasks can be useful for social continuity, so guards against them must stay narrow.
+FORAGING_POST_HARVEST_REDIRECT_TASKS = {
+    "camp_supply_food",
+    "bootstrap_gather",
+    "bootstrap_build_house",
+}
+POST_FIRST_HARVEST_RECENT_TICKS = 5
+POST_FIRST_HARVEST_NEARBY_FOOD_DISTANCE = 2
+POST_FIRST_HARVEST_LOW_HARVEST_ACTIONS = 2
+POST_FIRST_HARVEST_NON_CRITICAL_HUNGER = 24.0
 
 
 @dataclass
@@ -149,6 +173,24 @@ class Agent:
     first_food_relief_tick: int = -1
     high_hunger_enter_tick: int = -1
     high_hunger_episode_count: int = 0
+    foraging_trip_active: bool = False
+    foraging_trip_start_tick: int = -1
+    foraging_trip_move_ticks: int = 0
+    foraging_trip_harvest_units: int = 0
+    foraging_trip_harvest_actions: int = 0
+    foraging_trip_retarget_count: int = 0
+    foraging_trip_first_harvest_tick: int = -1
+    foraging_trip_target: Optional[Tuple[int, int]] = None
+    foraging_target_lock_until_tick: int = -1
+    foraging_target_set_tick: int = -1
+    foraging_trip_last_harvest_pos: Optional[Tuple[int, int]] = None
+    foraging_trip_current_consecutive_harvest_actions: int = 0
+    foraging_trip_max_consecutive_harvest_actions: int = 0
+    foraging_pressure_regime: str = "medium"
+    foraging_pressure_ratio: float = 0.0
+    foraging_patch_exploit_until_tick: int = -1
+    foraging_patch_exploit_target_harvest_actions: int = 0
+    foraging_patch_exploit_anchor: Optional[Tuple[int, int]] = None
     self_model: Dict[str, Any] = field(default_factory=dict)
     proto_traits: Dict[str, Any] = field(default_factory=dict)
     cognitive_profile: Dict[str, Any] = field(default_factory=dict)
@@ -444,6 +486,195 @@ class Agent:
         )
         return True
 
+    def _resolve_foraging_pressure_regime(
+        self, pressure_payload: Dict[str, Any], previous_regime: str
+    ) -> Tuple[str, float]:
+        ratio = 0.0
+        if isinstance(pressure_payload, dict):
+            supply = max(
+                1,
+                int(pressure_payload.get("near_food_sources", 0))
+                + int(pressure_payload.get("camp_food", 0))
+                + int(pressure_payload.get("house_food_nearby", 0)),
+            )
+            ratio = float(max(0, int(pressure_payload.get("nearby_needy_agents", 0)))) / float(supply)
+            pressure_active = bool(pressure_payload.get("pressure_active", False))
+        else:
+            pressure_active = False
+        prev = str(previous_regime or "medium")
+        if prev == "high":
+            if pressure_active and ratio >= float(FORAGING_PRESSURE_HYSTERESIS["high"]["stay_high_min_ratio"]):
+                return "high", ratio
+            if ratio < float(FORAGING_PRESSURE_HYSTERESIS["high"]["drop_to_low_ratio"]):
+                return "low", ratio
+            return "medium", ratio
+        if prev == "low":
+            if ratio <= float(FORAGING_PRESSURE_HYSTERESIS["low"]["stay_low_max_ratio"]):
+                return "low", ratio
+            if pressure_active and ratio >= float(FORAGING_PRESSURE_HYSTERESIS["low"]["rise_to_high_min_ratio"]):
+                return "high", ratio
+            return "medium", ratio
+        if pressure_active and ratio >= float(FORAGING_PRESSURE_HYSTERESIS["medium"]["rise_to_high_min_ratio"]):
+            return "high", ratio
+        if ratio < float(FORAGING_PRESSURE_HYSTERESIS["medium"]["drop_to_low_ratio"]):
+            return "low", ratio
+        return "medium", ratio
+
+    def _post_first_harvest_switch_context(
+        self,
+        world: "World",
+        *,
+        new_task: str,
+        tick_now: int,
+    ) -> Dict[str, Any]:
+        first_harvest_tick_local = int(getattr(self, "foraging_trip_first_harvest_tick", -1))
+        ticks_since_first = max(0, tick_now - first_harvest_tick_local) if first_harvest_tick_local >= 0 else -1
+        exploit_until_local = int(getattr(self, "foraging_patch_exploit_until_tick", -1))
+        exploit_target_local = int(getattr(self, "foraging_patch_exploit_target_harvest_actions", 0))
+        within_exploit = bool(
+            exploit_until_local >= tick_now
+            and exploit_target_local > 0
+            and int(getattr(self, "foraging_trip_harvest_actions", 0)) < exploit_target_local
+        )
+        commitment_active_local = bool(
+            within_exploit
+            or str(getattr(self, "primary_commitment_type", "none")) != "none"
+        )
+        target_valid_local = False
+        task_target = getattr(self, "task_target", None)
+        if isinstance(task_target, tuple) and len(task_target) == 2:
+            target_valid_local = tuple((int(task_target[0]), int(task_target[1]))) in getattr(world, "food", set())
+        local_food_available_local = 0
+        nearest_food_distance_local = -1
+        if hasattr(world, "compute_local_food_pressure_for_agent"):
+            try:
+                p = world.compute_local_food_pressure_for_agent(self, max_distance=10)
+            except Exception:
+                p = {}
+            if isinstance(p, dict):
+                local_food_available_local = int(p.get("near_food_sources", 0))
+        if hasattr(world, "_find_nearest_food_to"):
+            try:
+                nf = world._find_nearest_food_to(int(self.x), int(self.y), radius=10)
+            except Exception:
+                nf = None
+            if isinstance(nf, tuple) and len(nf) == 2:
+                nearest_food_distance_local = abs(int(self.x) - int(nf[0])) + abs(int(self.y) - int(nf[1]))
+        source_subsystem_local = "unknown"
+        nt = str(new_task or "")
+        if nt in {"eat_food", "rest", "survive"} or float(getattr(self, "hunger", 100.0)) < 18.0:
+            source_subsystem_local = "survival_override"
+        elif nt in {"idle", "wander"}:
+            source_subsystem_local = "wander_fallback"
+        elif nt == "gather_materials" and int(getattr(self, "inventory", {}).get("food", 0)) <= 2:
+            source_subsystem_local = "inventory_logic"
+        elif (not target_valid_local) and local_food_available_local <= 0:
+            source_subsystem_local = "target_invalidated"
+        elif nt and nt != "gather_food_wild":
+            source_subsystem_local = "role_task_update"
+        return {
+            "source_subsystem": source_subsystem_local,
+            "ticks_since_first_harvest": ticks_since_first,
+            "within_exploitation_window": within_exploit,
+            "commitment_active": commitment_active_local,
+            "target_valid": bool(target_valid_local),
+            "local_food_available": int(local_food_available_local),
+            "nearest_food_distance": int(nearest_food_distance_local),
+        }
+
+    def _reserve_vs_group_tiebreak_decision(
+        self,
+        world: "World",
+        pressure_payload: Dict[str, Any],
+    ) -> Tuple[bool, str]:
+        """
+        Narrow final tie-break: allow reserve accumulation only when non-emergency
+        post-policy conditions are already satisfied.
+        Returns (reserve_wins, reason_code).
+        """
+        pressure = pressure_payload if isinstance(pressure_payload, dict) else {}
+        camp_food = int(pressure.get("camp_food", 0))
+        house_food = int(pressure.get("house_food_nearby", 0))
+        near_food = int(pressure.get("near_food_sources", 0))
+        needy = int(pressure.get("nearby_needy_agents", 0))
+        pressure_score = int(pressure.get("pressure_score", 0))
+        pressure_active = bool(pressure.get("pressure_active", False))
+        unmet_pressure = bool(pressure.get("unmet_pressure", False))
+
+        supply = max(0, camp_food + house_food + near_food)
+        has_local_surplus = bool(supply >= max(2, needy + 1))
+        if not has_local_surplus:
+            return False, "blocked_no_surplus"
+
+        stable_context = bool(
+            str(getattr(self, "village_affiliation_status", "")) in {"attached", "resident"}
+            or isinstance(world.nearest_active_camp_for_agent(self, max_distance=2), dict)
+        )
+        if not stable_context:
+            return False, "blocked_unstable_context"
+
+        regime, _ratio = self._resolve_foraging_pressure_regime(
+            pressure,
+            str(getattr(self, "foraging_pressure_regime", "medium") or "medium"),
+        )
+        reserve_total_now = 0
+        if hasattr(world, "current_total_food_in_reserves"):
+            try:
+                reserve_total_now = int(world.current_total_food_in_reserves())
+            except Exception:
+                reserve_total_now = 0
+        if regime in {"low", "medium"} and reserve_total_now <= 0:
+            refill_recovery_possible = bool(
+                supply >= max(3, needy + 1)
+                and near_food >= 2
+                and (camp_food + house_food) <= 1
+                and needy <= 1
+                and pressure_score <= 3
+                and not unmet_pressure
+            )
+            if refill_recovery_possible:
+                return True, "won"
+        # FOOD-SECURITY-009:
+        # In non-high pressure, require stronger local coverage before reserve wins.
+        # This protects group-feeding continuity in low/reduced-pressure contexts.
+        if regime in {"low", "medium"} and pressure_score <= 3:
+            buffered_food = max(0, camp_food + house_food)
+            strong_surplus = bool(supply >= max(4, needy + 2))
+            if buffered_food < 3 or (not strong_surplus) or needy > 0:
+                return False, "blocked_no_surplus"
+
+        critical_group_need = bool(needy > 0 and (camp_food + house_food) <= 1)
+        pressure_emergency = bool(
+            regime == "high"
+            or unmet_pressure
+            or pressure_score >= 5
+            or critical_group_need
+        )
+        if pressure_emergency:
+            return False, "blocked_pressure"
+
+        return True, "won"
+
+    def _should_block_narrow_post_harvest_redirect(self, switch_context: Dict[str, Any]) -> bool:
+        ticks_since_first = int(switch_context.get("ticks_since_first_harvest", -1))
+        nearest_food_distance = int(switch_context.get("nearest_food_distance", -1))
+        local_food_available = int(switch_context.get("local_food_available", 0))
+        target_valid = bool(switch_context.get("target_valid", False))
+        recent_first_harvest = 0 <= ticks_since_first <= int(POST_FIRST_HARVEST_RECENT_TICKS)
+        nearby_continuation = 0 <= nearest_food_distance <= int(POST_FIRST_HARVEST_NEARBY_FOOD_DISTANCE)
+        patch_viable = bool(target_valid or local_food_available > 0)
+        low_trip_harvest = int(getattr(self, "foraging_trip_harvest_actions", 0)) <= int(POST_FIRST_HARVEST_LOW_HARVEST_ACTIONS)
+        non_critical_survival = float(getattr(self, "hunger", 100.0)) >= float(POST_FIRST_HARVEST_NON_CRITICAL_HUNGER)
+        role_update_source = str(switch_context.get("source_subsystem", "unknown")) == "role_task_update"
+        return bool(
+            role_update_source
+            and recent_first_harvest
+            and nearby_continuation
+            and patch_viable
+            and low_trip_harvest
+            and non_critical_survival
+        )
+
     def _is_house_claimably_active(self, building: Dict[str, Any]) -> bool:
         state = str(building.get("operational_state", "") or "")
         if state == "active":
@@ -704,6 +935,7 @@ class Agent:
                     nearest_food = None
             if isinstance(nearest_food, tuple) and len(nearest_food) == 2:
                 self.task_target = (int(nearest_food[0]), int(nearest_food[1]))
+                self.foraging_target_set_tick = int(tick_now)
             if hasattr(world, "record_settlement_progression_metric"):
                 world.record_settlement_progression_metric("early_food_priority_overrides")
             return
@@ -756,7 +988,25 @@ class Agent:
                 if int(self.inventory.get("food", 0)) > 0 and (
                     pressure_active or int(local_food_pressure.get("camp_food", 0) if isinstance(local_food_pressure, dict) else 0) <= 2
                 ):
-                    self.task = "camp_supply_food"
+                    tiebreak_invoked = bool(isinstance(local_food_pressure, dict) and pressure_active)
+                    if tiebreak_invoked and hasattr(world, "record_settlement_progression_metric"):
+                        world.record_settlement_progression_metric("reserve_final_tiebreak_invoked_count")
+                    reserve_win = False
+                    reserve_reason = "blocked_pressure"
+                    if tiebreak_invoked:
+                        reserve_win, reserve_reason = self._reserve_vs_group_tiebreak_decision(world, local_food_pressure)
+                        if hasattr(world, "record_settlement_progression_metric"):
+                            if reserve_win:
+                                world.record_settlement_progression_metric("reserve_final_tiebreak_won_count")
+                            else:
+                                world.record_settlement_progression_metric("reserve_final_tiebreak_lost_count")
+                                if reserve_reason == "blocked_pressure":
+                                    world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_pressure_count")
+                                elif reserve_reason == "blocked_unstable_context":
+                                    world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_unstable_context_count")
+                                elif reserve_reason == "blocked_no_surplus":
+                                    world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_no_surplus_count")
+                    self.task = "food_logistics" if reserve_win else "camp_supply_food"
                     loop_bonus = 0
                     density_state = self.subjective_state.get("social_density", {}) if isinstance(self.subjective_state, dict) else {}
                     nearby_familiar = int(density_state.get("familiar_nearby_agents_count", 0))
@@ -772,7 +1022,7 @@ class Agent:
                     self.camp_loop_commit_until_tick = tick_now + int(LOCAL_LOOP_COMMITMENT_TICKS) + int(loop_bonus)
                     if len(drop_pos) == 2:
                         self.task_target = (int(drop_pos[0]), int(drop_pos[1]))
-                    if pressure_active and hasattr(world, "record_pressure_backed_loop_selected"):
+                    if pressure_active and not reserve_win and hasattr(world, "record_pressure_backed_loop_selected"):
                         world.record_pressure_backed_loop_selected()
                 else:
                     self.task = "gather_food_wild"
@@ -781,7 +1031,25 @@ class Agent:
                 return
             if proto_spec == "food_hauler":
                 if pressure_active or int(self.inventory.get("food", 0)) > 0:
-                    self.task = "camp_supply_food"
+                    tiebreak_invoked = bool(isinstance(local_food_pressure, dict) and pressure_active and int(self.inventory.get("food", 0)) > 0)
+                    if tiebreak_invoked and hasattr(world, "record_settlement_progression_metric"):
+                        world.record_settlement_progression_metric("reserve_final_tiebreak_invoked_count")
+                    reserve_win = False
+                    reserve_reason = "blocked_pressure"
+                    if tiebreak_invoked:
+                        reserve_win, reserve_reason = self._reserve_vs_group_tiebreak_decision(world, local_food_pressure)
+                        if hasattr(world, "record_settlement_progression_metric"):
+                            if reserve_win:
+                                world.record_settlement_progression_metric("reserve_final_tiebreak_won_count")
+                            else:
+                                world.record_settlement_progression_metric("reserve_final_tiebreak_lost_count")
+                                if reserve_reason == "blocked_pressure":
+                                    world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_pressure_count")
+                                elif reserve_reason == "blocked_unstable_context":
+                                    world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_unstable_context_count")
+                                elif reserve_reason == "blocked_no_surplus":
+                                    world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_no_surplus_count")
+                    self.task = "food_logistics" if reserve_win else "camp_supply_food"
                     loop_bonus = 0
                     density_state = self.subjective_state.get("social_density", {}) if isinstance(self.subjective_state, dict) else {}
                     nearby_familiar = int(density_state.get("familiar_nearby_agents_count", 0))
@@ -799,7 +1067,7 @@ class Agent:
                         self.task_target = (int(drop_pos[0]), int(drop_pos[1]))
                     elif len(source_pos) == 2:
                         self.task_target = (int(source_pos[0]), int(source_pos[1]))
-                    if pressure_active and hasattr(world, "record_pressure_backed_loop_selected"):
+                    if pressure_active and not reserve_win and hasattr(world, "record_pressure_backed_loop_selected"):
                         world.record_pressure_backed_loop_selected()
                 else:
                     self.task = "gather_food_wild"
@@ -857,6 +1125,7 @@ class Agent:
                     scarcity_target = None
             if isinstance(scarcity_target, tuple) and len(scarcity_target) == 2:
                 self.task_target = (int(scarcity_target[0]), int(scarcity_target[1]))
+                self.foraging_target_set_tick = int(tick_now)
             if hasattr(world, "record_settlement_progression_metric"):
                 world.record_settlement_progression_metric("medium_term_food_priority_overrides")
                 world.record_settlement_progression_metric("food_scarcity_adaptive_retarget_events")
@@ -888,6 +1157,7 @@ class Agent:
                     nearest_food = None
             if isinstance(nearest_food, tuple) and len(nearest_food) == 2:
                 self.task_target = (int(nearest_food[0]), int(nearest_food[1]))
+                self.foraging_target_set_tick = int(tick_now)
             if hasattr(world, "record_settlement_progression_metric"):
                 world.record_settlement_progression_metric("medium_term_food_priority_overrides")
             return
@@ -1174,8 +1444,22 @@ class Agent:
             if int(self.inventory.get("food", 0)) > 0 and hasattr(world, "compute_local_food_pressure_for_agent"):
                 pressure = world.compute_local_food_pressure_for_agent(self)
                 if isinstance(pressure, dict) and bool(pressure.get("pressure_active", False)):
-                    self.task = "camp_supply_food"
-                    if hasattr(world, "record_pressure_backed_loop_selected"):
+                    if hasattr(world, "record_settlement_progression_metric"):
+                        world.record_settlement_progression_metric("reserve_final_tiebreak_invoked_count")
+                    reserve_win, reserve_reason = self._reserve_vs_group_tiebreak_decision(world, pressure)
+                    if hasattr(world, "record_settlement_progression_metric"):
+                        if reserve_win:
+                            world.record_settlement_progression_metric("reserve_final_tiebreak_won_count")
+                        else:
+                            world.record_settlement_progression_metric("reserve_final_tiebreak_lost_count")
+                            if reserve_reason == "blocked_pressure":
+                                world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_pressure_count")
+                            elif reserve_reason == "blocked_unstable_context":
+                                world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_unstable_context_count")
+                            elif reserve_reason == "blocked_no_surplus":
+                                world.record_settlement_progression_metric("reserve_final_tiebreak_blocked_by_no_surplus_count")
+                    self.task = "food_logistics" if reserve_win else "camp_supply_food"
+                    if (not reserve_win) and hasattr(world, "record_pressure_backed_loop_selected"):
                         world.record_pressure_backed_loop_selected()
                     return
             self.task = "gather_food_wild"
@@ -1840,6 +2124,310 @@ class Agent:
         prev_task = str(getattr(self, "task", "idle"))
         self.update_role_task(world)
         task_after_role = str(getattr(self, "task", "idle"))
+        tick_now = int(getattr(world, "tick", 0))
+        pressure_regime = "medium"
+        pressure_ratio = 0.0
+        if hasattr(world, "compute_local_food_pressure_for_agent"):
+            try:
+                pressure = world.compute_local_food_pressure_for_agent(self, max_distance=10)
+            except Exception:
+                pressure = {}
+            if isinstance(pressure, dict):
+                pressure_regime, pressure_ratio = self._resolve_foraging_pressure_regime(
+                    pressure, str(getattr(self, "foraging_pressure_regime", "medium"))
+                )
+        self.foraging_pressure_regime = str(pressure_regime)
+        self.foraging_pressure_ratio = float(pressure_ratio)
+        high_pressure_hold = bool(
+            pressure_regime == "high"
+            and int(getattr(self, "foraging_trip_harvest_units", 0)) > 0
+            and float(getattr(self, "hunger", 100.0)) >= 24.0
+            and int(getattr(self, "inventory", {}).get("food", 0)) <= 4
+            and task_after_role in FORAGING_POST_HARVEST_CONTINUE_TASKS
+        )
+        medium_pressure_hold = bool(
+            pressure_regime == "medium"
+            and int(getattr(self, "foraging_trip_harvest_units", 0)) >= 2
+            and float(getattr(self, "hunger", 100.0)) >= 34.0
+            and int(getattr(self, "inventory", {}).get("food", 0)) <= 2
+            and task_after_role in FORAGING_POST_HARVEST_CONTINUE_TASKS
+        )
+        post_first_harvest_hold = False
+        post_first_harvest_narrow_redirect_hold = False
+        first_harvest_tick = int(getattr(self, "foraging_trip_first_harvest_tick", -1))
+        exploit_until_tick = int(getattr(self, "foraging_patch_exploit_until_tick", -1))
+        exploit_target_actions = int(getattr(self, "foraging_patch_exploit_target_harvest_actions", 0))
+        exploit_anchor = getattr(self, "foraging_patch_exploit_anchor", None)
+        switch_context: Dict[str, Any] = {}
+        if (
+            prev_task == "gather_food_wild"
+            and task_after_role != "gather_food_wild"
+            and bool(getattr(self, "foraging_trip_active", False))
+            and int(getattr(self, "foraging_trip_harvest_units", 0)) > 0
+            and (
+                first_harvest_tick >= 0
+                or exploit_until_tick >= tick_now
+            )
+            and task_after_role in (FORAGING_POST_HARVEST_CONTINUE_TASKS | FORAGING_POST_HARVEST_REDIRECT_TASKS)
+            and float(getattr(self, "hunger", 100.0)) >= 24.0
+        ):
+            switch_context = self._post_first_harvest_switch_context(
+                world,
+                new_task=task_after_role,
+                tick_now=tick_now,
+            )
+            if hasattr(world, "record_foraging_switch_debug_event"):
+                world.record_foraging_switch_debug_event(
+                    self,
+                    "post_first_harvest_task_switch_attempt",
+                    prev_task=prev_task,
+                    new_task=task_after_role,
+                    reason="role_recompute_after_first_harvest",
+                    **switch_context,
+                )
+            low_value_redirect = str(task_after_role) in FORAGING_POST_HARVEST_REDIRECT_TASKS
+            if low_value_redirect:
+                if self._should_block_narrow_post_harvest_redirect(switch_context):
+                    post_first_harvest_narrow_redirect_hold = True
+            in_exploit_window = bool(exploit_until_tick >= tick_now and exploit_target_actions > 0)
+            if in_exploit_window and int(getattr(self, "foraging_trip_harvest_actions", 0)) >= exploit_target_actions:
+                in_exploit_window = False
+            if (not in_exploit_window) and first_harvest_tick >= 0:
+                hold_window = 0
+                if pressure_regime == "medium":
+                    hold_window = 10
+                elif pressure_regime == "high":
+                    hold_window = 18
+                in_exploit_window = bool(hold_window > 0 and (tick_now - first_harvest_tick) <= hold_window)
+            if in_exploit_window:
+                target = None
+                if isinstance(getattr(self, "task_target", None), tuple) and len(getattr(self, "task_target", ())) == 2:
+                    target = (int(self.task_target[0]), int(self.task_target[1]))
+                elif isinstance(getattr(self, "foraging_trip_target", None), tuple) and len(getattr(self, "foraging_trip_target", ())) == 2:
+                    target = (int(self.foraging_trip_target[0]), int(self.foraging_trip_target[1]))
+                elif isinstance(exploit_anchor, tuple) and len(exploit_anchor) == 2:
+                    target = (int(exploit_anchor[0]), int(exploit_anchor[1]))
+                if isinstance(target, tuple):
+                    distance = abs(int(self.x) - int(target[0])) + abs(int(self.y) - int(target[1]))
+                    target_has_food = target in getattr(world, "food", set())
+                    if not target_has_food and hasattr(world, "_find_nearest_food_to") and distance <= 3:
+                        nearby = world._find_nearest_food_to(int(target[0]), int(target[1]), radius=3)
+                        if isinstance(nearby, tuple) and len(nearby) == 2:
+                            self.task_target = (int(nearby[0]), int(nearby[1]))
+                            target_has_food = True
+                    if target_has_food or distance <= 1:
+                        post_first_harvest_hold = True
+        if (
+            prev_task == "gather_food_wild"
+            and task_after_role != "gather_food_wild"
+            and bool(getattr(self, "foraging_trip_active", False))
+            and (high_pressure_hold or medium_pressure_hold or post_first_harvest_hold or post_first_harvest_narrow_redirect_hold)
+        ):
+            self.task = "gather_food_wild"
+            task_after_role = "gather_food_wild"
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("foraging_commitment_hold_overrides")
+            if switch_context and hasattr(world, "record_foraging_switch_debug_event"):
+                world.record_foraging_switch_debug_event(
+                    self,
+                    "post_first_harvest_task_switch_blocked",
+                    prev_task=prev_task,
+                    new_task=str(getattr(self, "task", "")),
+                    reason="exploitation_or_commitment_hold",
+                    **switch_context,
+                )
+
+        def _finalize_foraging_trip(reason: str) -> None:
+            if not bool(getattr(self, "foraging_trip_active", False)):
+                return
+            move_ticks = int(getattr(self, "foraging_trip_move_ticks", 0))
+            harvest_units = int(getattr(self, "foraging_trip_harvest_units", 0))
+            harvest_actions = int(getattr(self, "foraging_trip_harvest_actions", 0))
+            retargets = int(getattr(self, "foraging_trip_retarget_count", 0))
+            first_harvest_tick_local = int(getattr(self, "foraging_trip_first_harvest_tick", -1))
+            max_consecutive_harvest_actions = int(getattr(self, "foraging_trip_max_consecutive_harvest_actions", 0))
+            pressure_bucket = "medium"
+            contention_bucket = "medium"
+            pressure = {}
+            if hasattr(world, "compute_local_food_pressure_for_agent"):
+                try:
+                    pressure = world.compute_local_food_pressure_for_agent(self, max_distance=10)
+                except Exception:
+                    pressure = {}
+            if isinstance(pressure, dict):
+                pressure_bucket, _ = self._resolve_foraging_pressure_regime(
+                    pressure, str(getattr(self, "foraging_pressure_regime", "medium"))
+                )
+            nearby_foragers = 0
+            for other in getattr(world, "agents", []):
+                if not getattr(other, "alive", False):
+                    continue
+                if str(getattr(other, "agent_id", "")) == str(getattr(self, "agent_id", "")):
+                    continue
+                if str(getattr(other, "task", "")) not in {"gather_food_wild", "farm_cycle"}:
+                    continue
+                if abs(int(getattr(other, "x", 0)) - int(self.x)) + abs(int(getattr(other, "y", 0)) - int(self.y)) <= 4:
+                    nearby_foragers += 1
+            if nearby_foragers <= 1:
+                contention_bucket = "low"
+            elif nearby_foragers >= 4:
+                contention_bucket = "high"
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("foraging_trip_completed_count")
+                world.record_settlement_progression_metric("foraging_trip_movement_ticks_total", move_ticks)
+                world.record_settlement_progression_metric("foraging_trip_food_gained_total", harvest_units)
+                world.record_settlement_progression_metric("foraging_trip_harvest_actions_total", harvest_actions)
+                world.record_settlement_progression_metric("foraging_trip_retarget_count_total", retargets)
+                world.record_settlement_progression_metric(f"foraging_trip_total_pressure_{pressure_bucket}_count")
+                world.record_settlement_progression_metric("foraging_trip_max_consecutive_harvest_actions_total", max_consecutive_harvest_actions)
+                world.record_settlement_progression_metric("foraging_trip_max_consecutive_harvest_actions_samples")
+                if harvest_units <= 0:
+                    world.record_settlement_progression_metric("foraging_trip_zero_harvest_count")
+                    world.record_settlement_progression_metric("foraging_trip_aborted_before_first_harvest_count")
+                    setattr(self, "last_failed_foraging_trip_tick", int(getattr(world, "tick", 0)))
+                else:
+                    setattr(self, "last_failed_foraging_trip_tick", -10_000)
+                    world.record_settlement_progression_metric(f"foraging_trip_success_pressure_{pressure_bucket}_count")
+                    world.record_settlement_progression_metric("foraging_trip_successful_count")
+                    world.record_settlement_progression_metric(
+                        "foraging_trip_post_first_harvest_units_total",
+                        max(0, harvest_units - 1),
+                    )
+                    world.record_settlement_progression_metric("foraging_trip_post_first_harvest_units_samples")
+                    if harvest_actions == 1:
+                        world.record_settlement_progression_metric("foraging_trip_single_harvest_action_count")
+                    if first_harvest_tick_local >= 0:
+                        dwell_ticks = max(0, int(getattr(world, "tick", 0)) - first_harvest_tick_local)
+                        world.record_settlement_progression_metric("foraging_trip_patch_dwell_after_first_harvest_ticks_total", dwell_ticks)
+                        world.record_settlement_progression_metric("foraging_trip_patch_dwell_after_first_harvest_ticks_samples")
+                        if str(reason) != "completed" and dwell_ticks <= 12:
+                            world.record_settlement_progression_metric("foraging_trip_ended_soon_after_first_harvest_count")
+                    if str(reason) != "completed":
+                        world.record_settlement_progression_metric("foraging_trip_aborted_after_first_harvest_count")
+                reason_metric = "foraging_trip_end_reason_other"
+                if str(reason) == "task_switched":
+                    reason_metric = "foraging_trip_end_reason_task_switched"
+                elif str(reason) == "hunger_death":
+                    reason_metric = "foraging_trip_end_reason_hunger_death"
+                world.record_settlement_progression_metric(reason_metric)
+                if harvest_units > 0:
+                    if str(reason) == "task_switched":
+                        world.record_settlement_progression_metric("foraging_trip_end_after_first_harvest_task_switched")
+                    elif str(reason) == "hunger_death":
+                        world.record_settlement_progression_metric("foraging_trip_end_after_first_harvest_hunger_death")
+                    elif str(reason) == "completed":
+                        world.record_settlement_progression_metric("foraging_trip_end_after_first_harvest_completed")
+                    else:
+                        world.record_settlement_progression_metric("foraging_trip_end_after_first_harvest_other")
+            stats = getattr(world, "settlement_progression_stats", {})
+            if isinstance(stats, dict):
+                efficiency = float(harvest_units) / float(max(1, move_ticks))
+                stats["foraging_trip_efficiency_ratio_sum"] = float(
+                    stats.get("foraging_trip_efficiency_ratio_sum", 0.0)
+                ) + float(efficiency)
+                stats["foraging_trip_efficiency_ratio_samples"] = int(
+                    stats.get("foraging_trip_efficiency_ratio_samples", 0)
+                ) + 1
+                pressure_sum_key = f"foraging_trip_efficiency_pressure_{pressure_bucket}_sum"
+                pressure_samples_key = f"foraging_trip_efficiency_pressure_{pressure_bucket}_samples"
+                stats[pressure_sum_key] = float(stats.get(pressure_sum_key, 0.0)) + float(efficiency)
+                stats[pressure_samples_key] = int(stats.get(pressure_samples_key, 0)) + 1
+                contention_sum_key = f"foraging_trip_efficiency_contention_{contention_bucket}_sum"
+                contention_samples_key = f"foraging_trip_efficiency_contention_{contention_bucket}_samples"
+                stats[contention_sum_key] = float(stats.get(contention_sum_key, 0.0)) + float(efficiency)
+                stats[contention_samples_key] = int(stats.get(contention_samples_key, 0)) + 1
+                world.settlement_progression_stats = stats
+            self.foraging_trip_active = False
+            self.foraging_trip_start_tick = -1
+            self.foraging_trip_move_ticks = 0
+            self.foraging_trip_harvest_units = 0
+            self.foraging_trip_harvest_actions = 0
+            self.foraging_trip_retarget_count = 0
+            self.foraging_trip_first_harvest_tick = -1
+            self.foraging_trip_target = None
+            self.foraging_target_set_tick = -1
+            self.foraging_trip_last_harvest_pos = None
+            self.foraging_trip_current_consecutive_harvest_actions = 0
+            self.foraging_trip_max_consecutive_harvest_actions = 0
+            self.foraging_patch_exploit_until_tick = -1
+            self.foraging_patch_exploit_target_harvest_actions = 0
+            self.foraging_patch_exploit_anchor = None
+            if hasattr(world, "record_behavior_activity"):
+                world.record_behavior_activity(f"foraging_trip_end:{reason}", x=int(self.x), y=int(self.y), agent=self)
+
+        if task_after_role == "gather_food_wild":
+            if not bool(getattr(self, "foraging_trip_active", False)):
+                self.foraging_trip_active = True
+                self.foraging_trip_start_tick = int(tick_now)
+                self.foraging_trip_move_ticks = 0
+                self.foraging_trip_harvest_units = 0
+                self.foraging_trip_harvest_actions = 0
+                self.foraging_trip_retarget_count = 0
+                self.foraging_trip_first_harvest_tick = -1
+                self.foraging_trip_target = tuple(getattr(self, "task_target", ())) if isinstance(getattr(self, "task_target", None), tuple) else None
+                self.foraging_trip_last_harvest_pos = None
+                self.foraging_trip_current_consecutive_harvest_actions = 0
+                self.foraging_trip_max_consecutive_harvest_actions = 0
+                self.foraging_patch_exploit_until_tick = -1
+                self.foraging_patch_exploit_target_harvest_actions = 0
+                self.foraging_patch_exploit_anchor = None
+                if hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("foraging_trip_started_count")
+            current_target = tuple(getattr(self, "task_target", ())) if isinstance(getattr(self, "task_target", None), tuple) else None
+            prev_target = tuple(getattr(self, "foraging_trip_target", ())) if isinstance(getattr(self, "foraging_trip_target", None), tuple) else None
+            if current_target is not None and prev_target is not None and current_target != prev_target:
+                self.foraging_trip_retarget_count = int(getattr(self, "foraging_trip_retarget_count", 0)) + 1
+                self.foraging_trip_target = current_target
+                if hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("foraging_retarget_events")
+                    pressure = {}
+                    if hasattr(world, "compute_local_food_pressure_for_agent"):
+                        try:
+                            pressure = world.compute_local_food_pressure_for_agent(self, max_distance=10)
+                        except Exception:
+                            pressure = {}
+                    bucket = "medium"
+                    if isinstance(pressure, dict):
+                        bucket, _ = self._resolve_foraging_pressure_regime(
+                            pressure, str(getattr(self, "foraging_pressure_regime", "medium"))
+                        )
+                    world.record_settlement_progression_metric(f"foraging_retarget_events_pressure_{bucket}")
+                set_tick = int(getattr(self, "foraging_target_set_tick", -1))
+                if set_tick >= 0:
+                    stats = getattr(world, "settlement_progression_stats", {})
+                    if isinstance(stats, dict):
+                        stats["foraging_commit_before_retarget_ticks_total"] = int(
+                            stats.get("foraging_commit_before_retarget_ticks_total", 0)
+                        ) + max(0, tick_now - set_tick)
+                        stats["foraging_commit_before_retarget_ticks_samples"] = int(
+                            stats.get("foraging_commit_before_retarget_ticks_samples", 0)
+                        ) + 1
+                        world.settlement_progression_stats = stats
+                self.foraging_target_set_tick = int(tick_now)
+            elif current_target is not None and prev_target is None:
+                self.foraging_trip_target = current_target
+                self.foraging_target_set_tick = int(tick_now)
+        elif prev_task == "gather_food_wild":
+            if (
+                bool(getattr(self, "foraging_trip_active", False))
+                and int(getattr(self, "foraging_trip_harvest_units", 0)) > 0
+                and str(task_after_role) != "gather_food_wild"
+            ):
+                committed_context = switch_context or self._post_first_harvest_switch_context(
+                    world,
+                    new_task=task_after_role,
+                    tick_now=tick_now,
+                )
+                if hasattr(world, "record_foraging_switch_debug_event"):
+                    world.record_foraging_switch_debug_event(
+                        self,
+                        "post_first_harvest_task_switch_committed",
+                        prev_task=prev_task,
+                        new_task=task_after_role,
+                        reason="task_switched_after_role_update",
+                        **committed_context,
+                    )
+            _finalize_foraging_trip("task_switched")
         if hasattr(world, "record_construction_debug_event"):
             in_construction_context = str(getattr(self, "role", "")) == "builder" or prev_task in {
                 "build_house",
@@ -1986,6 +2574,10 @@ class Agent:
             hunger_decay *= float(PRE_FIRST_FOOD_HUNGER_DECAY_MULTIPLIER)
         self.hunger -= float(hunger_decay)
         if self.hunger <= 0:
+            if bool(getattr(self, "foraging_trip_active", False)) and hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("foraging_trip_terminated_by_hunger_count")
+            if bool(getattr(self, "foraging_trip_active", False)):
+                _finalize_foraging_trip("hunger_death")
             world.set_agent_dead(self, reason="hunger")
             return
         if float(self.hunger) <= float(HIGH_HUNGER_LATENCY_THRESHOLD):
@@ -2067,6 +2659,31 @@ class Agent:
                 target=move_target if isinstance(move_target, tuple) and len(move_target) == 2 else None,
                 action_was_move=action_was_move,
             )
+        if str(getattr(self, "task", "")) == "gather_food_wild" and bool(getattr(self, "foraging_trip_active", False)):
+            if bool(action_was_move):
+                self.foraging_trip_move_ticks = int(getattr(self, "foraging_trip_move_ticks", 0)) + 1
+            active_target = getattr(self, "task_target", None)
+            if moved and isinstance(active_target, tuple) and len(active_target) == 2:
+                at_target = abs(int(self.x) - int(active_target[0])) + abs(int(self.y) - int(active_target[1])) <= 0
+                if at_target:
+                    if hasattr(world, "record_settlement_progression_metric"):
+                        world.record_settlement_progression_metric("foraging_source_visit_count")
+                    if (int(active_target[0]), int(active_target[1])) not in getattr(world, "food", set()):
+                        if hasattr(world, "record_settlement_progression_metric"):
+                            world.record_settlement_progression_metric("foraging_trip_wasted_arrival_count")
+                        nearby_foragers = 0
+                        for other in getattr(world, "agents", []):
+                            if not getattr(other, "alive", False):
+                                continue
+                            if str(getattr(other, "agent_id", "")) == str(getattr(self, "agent_id", "")):
+                                continue
+                            if abs(int(getattr(other, "x", 0)) - int(self.x)) + abs(int(getattr(other, "y", 0)) - int(self.y)) <= 1:
+                                if str(getattr(other, "task", "")) in {"gather_food_wild", "farm_cycle"}:
+                                    nearby_foragers += 1
+                        if nearby_foragers > 0 and hasattr(world, "record_settlement_progression_metric"):
+                            world.record_settlement_progression_metric("foraging_arrival_overcontested_count")
+                        elif hasattr(world, "record_settlement_progression_metric"):
+                            world.record_settlement_progression_metric("foraging_arrival_depleted_source_count")
 
         if self.last_pos is None:
             self.last_pos = (self.x, self.y)

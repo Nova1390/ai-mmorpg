@@ -1,5 +1,7 @@
 # Engine Architecture: Python Core + Godot Observer
 
+See also: `docs/foundational_life_model.md` for the life-first simulation invariants that guide survival, settlement, and infrastructure emergence.
+
 ## Goal
 Definire un'architettura chiara dove la simulazione resta nel backend Python e Godot agisce come client osservatore esterno.
 
