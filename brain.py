@@ -69,6 +69,13 @@ FORAGING_LOCK_ADAPTIVE_BASE = 4
 FORAGING_LOCK_ADAPTIVE_MEDIUM_AFTER_HARVEST = 6
 FORAGING_LOCK_ADAPTIVE_HIGH = 10
 FORAGING_LOCK_ADAPTIVE_HIGH_AFTER_HARVEST = 16
+STABLE_PROTO_PARTNER_NEARBY_RADIUS = 3
+STABLE_PROTO_MICRO_CLOSURE_MAX_DISTANCE = 6
+STABLE_PROTO_LOCAL_RETENTION_MAX_DRIFT = 8
+STABLE_PROTO_LOCAL_RETENTION_FRESH_TICKS = 100
+STABLE_PROTO_PARTNER_DRIFT_DAMPING_MAX_DRIFT = 6
+STABLE_PROTO_PARTNER_DRIFT_DAMPING_SOFT_DRIFT = 4
+STABLE_PROTO_MICRO_CLOSURE_SAME_WINDOW_GRACE_TICKS = 1
 SELF_FEEDING_TASKS = {"gather_food_wild", "eat_food", "survive"}
 GROUP_FEEDING_TASKS = {"camp_supply_food", "food_logistics", "village_logistics"}
 RESERVE_SUPPORT_TASKS = {"food_logistics"}
@@ -1016,6 +1023,270 @@ class FoodBrain:
         self._record_gap_block(world, agent, "no_resource_target")
         return None
 
+    def _handle_stable_proto_local_retention(self, agent, world) -> Optional[Tuple[str, ...]]:
+        tick_now = int(getattr(world, "tick", 0))
+        anchor_id = getattr(agent, "stable_proto_anchor_village_id", None)
+        anchor_tick = int(getattr(agent, "stable_proto_anchor_tick", -1))
+        if not isinstance(anchor_id, int):
+            return None
+        if int(tick_now - anchor_tick) > int(STABLE_PROTO_LOCAL_RETENTION_FRESH_TICKS):
+            return None
+        if self._is_urgent_movement_context(agent, world):
+            return None
+        task = str(getattr(agent, "task", "") or "")
+        if task not in {"gather_food_wild", "survive", "camp_supply_food"}:
+            return None
+        if float(getattr(agent, "hunger", 0.0)) < 55.0:
+            return None
+        if float(getattr(agent, "sleep_need", 0.0)) >= 70.0 or float(getattr(agent, "fatigue", 0.0)) >= 70.0:
+            return None
+        if float(getattr(agent, "health", 100.0)) < 45.0:
+            return None
+
+        village = world.get_village_by_id(anchor_id) if hasattr(world, "get_village_by_id") else None
+        if not isinstance(village, dict):
+            return None
+        if bool(village.get("formalized", False)):
+            return None
+
+        center = village.get("center", {})
+        cx = int(center.get("x", int(getattr(agent, "x", 0))))
+        cy = int(center.get("y", int(getattr(agent, "y", 0))))
+        dist = _manhattan((int(getattr(agent, "x", 0)), int(getattr(agent, "y", 0))), (cx, cy))
+        if dist <= int(STABLE_PROTO_LOCAL_RETENTION_MAX_DRIFT):
+            return None
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric("stable_proto_local_retention_applied_count", 1)
+        return self.move_towards(agent, world, (cx, cy))
+
+    def _handle_stable_proto_micro_proximity_closure(self, agent, world) -> Optional[Tuple[str, ...]]:
+        tick_now = int(getattr(world, "tick", 0))
+        target_id = str(getattr(agent, "stable_proto_micro_partner_agent_id", "") or "")
+        until_tick = int(getattr(agent, "stable_proto_micro_until_tick", -1))
+        anchor_id = getattr(agent, "stable_proto_micro_anchor_village_id", None)
+        invoke_tick = int(getattr(agent, "stable_proto_micro_invoke_tick", -1))
+        same_window_grace = bool(
+            invoke_tick >= 0
+            and int(tick_now - invoke_tick) <= int(STABLE_PROTO_MICRO_CLOSURE_SAME_WINDOW_GRACE_TICKS)
+        )
+
+        def _record_break_stats(reason: str, break_distance: Optional[int]) -> None:
+            if not hasattr(world, "record_settlement_progression_metric"):
+                return
+            reason_key = str(reason or "other")
+            world.record_settlement_progression_metric(
+                f"stable_proto_micro_proximity_closure_failed_by_{reason_key}_count",
+                1,
+            )
+            if reason_key == "survival":
+                world.record_settlement_progression_metric(
+                    "stable_proto_micro_proximity_closure_broken_by_survival_count", 1
+                )
+            elif reason_key in {"context_loss", "partner_moved_away", "anchor_shift"}:
+                world.record_settlement_progression_metric(
+                    "stable_proto_micro_proximity_closure_broken_by_context_loss_count", 1
+                )
+            invoke_tick = int(getattr(agent, "stable_proto_micro_invoke_tick", -1))
+            if invoke_tick >= 0 and invoke_tick <= tick_now:
+                world.record_settlement_progression_metric(
+                    "stable_proto_micro_proximity_closure_ticks_to_break_total",
+                    int(tick_now - invoke_tick),
+                )
+                world.record_settlement_progression_metric(
+                    "stable_proto_micro_proximity_closure_ticks_to_break_samples", 1
+                )
+            invoke_dist = int(getattr(agent, "stable_proto_micro_invoke_distance", 0))
+            if invoke_dist > 0:
+                world.record_settlement_progression_metric(
+                    "stable_proto_micro_proximity_closure_distance_at_invoke_total",
+                    int(invoke_dist),
+                )
+                world.record_settlement_progression_metric(
+                    "stable_proto_micro_proximity_closure_distance_at_invoke_samples", 1
+                )
+            if break_distance is not None and int(break_distance) >= 0:
+                world.record_settlement_progression_metric(
+                    "stable_proto_micro_proximity_closure_distance_at_break_total",
+                    int(break_distance),
+                )
+                world.record_settlement_progression_metric(
+                    "stable_proto_micro_proximity_closure_distance_at_break_samples", 1
+                )
+
+        def _clear_micro_state() -> None:
+            agent.stable_proto_micro_partner_agent_id = None
+            agent.stable_proto_micro_until_tick = -1
+            agent.stable_proto_micro_anchor_village_id = None
+            agent.stable_proto_micro_invoke_tick = -1
+            agent.stable_proto_micro_invoke_distance = 0
+
+        if (not target_id) or (not isinstance(anchor_id, int)):
+            return None
+        if until_tick < tick_now:
+            _record_break_stats("ttl_expiry", break_distance=None)
+            _clear_micro_state()
+            return None
+        if self._is_urgent_movement_context(agent, world):
+            _record_break_stats("survival", break_distance=None)
+            _clear_micro_state()
+            return None
+        village = world.get_village_by_id(anchor_id) if hasattr(world, "get_village_by_id") else None
+        if not isinstance(village, dict):
+            if same_window_grace:
+                if hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("stable_proto_micro_context_hold_invoked_count", 1)
+                return ("wait",)
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("stable_proto_micro_context_loss_anchor_invalid_count", 1)
+            _record_break_stats("context_loss", break_distance=None)
+            _clear_micro_state()
+            return None
+        center = village.get("center", {})
+        cx = int(center.get("x", int(getattr(agent, "x", 0))))
+        cy = int(center.get("y", int(getattr(agent, "y", 0))))
+        stable_anchor_id = getattr(agent, "stable_proto_anchor_village_id", None)
+        if isinstance(stable_anchor_id, int) and int(stable_anchor_id) != int(anchor_id):
+            if same_window_grace:
+                if hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("stable_proto_micro_context_hold_invoked_count", 1)
+                    world.record_settlement_progression_metric("stable_proto_partner_drift_damping_invoked_count", 1)
+                return self.move_towards(agent, world, (cx, cy))
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("stable_proto_micro_context_loss_anchor_shift_count", 1)
+            _record_break_stats("anchor_shift", break_distance=None)
+            _clear_micro_state()
+            return None
+
+        partner = None
+        for other in getattr(world, "agents", []):
+            if str(getattr(other, "agent_id", "")) == target_id and bool(getattr(other, "alive", False)):
+                partner = other
+                break
+        if partner is None:
+            if same_window_grace:
+                if hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("stable_proto_partner_drift_damping_invoked_count", 1)
+                return self.move_towards(agent, world, (cx, cy))
+            _record_break_stats("partner_moved_away", break_distance=None)
+            _clear_micro_state()
+            return None
+
+        px = int(getattr(partner, "x", 0))
+        py = int(getattr(partner, "y", 0))
+        anchor_dist_partner = _manhattan((px, py), (cx, cy))
+        if anchor_dist_partner > int(STABLE_PROTO_LOCAL_RETENTION_MAX_DRIFT):
+            if same_window_grace:
+                if hasattr(world, "record_settlement_progression_metric"):
+                    world.record_settlement_progression_metric("stable_proto_partner_drift_damping_invoked_count", 1)
+                return self.move_towards(agent, world, (cx, cy))
+            _record_break_stats("partner_moved_away", break_distance=int(anchor_dist_partner))
+            _clear_micro_state()
+            return None
+
+        sx = int(getattr(agent, "x", 0))
+        sy = int(getattr(agent, "y", 0))
+        dist = _manhattan((sx, sy), (px, py))
+        if dist <= int(STABLE_PROTO_PARTNER_NEARBY_RADIUS):
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("stable_proto_micro_proximity_closure_completed_count", 1)
+            _clear_micro_state()
+            return ("wait",)
+        if dist > int(STABLE_PROTO_MICRO_CLOSURE_MAX_DISTANCE):
+            _record_break_stats("distance_too_large", break_distance=int(dist))
+            _clear_micro_state()
+            return None
+
+        hub_x = int(round((sx + px + cx) / 3.0))
+        hub_y = int(round((sy + py + cy) / 3.0))
+        action = self.move_towards(agent, world, (hub_x, hub_y))
+        if (
+            isinstance(action, tuple)
+            and len(action) >= 1
+            and str(action[0]) == "wait"
+            and dist > int(STABLE_PROTO_PARTNER_NEARBY_RADIUS)
+        ):
+            _record_break_stats("path_not_completed", break_distance=int(dist))
+            _clear_micro_state()
+            return None
+        if action is None:
+            _record_break_stats("other", break_distance=int(dist))
+            _clear_micro_state()
+            return None
+        return action
+
+    def _handle_stable_proto_partner_drift_damping(self, agent, world) -> Optional[Tuple[str, ...]]:
+        tick_now = int(getattr(world, "tick", 0))
+        target_id = str(getattr(agent, "stable_proto_drift_damping_partner_agent_id", "") or "")
+        until_tick = int(getattr(agent, "stable_proto_drift_damping_until_tick", -1))
+        anchor_id = getattr(agent, "stable_proto_drift_damping_anchor_village_id", None)
+
+        def _clear(reason: str = "") -> None:
+            if hasattr(world, "record_settlement_progression_metric"):
+                if reason == "survival":
+                    world.record_settlement_progression_metric(
+                        "stable_proto_partner_drift_damping_broken_by_survival_count", 1
+                    )
+                elif reason == "context_loss":
+                    world.record_settlement_progression_metric(
+                        "stable_proto_partner_drift_damping_broken_by_context_loss_count", 1
+                    )
+            agent.stable_proto_drift_damping_partner_agent_id = None
+            agent.stable_proto_drift_damping_until_tick = -1
+            agent.stable_proto_drift_damping_anchor_village_id = None
+
+        if (not target_id) or (not isinstance(anchor_id, int)):
+            return None
+        if until_tick < tick_now:
+            _clear("")
+            return None
+        if self._is_urgent_movement_context(agent, world):
+            _clear("survival")
+            return None
+        village = world.get_village_by_id(anchor_id) if hasattr(world, "get_village_by_id") else None
+        if not isinstance(village, dict):
+            _clear("context_loss")
+            return None
+        center = village.get("center", {})
+        cx = int(center.get("x", int(getattr(agent, "x", 0))))
+        cy = int(center.get("y", int(getattr(agent, "y", 0))))
+
+        partner = None
+        for other in getattr(world, "agents", []):
+            if str(getattr(other, "agent_id", "")) == target_id and bool(getattr(other, "alive", False)):
+                partner = other
+                break
+        if partner is None:
+            _clear("context_loss")
+            return None
+
+        sx = int(getattr(agent, "x", 0))
+        sy = int(getattr(agent, "y", 0))
+        px = int(getattr(partner, "x", 0))
+        py = int(getattr(partner, "y", 0))
+        partner_dist = _manhattan((sx, sy), (px, py))
+        if partner_dist <= int(STABLE_PROTO_PARTNER_NEARBY_RADIUS):
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("stable_proto_partner_drift_damping_completed_count", 1)
+            _clear("")
+            return ("wait",)
+
+        self_anchor_dist = _manhattan((sx, sy), (cx, cy))
+        partner_anchor_dist = _manhattan((px, py), (cx, cy))
+        if partner_anchor_dist > int(STABLE_PROTO_LOCAL_RETENTION_MAX_DRIFT * 2):
+            _clear("context_loss")
+            return None
+        if self_anchor_dist <= int(STABLE_PROTO_PARTNER_DRIFT_DAMPING_SOFT_DRIFT):
+            return None
+        if self_anchor_dist > int(STABLE_PROTO_PARTNER_DRIFT_DAMPING_MAX_DRIFT):
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("stable_proto_partner_drift_damping_invoked_count", 1)
+            return self.move_towards(agent, world, (cx, cy))
+        if partner_dist > int(STABLE_PROTO_PARTNER_NEARBY_RADIUS):
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric("stable_proto_partner_drift_damping_invoked_count", 1)
+            return self.move_towards(agent, world, (cx, cy))
+        return None
+
     def decide(self, agent, world) -> Tuple[str, ...]:
         task = str(getattr(agent, "task", "idle")).lower()
         self._set_food_security_layer_context(agent, task)
@@ -1023,6 +1294,18 @@ class FoodBrain:
         intention_action = self._evaluate_intention(world, agent)
         if intention_action is not None:
             return intention_action
+
+        drift_damping_action = self._handle_stable_proto_partner_drift_damping(agent, world)
+        if drift_damping_action is not None:
+            return drift_damping_action
+
+        micro_closure_action = self._handle_stable_proto_micro_proximity_closure(agent, world)
+        if micro_closure_action is not None:
+            return micro_closure_action
+
+        local_retention_action = self._handle_stable_proto_local_retention(agent, world)
+        if local_retention_action is not None:
+            return local_retention_action
 
         # -----------------------------
         # 1) bootstrap founding
@@ -1704,6 +1987,12 @@ class FoodBrain:
                     if agent.inventory.get(delivery_resource, 0) > 0:
                         return self.move_towards(agent, world, (int(building.get("x", 0)), int(building.get("y", 0))))
                     village = world.get_village_by_id(getattr(agent, "village_id", None))
+                    if village and str(building.get("operational_state", "")) == "under_construction":
+                        stock = village.get("storage", {}) if isinstance(village.get("storage"), dict) else {}
+                        if int(stock.get(str(delivery_resource), 0)) <= 0:
+                            # Narrow RF-010 alignment: when storage path is empty for this reserved material,
+                            # keep the hauler close to the committed site to enable local source-class bridge entry.
+                            return self.move_towards(agent, world, (int(building.get("x", 0)), int(building.get("y", 0))))
                     if village:
                         sp = village.get("storage_pos")
                         if sp:
@@ -1790,6 +2079,12 @@ class FoodBrain:
                     if agent.inventory.get(delivery_resource, 0) > 0:
                         return self.move_towards(agent, world, (int(building.get("x", 0)), int(building.get("y", 0))))
                     village = world.get_village_by_id(getattr(agent, "village_id", None))
+                    if village and str(building.get("operational_state", "")) == "under_construction":
+                        stock = village.get("storage", {}) if isinstance(village.get("storage"), dict) else {}
+                        if int(stock.get(str(delivery_resource), 0)) <= 0:
+                            # Narrow RF-010 alignment: prioritize site-local context when reserved material
+                            # has no local storage stock, to reduce pre-pickup bridge non-entry.
+                            return self.move_towards(agent, world, (int(building.get("x", 0)), int(building.get("y", 0))))
                     if village:
                         sp = village.get("storage_pos")
                         if sp:

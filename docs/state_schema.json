@@ -29,7 +29,9 @@
     "houses_count",
     "villages_count",
     "leaders_count",
-    "llm_interactions"
+    "llm_interactions",
+    "infrastructure_systems_available",
+    "transport_network_counts"
   ],
   "properties": {
     "schema_version": { "type": "string" },
@@ -77,7 +79,15 @@
           "connected_to_road",
           "operational_state",
           "linked_resource_type",
-          "linked_resource_tiles_count"
+          "linked_resource_tiles_count",
+          "service",
+          "storage",
+          "storage_capacity",
+          "construction_request",
+          "construction_buffer",
+          "construction_progress",
+          "construction_required_work",
+          "construction_complete_ratio"
         ],
         "properties": {
           "building_id": { "type": "string", "minLength": 1 },
@@ -131,8 +141,10 @@
               { "type": "null" }
             ]
           },
-          "storage_capacity": { "type": ["integer", "null"] }
-          ,
+          "storage_capacity": {
+            "type": ["integer", "null"],
+            "minimum": 0
+          },
           "construction_request": {
             "anyOf": [
               {
@@ -191,6 +203,7 @@
           "target_village_id",
           "migration_target_id",
           "power",
+          "tier",
           "storage",
           "storage_pos",
           "farm_zone_center",
@@ -270,7 +283,18 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["agent_id", "x", "y", "is_player", "player_id", "role", "village_id", "task"],
+        "required": [
+          "agent_id",
+          "x",
+          "y",
+          "is_player",
+          "player_id",
+          "role",
+          "village_id",
+          "task",
+          "inventory",
+          "max_inventory"
+        ],
         "properties": {
           "agent_id": { "type": "string", "minLength": 1 },
           "x": { "type": "integer" },
@@ -296,8 +320,7 @@
     "houses_count": { "type": "integer", "minimum": 0 },
     "villages_count": { "type": "integer", "minimum": 0 },
     "leaders_count": { "type": "integer", "minimum": 0 },
-    "llm_interactions": { "type": "integer", "minimum": 0 }
-    ,
+    "llm_interactions": { "type": "integer", "minimum": 0 },
     "infrastructure_systems_available": {
       "type": "array",
       "items": { "type": "string" }

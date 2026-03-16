@@ -23,6 +23,7 @@ from config import (
     HOUSE_STONE_COST,
     LLM_ENABLED,
     LLM_TIMEOUT_SECONDS,
+    REPRO_MIN_HUNGER,
 )
 
 from agent import Agent, detect_agent_innovation_opportunity, validate_proto_asset_proposal
@@ -93,6 +94,10 @@ LOCAL_HANDOFF_RECENT_RESCUE_TICKS = 80
 EARLY_SURVIVAL_RELIEF_TICKS = 320
 EARLY_SURVIVAL_RELIEF_HUNGER_DECAY_MULTIPLIER = 0.9
 SETTLEMENT_STABILITY_TICK_THRESHOLD = 120
+USEFUL_LIFESPAN_REPRO_AGE_TICKS = 260
+USEFUL_LIFESPAN_FOOD_STABILITY_WINDOW_TICKS = 12
+USEFUL_LIFESPAN_REPRO_READY_MIN_HEALTH = 35.0
+SETTLEMENT_HOUSE_CLUSTER_LINK_DISTANCE = 6
 FOOD_PATCH_MIN_COUNT = 3
 FOOD_PATCH_MAX_COUNT = 6
 FOOD_PATCH_MIN_RADIUS = 5
@@ -670,6 +675,154 @@ def _default_settlement_progression_stats() -> Dict[str, Any]:
         "population_deaths_hunger_age_0_199_count": 0,
         "population_deaths_hunger_age_200_599_count": 0,
         "population_deaths_hunger_age_600_plus_count": 0,
+        "agents_above_repro_min_age_count": 0,
+        "agents_meeting_hunger_requirement_for_repro_count": 0,
+        "agents_meeting_health_requirement_for_repro_count": 0,
+        "agents_in_formal_village_count": 0,
+        "agents_meeting_household_or_shelter_requirement_count": 0,
+        "agents_with_local_partner_candidate_count": 0,
+        "agents_with_opposite_sex_partner_candidate_count": 0,
+        "agents_meeting_stability_requirement_for_repro_count": 0,
+        "agents_meeting_local_food_security_requirement_count": 0,
+        "agents_meeting_repro_cooldown_requirement_count": 0,
+        "agents_meeting_all_repro_conditions_count": 0,
+        "agents_meeting_all_repro_conditions_except_one_count": 0,
+        "agents_reaching_reproductive_age_count": 0,
+        "agents_reaching_household_or_shelter_stage_count": 0,
+        "agents_reaching_local_food_security_stability_count": 0,
+        "agents_reaching_reproduction_ready_state_count": 0,
+        "deaths_before_reproductive_age_count": 0,
+        "deaths_before_household_stage_count": 0,
+        "deaths_before_food_security_stability_count": 0,
+        "avg_ticks_lived_after_reproductive_age": 0.0,
+        "avg_ticks_lived_after_first_household_or_shelter": 0.0,
+        "avg_ticks_lived_after_local_food_security_stability": 0.0,
+        "avg_ticks_lived_after_reproduction_ready_state": 0.0,
+        "avg_age_at_first_household_or_shelter_stage": 0.0,
+        "avg_age_at_local_food_security_stability": 0.0,
+        "avg_age_at_reproduction_ready_state": 0.0,
+        "avg_age_at_first_meaningful_stability_milestone": 0.0,
+        "avg_remaining_lifespan_after_reproductive_age": 0.0,
+        "avg_remaining_lifespan_after_household_stage": 0.0,
+        "avg_remaining_lifespan_after_food_security_stability": 0.0,
+        "avg_remaining_lifespan_after_reproduction_ready_state": 0.0,
+        "_age_at_first_household_or_shelter_stage_total": 0,
+        "_age_at_first_household_or_shelter_stage_samples": 0,
+        "_age_at_local_food_security_stability_total": 0,
+        "_age_at_local_food_security_stability_samples": 0,
+        "_age_at_reproduction_ready_state_total": 0,
+        "_age_at_reproduction_ready_state_samples": 0,
+        "_age_at_first_meaningful_stability_milestone_total": 0,
+        "_age_at_first_meaningful_stability_milestone_samples": 0,
+        "_remaining_lifespan_after_reproductive_age_total": 0,
+        "_remaining_lifespan_after_reproductive_age_samples": 0,
+        "_remaining_lifespan_after_household_stage_total": 0,
+        "_remaining_lifespan_after_household_stage_samples": 0,
+        "_remaining_lifespan_after_food_security_stability_total": 0,
+        "_remaining_lifespan_after_food_security_stability_samples": 0,
+        "_remaining_lifespan_after_reproduction_ready_state_total": 0,
+        "_remaining_lifespan_after_reproduction_ready_state_samples": 0,
+        "reproduction_attempt_count": 0,
+        "reproduction_blocked_count": 0,
+        "reproduction_blocked_by_age_count": 0,
+        "reproduction_blocked_by_hunger_count": 0,
+        "reproduction_blocked_by_health_count": 0,
+        "reproduction_blocked_by_no_formal_village_count": 0,
+        "reproduction_blocked_by_no_partner_count": 0,
+        "reproduction_blocked_by_no_local_partner_count": 0,
+        "reproduction_blocked_by_no_opposite_sex_partner_count": 0,
+        "reproduction_blocked_by_partner_unavailable_count": 0,
+        "reproduction_blocked_by_partner_age_count": 0,
+        "reproduction_blocked_by_partner_health_or_hunger_count": 0,
+        "reproduction_blocked_by_no_shelter_or_household_count": 0,
+        "reproduction_blocked_by_low_local_food_security_count": 0,
+        "reproduction_blocked_by_stability_requirement_count": 0,
+        "reproduction_blocked_by_cooldown_count": 0,
+        "reproduction_blocked_by_other_count": 0,
+        "reproduction_proto_path_considered_count": 0,
+        "reproduction_proto_path_activated_count": 0,
+        "reproduction_proto_path_gate_pass_stability_count": 0,
+        "reproduction_proto_path_gate_pass_food_security_count": 0,
+        "reproduction_proto_path_gate_pass_crisis_count": 0,
+        "proto_food_security_window_pass_count": 0,
+        "proto_food_security_window_fail_count": 0,
+        "proto_food_security_window_recent_buffer_ok_count": 0,
+        "proto_food_security_window_recent_pressure_clear_count": 0,
+        "reproduction_proto_path_blocked_by_stability_count": 0,
+        "reproduction_proto_path_blocked_by_food_security_count": 0,
+        "reproduction_proto_path_blocked_by_no_opposite_sex_partner_count": 0,
+        "reproduction_proto_path_blocked_by_no_shelter_count": 0,
+        "reproduction_proto_path_blocked_by_other_count": 0,
+        "reproduction_stable_proto_household_path_considered_count": 0,
+        "stable_proto_household_path_considered_count": 0,
+        "stable_proto_household_local_anchor_created_count": 0,
+        "stable_proto_household_local_anchor_reused_count": 0,
+        "stable_proto_household_local_anchor_fail_count": 0,
+        "stable_proto_household_candidate_nearby_count": 0,
+        "stable_proto_household_candidate_too_far_count": 0,
+        "stable_proto_anchor_partner_candidate_count": 0,
+        "stable_proto_anchor_partner_nearby_count": 0,
+        "stable_proto_anchor_partner_too_far_count": 0,
+        "stable_proto_anchor_partner_blocked_by_health_or_hunger_count": 0,
+        "stable_proto_anchor_partner_blocked_by_cooldown_count": 0,
+        "stable_proto_anchor_partner_blocked_by_context_mismatch_count": 0,
+        "stable_proto_partner_convergence_invoked_count": 0,
+        "stable_proto_partner_convergence_completed_count": 0,
+        "stable_proto_partner_convergence_broken_by_survival_count": 0,
+        "stable_proto_partner_convergence_broken_by_context_loss_count": 0,
+        "stable_proto_copresence_ticks_with_opposite_sex_partner_count": 0,
+        "stable_proto_copresence_window_pass_count": 0,
+        "stable_proto_copresence_broken_by_survival_count": 0,
+        "stable_proto_copresence_broken_by_context_loss_count": 0,
+        "stable_proto_local_retention_applied_count": 0,
+        "stable_proto_partner_drift_damping_invoked_count": 0,
+        "stable_proto_partner_drift_damping_completed_count": 0,
+        "stable_proto_partner_drift_damping_broken_by_survival_count": 0,
+        "stable_proto_partner_drift_damping_broken_by_context_loss_count": 0,
+        "stable_proto_micro_context_hold_invoked_count": 0,
+        "stable_proto_path_inactivity_jitter_hold_invoked_count": 0,
+        "stable_proto_path_inactivity_jitter_hold_completed_count": 0,
+        "stable_proto_path_inactivity_jitter_hold_broken_by_survival_count": 0,
+        "stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count": 0,
+        "stable_proto_micro_context_loss_anchor_invalid_count": 0,
+        "stable_proto_micro_context_loss_anchor_shift_count": 0,
+        "stable_proto_micro_context_loss_proto_path_inactive_count": 0,
+        "stable_proto_micro_context_loss_candidate_missing_count": 0,
+        "stable_proto_micro_proximity_closure_invoked_count": 0,
+        "stable_proto_micro_proximity_closure_completed_count": 0,
+        "stable_proto_micro_proximity_closure_broken_by_survival_count": 0,
+        "stable_proto_micro_proximity_closure_broken_by_context_loss_count": 0,
+        "stable_proto_micro_proximity_closure_failed_by_distance_too_large_count": 0,
+        "stable_proto_micro_proximity_closure_failed_by_ttl_expiry_count": 0,
+        "stable_proto_micro_proximity_closure_failed_by_survival_count": 0,
+        "stable_proto_micro_proximity_closure_failed_by_context_loss_count": 0,
+        "stable_proto_micro_proximity_closure_failed_by_partner_moved_away_count": 0,
+        "stable_proto_micro_proximity_closure_failed_by_anchor_shift_count": 0,
+        "stable_proto_micro_proximity_closure_failed_by_path_not_completed_count": 0,
+        "stable_proto_micro_proximity_closure_failed_by_other_count": 0,
+        "stable_proto_micro_proximity_closure_ticks_to_break_total": 0,
+        "stable_proto_micro_proximity_closure_ticks_to_break_samples": 0,
+        "stable_proto_micro_proximity_closure_distance_at_invoke_total": 0,
+        "stable_proto_micro_proximity_closure_distance_at_invoke_samples": 0,
+        "stable_proto_micro_proximity_closure_distance_at_break_total": 0,
+        "stable_proto_micro_proximity_closure_distance_at_break_samples": 0,
+        "stable_proto_household_candidate_nearby_count": 0,
+        "stable_proto_household_candidate_too_far_count": 0,
+        "reproduction_stable_proto_household_path_candidate_nearby_count": 0,
+        "reproduction_stable_proto_household_path_activated_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_stability_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_food_security_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_crisis_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_other_residual_count": 0,
+        "reproduction_stable_proto_household_path_blocked_by_other_count": 0,
         "hunger_deaths_before_first_food_acquisition": 0,
         "population_net_change": 0,
         "agent_average_age": 0.0,
@@ -972,6 +1125,12 @@ def _default_settlement_progression_stats() -> Dict[str, Any]:
         "settlement_proto_count": 0,
         "settlement_stable_village_count": 0,
         "settlement_abandoned_count": 0,
+        "road_blocked_by_life_stage_count": 0,
+        "road_blocked_by_low_population_count": 0,
+        "road_blocked_by_low_settlement_stability_count": 0,
+        "road_blocked_by_low_food_security_count": 0,
+        "road_blocked_by_proto_fragility_count": 0,
+        "road_allowed_by_mature_settlement_count": 0,
         "storage_built_before_house_count": 0,
         "road_built_before_house_threshold_count": 0,
         "startup_survival_relief_ticks": 0,
@@ -996,6 +1155,52 @@ def _default_settlement_progression_stats() -> Dict[str, Any]:
         "house_cluster_count": 0,
         "avg_houses_per_cluster": 0.0,
         "house_cluster_growth_events": 0,
+        "settlement_house_clusters_at_2_houses_count": 0,
+        "settlement_house_clusters_at_or_above_3_houses_count": 0,
+        "settlement_house_clusters_split_near_formalization_count": 0,
+        "settlement_max_houses_in_single_cluster_total": 0,
+        "settlement_max_houses_in_single_cluster_samples": 0,
+        "settlement_same_cluster_house_distance_total": 0.0,
+        "settlement_same_cluster_house_distance_samples": 0,
+        "cluster_meets_house_threshold_count": 0,
+        "cluster_fails_population_gate_count": 0,
+        "cluster_fails_stability_gate_count": 0,
+        "cluster_fails_food_security_gate_count": 0,
+        "cluster_fails_camp_or_household_maturity_gate_count": 0,
+        "cluster_fails_proto_fragility_gate_count": 0,
+        "cluster_formalized_count": 0,
+        "cluster_fails_exactly_one_gate_count": 0,
+        "cluster_fails_population_only_count": 0,
+        "cluster_fails_stability_only_count": 0,
+        "cluster_fails_food_security_only_count": 0,
+        "cluster_coherence_hold_invoked_count": 0,
+        "cluster_coherence_hold_completed_count": 0,
+        "cluster_coherence_hold_broken_by_population_count": 0,
+        "cluster_coherence_hold_broken_by_maturity_count": 0,
+        "cluster_coherence_hold_broken_by_food_security_count": 0,
+        "cluster_population_gate_pass_count": 0,
+        "cluster_food_security_gate_pass_count": 0,
+        "cluster_maturity_gate_pass_count": 0,
+        "cluster_population_and_food_security_pass_count": 0,
+        "cluster_population_and_maturity_pass_count": 0,
+        "cluster_food_security_and_maturity_pass_count": 0,
+        "cluster_all_core_formalization_gates_pass_count": 0,
+        "cluster_all_core_formalization_gates_pass_but_not_formalized_count": 0,
+        "cluster_all_core_coherent_but_not_formalized_count": 0,
+        "cluster_formalization_blocked_by_final_state_condition_count": 0,
+        "cluster_formalization_blocked_by_ordering_or_timing_count": 0,
+        "cluster_formalization_already_saturated_count": 0,
+        "cluster_formalization_transition_count": 0,
+        "cluster_ticks_first_all_core_coherence_to_formalization_total": 0,
+        "cluster_ticks_first_all_core_coherence_to_formalization_samples": 0,
+        "cluster_coherent_without_formalization_ticks_total": 0,
+        "cluster_coherent_without_formalization_ticks_samples": 0,
+        "cluster_population_pass_before_food_fail_streak_total": 0,
+        "cluster_population_pass_before_food_fail_streak_samples": 0,
+        "cluster_food_security_pass_before_maturity_fail_streak_total": 0,
+        "cluster_food_security_pass_before_maturity_fail_streak_samples": 0,
+        "cluster_all_core_gates_consecutive_streak_total": 0,
+        "cluster_all_core_gates_consecutive_streak_samples": 0,
         "storage_built_after_cluster_count": 0,
         "storage_built_without_cluster_count": 0,
         "storage_emergence_attempts": 0,
@@ -1102,6 +1307,63 @@ def _default_settlement_progression_stats() -> Dict[str, Any]:
         "construction_delivery_reservation_alignment_fail_reason_demand_mismatch_count": 0,
         "construction_delivery_reservation_alignment_fail_reason_source_ineligible_count": 0,
         "construction_delivery_reservation_alignment_fail_reason_source_empty_count": 0,
+        "source_candidate_set_created_count": 0,
+        "source_candidate_set_reused_count": 0,
+        "source_candidate_set_exhausted_count": 0,
+        "source_candidate_set_refresh_success_count": 0,
+        "source_candidate_set_refresh_fail_count": 0,
+        "source_candidate_set_bound_source_hit_count": 0,
+        "source_candidate_set_cached_candidate_hit_count": 0,
+        "source_candidate_set_nearest_recompute_hit_count": 0,
+        "source_class_bridge_invoked_count": 0,
+        "source_class_bridge_success_count": 0,
+        "source_class_bridge_fail_count": 0,
+        "source_class_bridge_world_node_hit_count": 0,
+        "source_class_bridge_agent_inventory_hit_count": 0,
+        "source_class_bridge_blocked_by_distance_count": 0,
+        "source_class_bridge_blocked_by_context_count": 0,
+        "bridge_not_entered_due_to_storage_path_preemption_count": 0,
+        "bridge_not_entered_due_to_no_pickup_attempt_count": 0,
+        "bridge_not_entered_due_to_retarget_before_bridge_count": 0,
+        "bridge_not_entered_due_to_invalid_site_before_bridge_count": 0,
+        "bridge_not_entered_due_to_other_count": 0,
+        "bridge_fail_context_village_mismatch_count": 0,
+        "bridge_fail_context_no_local_source_count": 0,
+        "bridge_fail_distance_world_node_count": 0,
+        "bridge_fail_distance_agent_inventory_count": 0,
+        "bridge_fail_other_count": 0,
+        "construction_source_pool_checks_count": 0,
+        "construction_source_pool_storage_holders_total": 0,
+        "construction_source_pool_storage_holders_eligible_count": 0,
+        "construction_source_pool_storage_holders_reachable_count": 0,
+        "construction_source_pool_rejected_wrong_village_context_count": 0,
+        "construction_source_pool_rejected_insufficient_stock_count": 0,
+        "construction_source_pool_rejected_reservation_conflict_count": 0,
+        "construction_source_pool_rejected_not_reachable_count": 0,
+        "construction_source_pool_rejected_not_allowed_source_class_count": 0,
+        "construction_source_pool_global_stock_but_not_delivery_eligible_count": 0,
+        "construction_source_pool_eligible_but_unreachable_count": 0,
+        "construction_source_pool_global_wood_nodes_total": 0,
+        "construction_source_pool_global_stone_nodes_total": 0,
+        "construction_source_pool_global_food_nodes_total": 0,
+        "construction_source_pool_storage_stock_wood_global_total": 0,
+        "construction_source_pool_storage_stock_stone_global_total": 0,
+        "construction_source_pool_storage_stock_food_global_total": 0,
+        "construction_source_pool_storage_stock_wood_eligible_total": 0,
+        "construction_source_pool_storage_stock_stone_eligible_total": 0,
+        "construction_source_pool_storage_stock_food_eligible_total": 0,
+        "construction_source_pool_agent_inventory_wood_global_total": 0,
+        "construction_source_pool_agent_inventory_stone_global_total": 0,
+        "construction_source_pool_agent_inventory_food_global_total": 0,
+        "construction_source_pool_agent_inventory_wood_village_total": 0,
+        "construction_source_pool_agent_inventory_stone_village_total": 0,
+        "construction_source_pool_agent_inventory_food_village_total": 0,
+        "construction_source_pool_camp_buffer_wood_total": 0,
+        "construction_source_pool_camp_buffer_stone_total": 0,
+        "construction_source_pool_camp_buffer_food_total": 0,
+        "construction_source_pool_construction_buffer_wood_total": 0,
+        "construction_source_pool_construction_buffer_stone_total": 0,
+        "construction_source_pool_construction_buffer_food_total": 0,
         "delivery_commitment_hold_invoked_count": 0,
         "delivery_commitment_hold_completed_count": 0,
         "delivery_commitment_hold_broken_by_survival_count": 0,
@@ -6868,7 +7130,7 @@ class World:
             out.append(b)
         return out
 
-    def _compute_house_cluster_sizes(self, *, link_distance: int = 4) -> List[int]:
+    def _compute_house_cluster_sizes(self, *, link_distance: int = SETTLEMENT_HOUSE_CLUSTER_LINK_DISTANCE) -> List[int]:
         houses = self._active_house_buildings()
         if not houses:
             return []
@@ -7393,6 +7655,206 @@ class World:
         if shortage_active and not shortage_prev:
             stats["settlement_food_shortage_events"] = int(stats.get("settlement_food_shortage_events", 0)) + 1
         stats["reserve_shortage_active_prev"] = 1 if shortage_active else 0
+        tick_now = int(getattr(self, "tick", 0))
+        repro_post_lived_total = 0
+        repro_post_lived_samples = 0
+        household_post_lived_total = 0
+        household_post_lived_samples = 0
+        food_stability_post_lived_total = 0
+        food_stability_post_lived_samples = 0
+        repro_ready_post_lived_total = 0
+        repro_ready_post_lived_samples = 0
+        for a in alive_agents:
+            born_tick = int(getattr(a, "born_tick", tick_now))
+            age_ticks = max(0, tick_now - born_tick)
+            repro_age_tick = int(getattr(a, "_useful_lifespan_repro_age_tick", -1))
+            household_tick = int(getattr(a, "_useful_lifespan_household_stage_tick", -1))
+            food_stability_tick = int(getattr(a, "_useful_lifespan_food_security_stability_tick", -1))
+            repro_ready_tick = int(getattr(a, "_useful_lifespan_reproduction_ready_tick", -1))
+            first_stability_tick = int(getattr(a, "_useful_lifespan_first_stability_milestone_tick", -1))
+            if age_ticks >= int(USEFUL_LIFESPAN_REPRO_AGE_TICKS):
+                if repro_age_tick < 0:
+                    setattr(a, "_useful_lifespan_repro_age_tick", int(tick_now))
+                    repro_age_tick = int(tick_now)
+                    stats["agents_reaching_reproductive_age_count"] = int(
+                        stats.get("agents_reaching_reproductive_age_count", 0)
+                    ) + 1
+                repro_post_lived_total += max(0, tick_now - repro_age_tick)
+                repro_post_lived_samples += 1
+            village = self.get_village_by_id(getattr(a, "village_id", None))
+            village_houses = int(village.get("houses", 0)) if isinstance(village, dict) else 0
+            village_pop = int(village.get("population", 0)) if isinstance(village, dict) else 0
+            village_capacity = max(0, int(village_houses) * 5)
+            home_id = getattr(a, "home_building_id", None)
+            home_building = self.buildings.get(home_id) if isinstance(home_id, int) else None
+            has_home_shelter = bool(
+                isinstance(home_building, dict)
+                and str(home_building.get("type", "")) == "house"
+                and str(home_building.get("operational_state", "")) != "under_construction"
+            )
+            has_local_household_context = bool(village_houses >= 2 and village_pop >= 3 and village_pop < max(1, village_capacity))
+            has_camp_shelter = isinstance(self.nearest_active_camp_for_agent(a, max_distance=2), dict)
+            household_stage_ok = bool(has_home_shelter or has_local_household_context or has_camp_shelter)
+            if household_stage_ok:
+                if household_tick < 0:
+                    setattr(a, "_useful_lifespan_household_stage_tick", int(tick_now))
+                    household_tick = int(tick_now)
+                    stats["agents_reaching_household_or_shelter_stage_count"] = int(
+                        stats.get("agents_reaching_household_or_shelter_stage_count", 0)
+                    ) + 1
+                    stats["_age_at_first_household_or_shelter_stage_total"] = int(
+                        stats.get("_age_at_first_household_or_shelter_stage_total", 0)
+                    ) + int(age_ticks)
+                    stats["_age_at_first_household_or_shelter_stage_samples"] = int(
+                        stats.get("_age_at_first_household_or_shelter_stage_samples", 0)
+                    ) + 1
+                    if first_stability_tick < 0:
+                        setattr(a, "_useful_lifespan_first_stability_milestone_tick", int(tick_now))
+                        stats["_age_at_first_meaningful_stability_milestone_total"] = int(
+                            stats.get("_age_at_first_meaningful_stability_milestone_total", 0)
+                        ) + int(age_ticks)
+                        stats["_age_at_first_meaningful_stability_milestone_samples"] = int(
+                            stats.get("_age_at_first_meaningful_stability_milestone_samples", 0)
+                        ) + 1
+                household_post_lived_total += max(0, tick_now - household_tick)
+                household_post_lived_samples += 1
+            pressure = {}
+            if hasattr(self, "compute_local_food_pressure_for_agent"):
+                try:
+                    pressure = self.compute_local_food_pressure_for_agent(a, max_distance=8)
+                except Exception:
+                    pressure = {}
+            buffered_local_food = 0
+            near_food_sources = 0
+            unmet_pressure = True
+            if isinstance(pressure, dict):
+                buffered_local_food = max(0, int(pressure.get("camp_food", 0)) + int(pressure.get("house_food_nearby", 0)))
+                near_food_sources = int(pressure.get("near_food_sources", 0))
+                unmet_pressure = bool(pressure.get("unmet_pressure", False))
+            food_window_ok = bool((not unmet_pressure) and (buffered_local_food >= 1 or near_food_sources >= 2))
+            current_food_streak = int(getattr(a, "_useful_lifespan_food_stability_streak", 0))
+            if food_window_ok:
+                current_food_streak += 1
+            else:
+                current_food_streak = 0
+            setattr(a, "_useful_lifespan_food_stability_streak", int(current_food_streak))
+            if current_food_streak >= int(USEFUL_LIFESPAN_FOOD_STABILITY_WINDOW_TICKS):
+                if food_stability_tick < 0:
+                    setattr(a, "_useful_lifespan_food_security_stability_tick", int(tick_now))
+                    food_stability_tick = int(tick_now)
+                    stats["agents_reaching_local_food_security_stability_count"] = int(
+                        stats.get("agents_reaching_local_food_security_stability_count", 0)
+                    ) + 1
+                    stats["_age_at_local_food_security_stability_total"] = int(
+                        stats.get("_age_at_local_food_security_stability_total", 0)
+                    ) + int(age_ticks)
+                    stats["_age_at_local_food_security_stability_samples"] = int(
+                        stats.get("_age_at_local_food_security_stability_samples", 0)
+                    ) + 1
+                    if first_stability_tick < 0:
+                        setattr(a, "_useful_lifespan_first_stability_milestone_tick", int(tick_now))
+                        stats["_age_at_first_meaningful_stability_milestone_total"] = int(
+                            stats.get("_age_at_first_meaningful_stability_milestone_total", 0)
+                        ) + int(age_ticks)
+                        stats["_age_at_first_meaningful_stability_milestone_samples"] = int(
+                            stats.get("_age_at_first_meaningful_stability_milestone_samples", 0)
+                        ) + 1
+                food_stability_post_lived_total += max(0, tick_now - food_stability_tick)
+                food_stability_post_lived_samples += 1
+            stable_context = bool(
+                str(getattr(a, "village_affiliation_status", "")) in {"attached", "resident"}
+                or isinstance(self.nearest_active_camp_for_agent(a, max_distance=2), dict)
+            )
+            repro_ready_ok = bool(
+                age_ticks >= int(USEFUL_LIFESPAN_REPRO_AGE_TICKS)
+                and household_stage_ok
+                and food_stability_tick >= 0
+                and float(getattr(a, "hunger", 0.0)) >= max(72.0, float(REPRO_MIN_HUNGER) - 20.0)
+                and float(getattr(a, "health", 100.0)) >= float(USEFUL_LIFESPAN_REPRO_READY_MIN_HEALTH)
+                and float(getattr(a, "sleep_need", 0.0)) < 85.0
+                and float(getattr(a, "fatigue", 0.0)) < 85.0
+                and int(getattr(a, "repro_cooldown", 0)) <= 0
+                and stable_context
+            )
+            if repro_ready_ok:
+                if repro_ready_tick < 0:
+                    setattr(a, "_useful_lifespan_reproduction_ready_tick", int(tick_now))
+                    repro_ready_tick = int(tick_now)
+                    stats["agents_reaching_reproduction_ready_state_count"] = int(
+                        stats.get("agents_reaching_reproduction_ready_state_count", 0)
+                    ) + 1
+                    stats["_age_at_reproduction_ready_state_total"] = int(
+                        stats.get("_age_at_reproduction_ready_state_total", 0)
+                    ) + int(age_ticks)
+                    stats["_age_at_reproduction_ready_state_samples"] = int(
+                        stats.get("_age_at_reproduction_ready_state_samples", 0)
+                    ) + 1
+                    if first_stability_tick < 0:
+                        setattr(a, "_useful_lifespan_first_stability_milestone_tick", int(tick_now))
+                        stats["_age_at_first_meaningful_stability_milestone_total"] = int(
+                            stats.get("_age_at_first_meaningful_stability_milestone_total", 0)
+                        ) + int(age_ticks)
+                        stats["_age_at_first_meaningful_stability_milestone_samples"] = int(
+                            stats.get("_age_at_first_meaningful_stability_milestone_samples", 0)
+                        ) + 1
+                repro_ready_post_lived_total += max(0, tick_now - repro_ready_tick)
+                repro_ready_post_lived_samples += 1
+        stats["avg_ticks_lived_after_reproductive_age"] = round(
+            float(repro_post_lived_total) / float(max(1, repro_post_lived_samples)),
+            4,
+        ) if repro_post_lived_samples > 0 else 0.0
+        stats["avg_ticks_lived_after_first_household_or_shelter"] = round(
+            float(household_post_lived_total) / float(max(1, household_post_lived_samples)),
+            4,
+        ) if household_post_lived_samples > 0 else 0.0
+        stats["avg_ticks_lived_after_local_food_security_stability"] = round(
+            float(food_stability_post_lived_total) / float(max(1, food_stability_post_lived_samples)),
+            4,
+        ) if food_stability_post_lived_samples > 0 else 0.0
+        stats["avg_ticks_lived_after_reproduction_ready_state"] = round(
+            float(repro_ready_post_lived_total) / float(max(1, repro_ready_post_lived_samples)),
+            4,
+        ) if repro_ready_post_lived_samples > 0 else 0.0
+        stats["avg_age_at_first_household_or_shelter_stage"] = round(
+            float(stats.get("_age_at_first_household_or_shelter_stage_total", 0))
+            / float(max(1, int(stats.get("_age_at_first_household_or_shelter_stage_samples", 0)))),
+            4,
+        )
+        stats["avg_age_at_local_food_security_stability"] = round(
+            float(stats.get("_age_at_local_food_security_stability_total", 0))
+            / float(max(1, int(stats.get("_age_at_local_food_security_stability_samples", 0)))),
+            4,
+        )
+        stats["avg_age_at_reproduction_ready_state"] = round(
+            float(stats.get("_age_at_reproduction_ready_state_total", 0))
+            / float(max(1, int(stats.get("_age_at_reproduction_ready_state_samples", 0)))),
+            4,
+        )
+        stats["avg_age_at_first_meaningful_stability_milestone"] = round(
+            float(stats.get("_age_at_first_meaningful_stability_milestone_total", 0))
+            / float(max(1, int(stats.get("_age_at_first_meaningful_stability_milestone_samples", 0)))),
+            4,
+        )
+        stats["avg_remaining_lifespan_after_reproductive_age"] = round(
+            float(stats.get("_remaining_lifespan_after_reproductive_age_total", 0))
+            / float(max(1, int(stats.get("_remaining_lifespan_after_reproductive_age_samples", 0)))),
+            4,
+        )
+        stats["avg_remaining_lifespan_after_household_stage"] = round(
+            float(stats.get("_remaining_lifespan_after_household_stage_total", 0))
+            / float(max(1, int(stats.get("_remaining_lifespan_after_household_stage_samples", 0)))),
+            4,
+        )
+        stats["avg_remaining_lifespan_after_food_security_stability"] = round(
+            float(stats.get("_remaining_lifespan_after_food_security_stability_total", 0))
+            / float(max(1, int(stats.get("_remaining_lifespan_after_food_security_stability_samples", 0)))),
+            4,
+        )
+        stats["avg_remaining_lifespan_after_reproduction_ready_state"] = round(
+            float(stats.get("_remaining_lifespan_after_reproduction_ready_state_total", 0))
+            / float(max(1, int(stats.get("_remaining_lifespan_after_reproduction_ready_state_samples", 0)))),
+            4,
+        )
         layer_counts = {
             "self_feeding": 0,
             "group_feeding": 0,
@@ -7783,9 +8245,52 @@ class World:
         stats["_surplus_resource_rate_sum_scaled"] = int(resource_rate_sum_scaled)
         stats["_surplus_rate_samples"] = int(rate_samples)
 
-        sizes = self._compute_house_cluster_sizes(link_distance=4)
+        sizes = self._compute_house_cluster_sizes(link_distance=SETTLEMENT_HOUSE_CLUSTER_LINK_DISTANCE)
         stats["house_cluster_count"] = int(len([s for s in sizes if int(s) > 0]))
         stats["avg_houses_per_cluster"] = round(float(sum(sizes)) / float(max(1, len(sizes))), 3) if sizes else 0.0
+        clusters_at_2 = int(sum(1 for s in sizes if int(s) == 2))
+        clusters_ge_3 = int(sum(1 for s in sizes if int(s) >= 3))
+        max_cluster = int(max(sizes)) if sizes else 0
+        stats["settlement_house_clusters_at_2_houses_count"] = int(clusters_at_2)
+        stats["settlement_house_clusters_at_or_above_3_houses_count"] = int(clusters_ge_3)
+        split_near_formalization = int(1 if (sum(int(s) for s in sizes) >= 3 and clusters_ge_3 <= 0 and clusters_at_2 > 0) else 0)
+        stats["settlement_house_clusters_split_near_formalization_count"] = int(
+            stats.get("settlement_house_clusters_split_near_formalization_count", 0)
+        ) + int(split_near_formalization)
+        stats["settlement_max_houses_in_single_cluster_total"] = int(
+            stats.get("settlement_max_houses_in_single_cluster_total", 0)
+        ) + int(max_cluster)
+        stats["settlement_max_houses_in_single_cluster_samples"] = int(
+            stats.get("settlement_max_houses_in_single_cluster_samples", 0)
+        ) + 1
+        same_cluster_distance_total = 0.0
+        same_cluster_distance_samples = 0
+        for village in (self.villages or []):
+            if not isinstance(village, dict):
+                continue
+            tiles = village.get("tiles", [])
+            if not isinstance(tiles, list):
+                continue
+            coords: List[Tuple[int, int]] = []
+            for t in tiles:
+                if not isinstance(t, dict):
+                    continue
+                coords.append((int(t.get("x", 0)), int(t.get("y", 0))))
+            ncoords = len(coords)
+            if ncoords < 2:
+                continue
+            for i in range(ncoords):
+                x0, y0 = coords[i]
+                for j in range(i + 1, ncoords):
+                    x1, y1 = coords[j]
+                    same_cluster_distance_total += float(abs(x0 - x1) + abs(y0 - y1))
+                    same_cluster_distance_samples += 1
+        stats["settlement_same_cluster_house_distance_total"] = float(
+            stats.get("settlement_same_cluster_house_distance_total", 0.0)
+        ) + float(same_cluster_distance_total)
+        stats["settlement_same_cluster_house_distance_samples"] = int(
+            stats.get("settlement_same_cluster_house_distance_samples", 0)
+        ) + int(same_cluster_distance_samples)
 
         prev_sizes = stats.get("_prev_cluster_sizes", [])
         if not isinstance(prev_sizes, list):
@@ -8327,6 +8832,15 @@ class World:
             else:
                 dead_age_median = (float(dead_age_sorted[mid - 1]) + float(dead_age_sorted[mid])) / 2.0
         dead_age_avg = float(stats.get("_dead_agent_ages_sum", 0)) / float(max(1, int(stats.get("_dead_agent_ages_count", 0))))
+        agents_alive = [a for a in getattr(self, "agents", []) if bool(getattr(a, "alive", False))]
+        agents_male_count = 0
+        agents_female_count = 0
+        for agent in agents_alive:
+            sex = str(getattr(agent, "biological_sex", "") or "").strip().lower()
+            if sex == "male":
+                agents_male_count += 1
+            elif sex == "female":
+                agents_female_count += 1
         return {
             "population_alive": int(stats.get("population_alive", 0)),
             "population_births_count": int(stats.get("population_births_count", 0)),
@@ -8337,6 +8851,393 @@ class World:
             "population_deaths_hunger_age_0_199_count": int(stats.get("population_deaths_hunger_age_0_199_count", 0)),
             "population_deaths_hunger_age_200_599_count": int(stats.get("population_deaths_hunger_age_200_599_count", 0)),
             "population_deaths_hunger_age_600_plus_count": int(stats.get("population_deaths_hunger_age_600_plus_count", 0)),
+            "agents_male_count": int(agents_male_count),
+            "agents_female_count": int(agents_female_count),
+            "agents_above_repro_min_age_count": int(stats.get("agents_above_repro_min_age_count", 0)),
+            "agents_meeting_hunger_requirement_for_repro_count": int(
+                stats.get("agents_meeting_hunger_requirement_for_repro_count", 0)
+            ),
+            "agents_meeting_health_requirement_for_repro_count": int(
+                stats.get("agents_meeting_health_requirement_for_repro_count", 0)
+            ),
+            "agents_in_formal_village_count": int(stats.get("agents_in_formal_village_count", 0)),
+            "agents_meeting_household_or_shelter_requirement_count": int(
+                stats.get("agents_meeting_household_or_shelter_requirement_count", 0)
+            ),
+            "agents_with_local_partner_candidate_count": int(
+                stats.get("agents_with_local_partner_candidate_count", 0)
+            ),
+            "agents_with_opposite_sex_partner_candidate_count": int(
+                stats.get("agents_with_opposite_sex_partner_candidate_count", 0)
+            ),
+            "agents_meeting_stability_requirement_for_repro_count": int(
+                stats.get("agents_meeting_stability_requirement_for_repro_count", 0)
+            ),
+            "agents_meeting_local_food_security_requirement_count": int(
+                stats.get("agents_meeting_local_food_security_requirement_count", 0)
+            ),
+            "agents_meeting_repro_cooldown_requirement_count": int(
+                stats.get("agents_meeting_repro_cooldown_requirement_count", 0)
+            ),
+            "agents_meeting_all_repro_conditions_count": int(
+                stats.get("agents_meeting_all_repro_conditions_count", 0)
+            ),
+            "agents_meeting_all_repro_conditions_except_one_count": int(
+                stats.get("agents_meeting_all_repro_conditions_except_one_count", 0)
+            ),
+            "agents_reaching_reproductive_age_count": int(
+                stats.get("agents_reaching_reproductive_age_count", 0)
+            ),
+            "agents_reaching_household_or_shelter_stage_count": int(
+                stats.get("agents_reaching_household_or_shelter_stage_count", 0)
+            ),
+            "agents_reaching_local_food_security_stability_count": int(
+                stats.get("agents_reaching_local_food_security_stability_count", 0)
+            ),
+            "agents_reaching_reproduction_ready_state_count": int(
+                stats.get("agents_reaching_reproduction_ready_state_count", 0)
+            ),
+            "avg_ticks_lived_after_reproductive_age": round(
+                float(stats.get("avg_ticks_lived_after_reproductive_age", 0.0)),
+                4,
+            ),
+            "avg_ticks_lived_after_first_household_or_shelter": round(
+                float(stats.get("avg_ticks_lived_after_first_household_or_shelter", 0.0)),
+                4,
+            ),
+            "avg_ticks_lived_after_local_food_security_stability": round(
+                float(stats.get("avg_ticks_lived_after_local_food_security_stability", 0.0)),
+                4,
+            ),
+            "avg_ticks_lived_after_reproduction_ready_state": round(
+                float(stats.get("avg_ticks_lived_after_reproduction_ready_state", 0.0)),
+                4,
+            ),
+            "deaths_before_reproductive_age_count": int(
+                stats.get("deaths_before_reproductive_age_count", 0)
+            ),
+            "deaths_before_household_stage_count": int(
+                stats.get("deaths_before_household_stage_count", 0)
+            ),
+            "deaths_before_food_security_stability_count": int(
+                stats.get("deaths_before_food_security_stability_count", 0)
+            ),
+            "avg_age_at_first_household_or_shelter_stage": round(
+                float(stats.get("avg_age_at_first_household_or_shelter_stage", 0.0)),
+                4,
+            ),
+            "avg_age_at_local_food_security_stability": round(
+                float(stats.get("avg_age_at_local_food_security_stability", 0.0)),
+                4,
+            ),
+            "avg_age_at_reproduction_ready_state": round(
+                float(stats.get("avg_age_at_reproduction_ready_state", 0.0)),
+                4,
+            ),
+            "avg_age_at_first_meaningful_stability_milestone": round(
+                float(stats.get("avg_age_at_first_meaningful_stability_milestone", 0.0)),
+                4,
+            ),
+            "avg_remaining_lifespan_after_reproductive_age": round(
+                float(stats.get("avg_remaining_lifespan_after_reproductive_age", 0.0)),
+                4,
+            ),
+            "avg_remaining_lifespan_after_household_stage": round(
+                float(stats.get("avg_remaining_lifespan_after_household_stage", 0.0)),
+                4,
+            ),
+            "avg_remaining_lifespan_after_food_security_stability": round(
+                float(stats.get("avg_remaining_lifespan_after_food_security_stability", 0.0)),
+                4,
+            ),
+            "avg_remaining_lifespan_after_reproduction_ready_state": round(
+                float(stats.get("avg_remaining_lifespan_after_reproduction_ready_state", 0.0)),
+                4,
+            ),
+            "reproduction_attempt_count": int(stats.get("reproduction_attempt_count", 0)),
+            "reproduction_blocked_count": int(stats.get("reproduction_blocked_count", 0)),
+            "reproduction_blocked_by_age_count": int(stats.get("reproduction_blocked_by_age_count", 0)),
+            "reproduction_blocked_by_hunger_count": int(stats.get("reproduction_blocked_by_hunger_count", 0)),
+            "reproduction_blocked_by_health_count": int(stats.get("reproduction_blocked_by_health_count", 0)),
+            "reproduction_blocked_by_no_formal_village_count": int(
+                stats.get("reproduction_blocked_by_no_formal_village_count", 0)
+            ),
+            "reproduction_blocked_by_no_partner_count": int(stats.get("reproduction_blocked_by_no_partner_count", 0)),
+            "reproduction_blocked_by_no_local_partner_count": int(
+                stats.get("reproduction_blocked_by_no_local_partner_count", 0)
+            ),
+            "reproduction_blocked_by_no_opposite_sex_partner_count": int(
+                stats.get("reproduction_blocked_by_no_opposite_sex_partner_count", 0)
+            ),
+            "reproduction_blocked_by_partner_unavailable_count": int(
+                stats.get("reproduction_blocked_by_partner_unavailable_count", 0)
+            ),
+            "reproduction_blocked_by_partner_age_count": int(
+                stats.get("reproduction_blocked_by_partner_age_count", 0)
+            ),
+            "reproduction_blocked_by_partner_health_or_hunger_count": int(
+                stats.get("reproduction_blocked_by_partner_health_or_hunger_count", 0)
+            ),
+            "reproduction_blocked_by_no_shelter_or_household_count": int(
+                stats.get("reproduction_blocked_by_no_shelter_or_household_count", 0)
+            ),
+            "reproduction_blocked_by_low_local_food_security_count": int(
+                stats.get("reproduction_blocked_by_low_local_food_security_count", 0)
+            ),
+            "reproduction_blocked_by_stability_requirement_count": int(
+                stats.get("reproduction_blocked_by_stability_requirement_count", 0)
+            ),
+            "reproduction_blocked_by_cooldown_count": int(stats.get("reproduction_blocked_by_cooldown_count", 0)),
+            "reproduction_blocked_by_other_count": int(stats.get("reproduction_blocked_by_other_count", 0)),
+            "reproduction_proto_path_considered_count": int(
+                stats.get("reproduction_proto_path_considered_count", 0)
+            ),
+            "reproduction_proto_path_activated_count": int(
+                stats.get("reproduction_proto_path_activated_count", 0)
+            ),
+            "reproduction_proto_path_gate_pass_stability_count": int(
+                stats.get("reproduction_proto_path_gate_pass_stability_count", 0)
+            ),
+            "reproduction_proto_path_gate_pass_food_security_count": int(
+                stats.get("reproduction_proto_path_gate_pass_food_security_count", 0)
+            ),
+            "reproduction_proto_path_gate_pass_crisis_count": int(
+                stats.get("reproduction_proto_path_gate_pass_crisis_count", 0)
+            ),
+            "proto_food_security_window_pass_count": int(
+                stats.get("proto_food_security_window_pass_count", 0)
+            ),
+            "proto_food_security_window_fail_count": int(
+                stats.get("proto_food_security_window_fail_count", 0)
+            ),
+            "proto_food_security_window_recent_buffer_ok_count": int(
+                stats.get("proto_food_security_window_recent_buffer_ok_count", 0)
+            ),
+            "proto_food_security_window_recent_pressure_clear_count": int(
+                stats.get("proto_food_security_window_recent_pressure_clear_count", 0)
+            ),
+            "reproduction_proto_path_blocked_by_stability_count": int(
+                stats.get("reproduction_proto_path_blocked_by_stability_count", 0)
+            ),
+            "reproduction_proto_path_blocked_by_food_security_count": int(
+                stats.get("reproduction_proto_path_blocked_by_food_security_count", 0)
+            ),
+            "reproduction_proto_path_blocked_by_no_opposite_sex_partner_count": int(
+                stats.get("reproduction_proto_path_blocked_by_no_opposite_sex_partner_count", 0)
+            ),
+            "reproduction_proto_path_blocked_by_no_shelter_count": int(
+                stats.get("reproduction_proto_path_blocked_by_no_shelter_count", 0)
+            ),
+            "reproduction_proto_path_blocked_by_other_count": int(
+                stats.get("reproduction_proto_path_blocked_by_other_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_considered_count": int(
+                stats.get("reproduction_stable_proto_household_path_considered_count", 0)
+            ),
+            "stable_proto_household_path_considered_count": int(
+                stats.get("stable_proto_household_path_considered_count", 0)
+            ),
+            "stable_proto_household_local_anchor_created_count": int(
+                stats.get("stable_proto_household_local_anchor_created_count", 0)
+            ),
+            "stable_proto_household_local_anchor_reused_count": int(
+                stats.get("stable_proto_household_local_anchor_reused_count", 0)
+            ),
+            "stable_proto_household_local_anchor_fail_count": int(
+                stats.get("stable_proto_household_local_anchor_fail_count", 0)
+            ),
+            "stable_proto_household_candidate_nearby_count": int(
+                stats.get("stable_proto_household_candidate_nearby_count", 0)
+            ),
+            "stable_proto_household_candidate_too_far_count": int(
+                stats.get("stable_proto_household_candidate_too_far_count", 0)
+            ),
+            "stable_proto_anchor_partner_candidate_count": int(
+                stats.get("stable_proto_anchor_partner_candidate_count", 0)
+            ),
+            "stable_proto_anchor_partner_nearby_count": int(
+                stats.get("stable_proto_anchor_partner_nearby_count", 0)
+            ),
+            "stable_proto_anchor_partner_too_far_count": int(
+                stats.get("stable_proto_anchor_partner_too_far_count", 0)
+            ),
+            "stable_proto_anchor_partner_blocked_by_health_or_hunger_count": int(
+                stats.get("stable_proto_anchor_partner_blocked_by_health_or_hunger_count", 0)
+            ),
+            "stable_proto_anchor_partner_blocked_by_cooldown_count": int(
+                stats.get("stable_proto_anchor_partner_blocked_by_cooldown_count", 0)
+            ),
+            "stable_proto_anchor_partner_blocked_by_context_mismatch_count": int(
+                stats.get("stable_proto_anchor_partner_blocked_by_context_mismatch_count", 0)
+            ),
+            "stable_proto_partner_convergence_invoked_count": int(
+                stats.get("stable_proto_partner_convergence_invoked_count", 0)
+            ),
+            "stable_proto_partner_convergence_completed_count": int(
+                stats.get("stable_proto_partner_convergence_completed_count", 0)
+            ),
+            "stable_proto_partner_convergence_broken_by_survival_count": int(
+                stats.get("stable_proto_partner_convergence_broken_by_survival_count", 0)
+            ),
+            "stable_proto_partner_convergence_broken_by_context_loss_count": int(
+                stats.get("stable_proto_partner_convergence_broken_by_context_loss_count", 0)
+            ),
+            "stable_proto_copresence_ticks_with_opposite_sex_partner_count": int(
+                stats.get("stable_proto_copresence_ticks_with_opposite_sex_partner_count", 0)
+            ),
+            "stable_proto_copresence_window_pass_count": int(
+                stats.get("stable_proto_copresence_window_pass_count", 0)
+            ),
+            "stable_proto_copresence_broken_by_survival_count": int(
+                stats.get("stable_proto_copresence_broken_by_survival_count", 0)
+            ),
+            "stable_proto_copresence_broken_by_context_loss_count": int(
+                stats.get("stable_proto_copresence_broken_by_context_loss_count", 0)
+            ),
+            "stable_proto_local_retention_applied_count": int(
+                stats.get("stable_proto_local_retention_applied_count", 0)
+            ),
+            "stable_proto_partner_drift_damping_invoked_count": int(
+                stats.get("stable_proto_partner_drift_damping_invoked_count", 0)
+            ),
+            "stable_proto_partner_drift_damping_completed_count": int(
+                stats.get("stable_proto_partner_drift_damping_completed_count", 0)
+            ),
+            "stable_proto_partner_drift_damping_broken_by_survival_count": int(
+                stats.get("stable_proto_partner_drift_damping_broken_by_survival_count", 0)
+            ),
+            "stable_proto_partner_drift_damping_broken_by_context_loss_count": int(
+                stats.get("stable_proto_partner_drift_damping_broken_by_context_loss_count", 0)
+            ),
+            "stable_proto_micro_context_hold_invoked_count": int(
+                stats.get("stable_proto_micro_context_hold_invoked_count", 0)
+            ),
+            "stable_proto_path_inactivity_jitter_hold_invoked_count": int(
+                stats.get("stable_proto_path_inactivity_jitter_hold_invoked_count", 0)
+            ),
+            "stable_proto_path_inactivity_jitter_hold_completed_count": int(
+                stats.get("stable_proto_path_inactivity_jitter_hold_completed_count", 0)
+            ),
+            "stable_proto_path_inactivity_jitter_hold_broken_by_survival_count": int(
+                stats.get("stable_proto_path_inactivity_jitter_hold_broken_by_survival_count", 0)
+            ),
+            "stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count": int(
+                stats.get("stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count", 0)
+            ),
+            "stable_proto_micro_context_loss_anchor_invalid_count": int(
+                stats.get("stable_proto_micro_context_loss_anchor_invalid_count", 0)
+            ),
+            "stable_proto_micro_context_loss_anchor_shift_count": int(
+                stats.get("stable_proto_micro_context_loss_anchor_shift_count", 0)
+            ),
+            "stable_proto_micro_context_loss_proto_path_inactive_count": int(
+                stats.get("stable_proto_micro_context_loss_proto_path_inactive_count", 0)
+            ),
+            "stable_proto_micro_context_loss_candidate_missing_count": int(
+                stats.get("stable_proto_micro_context_loss_candidate_missing_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_invoked_count": int(
+                stats.get("stable_proto_micro_proximity_closure_invoked_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_completed_count": int(
+                stats.get("stable_proto_micro_proximity_closure_completed_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_broken_by_survival_count": int(
+                stats.get("stable_proto_micro_proximity_closure_broken_by_survival_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_broken_by_context_loss_count": int(
+                stats.get("stable_proto_micro_proximity_closure_broken_by_context_loss_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_failed_by_distance_too_large_count": int(
+                stats.get("stable_proto_micro_proximity_closure_failed_by_distance_too_large_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_failed_by_ttl_expiry_count": int(
+                stats.get("stable_proto_micro_proximity_closure_failed_by_ttl_expiry_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_failed_by_survival_count": int(
+                stats.get("stable_proto_micro_proximity_closure_failed_by_survival_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_failed_by_context_loss_count": int(
+                stats.get("stable_proto_micro_proximity_closure_failed_by_context_loss_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_failed_by_partner_moved_away_count": int(
+                stats.get("stable_proto_micro_proximity_closure_failed_by_partner_moved_away_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_failed_by_anchor_shift_count": int(
+                stats.get("stable_proto_micro_proximity_closure_failed_by_anchor_shift_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_failed_by_path_not_completed_count": int(
+                stats.get("stable_proto_micro_proximity_closure_failed_by_path_not_completed_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_failed_by_other_count": int(
+                stats.get("stable_proto_micro_proximity_closure_failed_by_other_count", 0)
+            ),
+            "stable_proto_micro_proximity_closure_avg_ticks_to_break": round(
+                float(stats.get("stable_proto_micro_proximity_closure_ticks_to_break_total", 0))
+                / float(max(1, int(stats.get("stable_proto_micro_proximity_closure_ticks_to_break_samples", 0)))),
+                4,
+            ),
+            "stable_proto_micro_proximity_closure_avg_distance_at_invoke": round(
+                float(stats.get("stable_proto_micro_proximity_closure_distance_at_invoke_total", 0))
+                / float(max(1, int(stats.get("stable_proto_micro_proximity_closure_distance_at_invoke_samples", 0)))),
+                4,
+            ),
+            "stable_proto_micro_proximity_closure_avg_distance_at_break": round(
+                float(stats.get("stable_proto_micro_proximity_closure_distance_at_break_total", 0))
+                / float(max(1, int(stats.get("stable_proto_micro_proximity_closure_distance_at_break_samples", 0)))),
+                4,
+            ),
+            "stable_proto_household_candidate_nearby_count": int(
+                stats.get("stable_proto_household_candidate_nearby_count", 0)
+            ),
+            "stable_proto_household_candidate_too_far_count": int(
+                stats.get("stable_proto_household_candidate_too_far_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_candidate_nearby_count": int(
+                stats.get("reproduction_stable_proto_household_path_candidate_nearby_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_activated_count": int(
+                stats.get("reproduction_stable_proto_household_path_activated_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_stability_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_stability_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_food_security_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_food_security_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_crisis_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_crisis_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_other_residual_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_other_residual_count", 0)
+            ),
+            "reproduction_stable_proto_household_path_blocked_by_other_count": int(
+                stats.get("reproduction_stable_proto_household_path_blocked_by_other_count", 0)
+            ),
             "hunger_deaths_before_first_food_acquisition": int(
                 stats.get("hunger_deaths_before_first_food_acquisition", 0)
             ),
@@ -9060,6 +9961,12 @@ class World:
             "settlement_proto_count": int(stats.get("settlement_proto_count", 0)),
             "settlement_stable_village_count": int(stats.get("settlement_stable_village_count", 0)),
             "settlement_abandoned_count": int(stats.get("settlement_abandoned_count", 0)),
+            "road_blocked_by_life_stage_count": int(stats.get("road_blocked_by_life_stage_count", 0)),
+            "road_blocked_by_low_population_count": int(stats.get("road_blocked_by_low_population_count", 0)),
+            "road_blocked_by_low_settlement_stability_count": int(stats.get("road_blocked_by_low_settlement_stability_count", 0)),
+            "road_blocked_by_low_food_security_count": int(stats.get("road_blocked_by_low_food_security_count", 0)),
+            "road_blocked_by_proto_fragility_count": int(stats.get("road_blocked_by_proto_fragility_count", 0)),
+            "road_allowed_by_mature_settlement_count": int(stats.get("road_allowed_by_mature_settlement_count", 0)),
             "storage_built_before_house_count": int(stats.get("storage_built_before_house_count", 0)),
             "road_built_before_house_threshold_count": int(stats.get("road_built_before_house_threshold_count", 0)),
             "startup_survival_relief_ticks": int(stats.get("startup_survival_relief_ticks", 0)),
@@ -9083,6 +9990,137 @@ class World:
             "house_cluster_count": int(stats.get("house_cluster_count", 0)),
             "avg_houses_per_cluster": float(stats.get("avg_houses_per_cluster", 0.0)),
             "house_cluster_growth_events": int(stats.get("house_cluster_growth_events", 0)),
+            "settlement_house_clusters_at_2_houses_count": int(
+                stats.get("settlement_house_clusters_at_2_houses_count", 0)
+            ),
+            "settlement_house_clusters_at_or_above_3_houses_count": int(
+                stats.get("settlement_house_clusters_at_or_above_3_houses_count", 0)
+            ),
+            "settlement_house_clusters_split_near_formalization_count": int(
+                stats.get("settlement_house_clusters_split_near_formalization_count", 0)
+            ),
+            "cluster_meets_house_threshold_count": int(
+                stats.get("cluster_meets_house_threshold_count", 0)
+            ),
+            "cluster_fails_population_gate_count": int(
+                stats.get("cluster_fails_population_gate_count", 0)
+            ),
+            "cluster_fails_stability_gate_count": int(
+                stats.get("cluster_fails_stability_gate_count", 0)
+            ),
+            "cluster_fails_food_security_gate_count": int(
+                stats.get("cluster_fails_food_security_gate_count", 0)
+            ),
+            "cluster_fails_camp_or_household_maturity_gate_count": int(
+                stats.get("cluster_fails_camp_or_household_maturity_gate_count", 0)
+            ),
+            "cluster_fails_proto_fragility_gate_count": int(
+                stats.get("cluster_fails_proto_fragility_gate_count", 0)
+            ),
+            "cluster_formalized_count": int(
+                stats.get("cluster_formalized_count", 0)
+            ),
+            "cluster_fails_exactly_one_gate_count": int(
+                stats.get("cluster_fails_exactly_one_gate_count", 0)
+            ),
+            "cluster_fails_population_only_count": int(
+                stats.get("cluster_fails_population_only_count", 0)
+            ),
+            "cluster_fails_stability_only_count": int(
+                stats.get("cluster_fails_stability_only_count", 0)
+            ),
+            "cluster_fails_food_security_only_count": int(
+                stats.get("cluster_fails_food_security_only_count", 0)
+            ),
+            "cluster_coherence_hold_invoked_count": int(
+                stats.get("cluster_coherence_hold_invoked_count", 0)
+            ),
+            "cluster_coherence_hold_completed_count": int(
+                stats.get("cluster_coherence_hold_completed_count", 0)
+            ),
+            "cluster_coherence_hold_broken_by_population_count": int(
+                stats.get("cluster_coherence_hold_broken_by_population_count", 0)
+            ),
+            "cluster_coherence_hold_broken_by_maturity_count": int(
+                stats.get("cluster_coherence_hold_broken_by_maturity_count", 0)
+            ),
+            "cluster_coherence_hold_broken_by_food_security_count": int(
+                stats.get("cluster_coherence_hold_broken_by_food_security_count", 0)
+            ),
+            "cluster_population_gate_pass_count": int(
+                stats.get("cluster_population_gate_pass_count", 0)
+            ),
+            "cluster_food_security_gate_pass_count": int(
+                stats.get("cluster_food_security_gate_pass_count", 0)
+            ),
+            "cluster_maturity_gate_pass_count": int(
+                stats.get("cluster_maturity_gate_pass_count", 0)
+            ),
+            "cluster_population_and_food_security_pass_count": int(
+                stats.get("cluster_population_and_food_security_pass_count", 0)
+            ),
+            "cluster_population_and_maturity_pass_count": int(
+                stats.get("cluster_population_and_maturity_pass_count", 0)
+            ),
+            "cluster_food_security_and_maturity_pass_count": int(
+                stats.get("cluster_food_security_and_maturity_pass_count", 0)
+            ),
+            "cluster_all_core_formalization_gates_pass_count": int(
+                stats.get("cluster_all_core_formalization_gates_pass_count", 0)
+            ),
+            "cluster_all_core_formalization_gates_pass_but_not_formalized_count": int(
+                stats.get("cluster_all_core_formalization_gates_pass_but_not_formalized_count", 0)
+            ),
+            "cluster_all_core_coherent_but_not_formalized_count": int(
+                stats.get("cluster_all_core_coherent_but_not_formalized_count", 0)
+            ),
+            "cluster_formalization_blocked_by_final_state_condition_count": int(
+                stats.get("cluster_formalization_blocked_by_final_state_condition_count", 0)
+            ),
+            "cluster_formalization_blocked_by_ordering_or_timing_count": int(
+                stats.get("cluster_formalization_blocked_by_ordering_or_timing_count", 0)
+            ),
+            "cluster_formalization_already_saturated_count": int(
+                stats.get("cluster_formalization_already_saturated_count", 0)
+            ),
+            "cluster_formalization_transition_count": int(
+                stats.get("cluster_formalization_transition_count", 0)
+            ),
+            "avg_cluster_population_pass_before_food_fail_streak_ticks": round(
+                float(stats.get("cluster_population_pass_before_food_fail_streak_total", 0))
+                / float(max(1, int(stats.get("cluster_population_pass_before_food_fail_streak_samples", 0)))),
+                4,
+            ),
+            "avg_cluster_food_security_pass_before_maturity_fail_streak_ticks": round(
+                float(stats.get("cluster_food_security_pass_before_maturity_fail_streak_total", 0))
+                / float(max(1, int(stats.get("cluster_food_security_pass_before_maturity_fail_streak_samples", 0)))),
+                4,
+            ),
+            "avg_cluster_all_core_gates_consecutive_streak_ticks": round(
+                float(stats.get("cluster_all_core_gates_consecutive_streak_total", 0))
+                / float(max(1, int(stats.get("cluster_all_core_gates_consecutive_streak_samples", 0)))),
+                4,
+            ),
+            "avg_cluster_ticks_first_all_core_coherence_to_formalization": round(
+                float(stats.get("cluster_ticks_first_all_core_coherence_to_formalization_total", 0))
+                / float(max(1, int(stats.get("cluster_ticks_first_all_core_coherence_to_formalization_samples", 0)))),
+                4,
+            ),
+            "avg_cluster_coherent_ticks_without_formalization": round(
+                float(stats.get("cluster_coherent_without_formalization_ticks_total", 0))
+                / float(max(1, int(stats.get("cluster_coherent_without_formalization_ticks_samples", 0)))),
+                4,
+            ),
+            "avg_max_houses_in_single_cluster": round(
+                float(stats.get("settlement_max_houses_in_single_cluster_total", 0))
+                / float(max(1, int(stats.get("settlement_max_houses_in_single_cluster_samples", 0)))),
+                4,
+            ),
+            "avg_distance_between_same_settlement_houses": round(
+                float(stats.get("settlement_same_cluster_house_distance_total", 0.0))
+                / float(max(1, int(stats.get("settlement_same_cluster_house_distance_samples", 0)))),
+                4,
+            ),
             "storage_built_after_cluster_count": int(stats.get("storage_built_after_cluster_count", 0)),
             "storage_built_without_cluster_count": int(stats.get("storage_built_without_cluster_count", 0)),
             "storage_emergence_attempts": int(stats.get("storage_emergence_attempts", 0)),
@@ -9217,6 +10255,147 @@ class World:
             ),
             "construction_delivery_reservation_alignment_fail_reason_source_empty_count": int(
                 stats.get("construction_delivery_reservation_alignment_fail_reason_source_empty_count", 0)
+            ),
+            "source_candidate_set_created_count": int(stats.get("source_candidate_set_created_count", 0)),
+            "source_candidate_set_reused_count": int(stats.get("source_candidate_set_reused_count", 0)),
+            "source_candidate_set_exhausted_count": int(stats.get("source_candidate_set_exhausted_count", 0)),
+            "source_candidate_set_refresh_success_count": int(stats.get("source_candidate_set_refresh_success_count", 0)),
+            "source_candidate_set_refresh_fail_count": int(stats.get("source_candidate_set_refresh_fail_count", 0)),
+            "source_candidate_set_bound_source_hit_count": int(stats.get("source_candidate_set_bound_source_hit_count", 0)),
+            "source_candidate_set_cached_candidate_hit_count": int(stats.get("source_candidate_set_cached_candidate_hit_count", 0)),
+            "source_candidate_set_nearest_recompute_hit_count": int(
+                stats.get("source_candidate_set_nearest_recompute_hit_count", 0)
+            ),
+            "source_class_bridge_invoked_count": int(stats.get("source_class_bridge_invoked_count", 0)),
+            "source_class_bridge_success_count": int(stats.get("source_class_bridge_success_count", 0)),
+            "source_class_bridge_fail_count": int(stats.get("source_class_bridge_fail_count", 0)),
+            "source_class_bridge_world_node_hit_count": int(stats.get("source_class_bridge_world_node_hit_count", 0)),
+            "source_class_bridge_agent_inventory_hit_count": int(
+                stats.get("source_class_bridge_agent_inventory_hit_count", 0)
+            ),
+            "source_class_bridge_blocked_by_distance_count": int(
+                stats.get("source_class_bridge_blocked_by_distance_count", 0)
+            ),
+            "source_class_bridge_blocked_by_context_count": int(
+                stats.get("source_class_bridge_blocked_by_context_count", 0)
+            ),
+            "bridge_not_entered_due_to_storage_path_preemption_count": int(
+                stats.get("bridge_not_entered_due_to_storage_path_preemption_count", 0)
+            ),
+            "bridge_not_entered_due_to_no_pickup_attempt_count": int(
+                stats.get("bridge_not_entered_due_to_no_pickup_attempt_count", 0)
+            ),
+            "bridge_not_entered_due_to_retarget_before_bridge_count": int(
+                stats.get("bridge_not_entered_due_to_retarget_before_bridge_count", 0)
+            ),
+            "bridge_not_entered_due_to_invalid_site_before_bridge_count": int(
+                stats.get("bridge_not_entered_due_to_invalid_site_before_bridge_count", 0)
+            ),
+            "bridge_not_entered_due_to_other_count": int(stats.get("bridge_not_entered_due_to_other_count", 0)),
+            "bridge_fail_context_village_mismatch_count": int(
+                stats.get("bridge_fail_context_village_mismatch_count", 0)
+            ),
+            "bridge_fail_context_no_local_source_count": int(
+                stats.get("bridge_fail_context_no_local_source_count", 0)
+            ),
+            "bridge_fail_distance_world_node_count": int(stats.get("bridge_fail_distance_world_node_count", 0)),
+            "bridge_fail_distance_agent_inventory_count": int(
+                stats.get("bridge_fail_distance_agent_inventory_count", 0)
+            ),
+            "bridge_fail_other_count": int(stats.get("bridge_fail_other_count", 0)),
+            "construction_source_pool_checks_count": int(stats.get("construction_source_pool_checks_count", 0)),
+            "construction_source_pool_storage_holders_total": int(
+                stats.get("construction_source_pool_storage_holders_total", 0)
+            ),
+            "construction_source_pool_storage_holders_eligible_count": int(
+                stats.get("construction_source_pool_storage_holders_eligible_count", 0)
+            ),
+            "construction_source_pool_storage_holders_reachable_count": int(
+                stats.get("construction_source_pool_storage_holders_reachable_count", 0)
+            ),
+            "construction_source_pool_rejected_wrong_village_context_count": int(
+                stats.get("construction_source_pool_rejected_wrong_village_context_count", 0)
+            ),
+            "construction_source_pool_rejected_insufficient_stock_count": int(
+                stats.get("construction_source_pool_rejected_insufficient_stock_count", 0)
+            ),
+            "construction_source_pool_rejected_reservation_conflict_count": int(
+                stats.get("construction_source_pool_rejected_reservation_conflict_count", 0)
+            ),
+            "construction_source_pool_rejected_not_reachable_count": int(
+                stats.get("construction_source_pool_rejected_not_reachable_count", 0)
+            ),
+            "construction_source_pool_rejected_not_allowed_source_class_count": int(
+                stats.get("construction_source_pool_rejected_not_allowed_source_class_count", 0)
+            ),
+            "construction_source_pool_global_stock_but_not_delivery_eligible_count": int(
+                stats.get("construction_source_pool_global_stock_but_not_delivery_eligible_count", 0)
+            ),
+            "construction_source_pool_eligible_but_unreachable_count": int(
+                stats.get("construction_source_pool_eligible_but_unreachable_count", 0)
+            ),
+            "construction_source_pool_global_wood_nodes_total": int(
+                stats.get("construction_source_pool_global_wood_nodes_total", 0)
+            ),
+            "construction_source_pool_global_stone_nodes_total": int(
+                stats.get("construction_source_pool_global_stone_nodes_total", 0)
+            ),
+            "construction_source_pool_global_food_nodes_total": int(
+                stats.get("construction_source_pool_global_food_nodes_total", 0)
+            ),
+            "construction_source_pool_storage_stock_wood_global_total": int(
+                stats.get("construction_source_pool_storage_stock_wood_global_total", 0)
+            ),
+            "construction_source_pool_storage_stock_stone_global_total": int(
+                stats.get("construction_source_pool_storage_stock_stone_global_total", 0)
+            ),
+            "construction_source_pool_storage_stock_food_global_total": int(
+                stats.get("construction_source_pool_storage_stock_food_global_total", 0)
+            ),
+            "construction_source_pool_storage_stock_wood_eligible_total": int(
+                stats.get("construction_source_pool_storage_stock_wood_eligible_total", 0)
+            ),
+            "construction_source_pool_storage_stock_stone_eligible_total": int(
+                stats.get("construction_source_pool_storage_stock_stone_eligible_total", 0)
+            ),
+            "construction_source_pool_storage_stock_food_eligible_total": int(
+                stats.get("construction_source_pool_storage_stock_food_eligible_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_wood_global_total": int(
+                stats.get("construction_source_pool_agent_inventory_wood_global_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_stone_global_total": int(
+                stats.get("construction_source_pool_agent_inventory_stone_global_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_food_global_total": int(
+                stats.get("construction_source_pool_agent_inventory_food_global_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_wood_village_total": int(
+                stats.get("construction_source_pool_agent_inventory_wood_village_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_stone_village_total": int(
+                stats.get("construction_source_pool_agent_inventory_stone_village_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_food_village_total": int(
+                stats.get("construction_source_pool_agent_inventory_food_village_total", 0)
+            ),
+            "construction_source_pool_camp_buffer_wood_total": int(
+                stats.get("construction_source_pool_camp_buffer_wood_total", 0)
+            ),
+            "construction_source_pool_camp_buffer_stone_total": int(
+                stats.get("construction_source_pool_camp_buffer_stone_total", 0)
+            ),
+            "construction_source_pool_camp_buffer_food_total": int(
+                stats.get("construction_source_pool_camp_buffer_food_total", 0)
+            ),
+            "construction_source_pool_construction_buffer_wood_total": int(
+                stats.get("construction_source_pool_construction_buffer_wood_total", 0)
+            ),
+            "construction_source_pool_construction_buffer_stone_total": int(
+                stats.get("construction_source_pool_construction_buffer_stone_total", 0)
+            ),
+            "construction_source_pool_construction_buffer_food_total": int(
+                stats.get("construction_source_pool_construction_buffer_food_total", 0)
             ),
             "delivery_commitment_hold_invoked_count": int(stats.get("delivery_commitment_hold_invoked_count", 0)),
             "delivery_commitment_hold_completed_count": int(stats.get("delivery_commitment_hold_completed_count", 0)),
@@ -9985,6 +11164,161 @@ class World:
             "construction_delivery_reservation_alignment_fail_reason_source_empty_count": int(
                 progression.get("construction_delivery_reservation_alignment_fail_reason_source_empty_count", 0)
             ),
+            "source_candidate_set_created_count": int(progression.get("source_candidate_set_created_count", 0)),
+            "source_candidate_set_reused_count": int(progression.get("source_candidate_set_reused_count", 0)),
+            "source_candidate_set_exhausted_count": int(progression.get("source_candidate_set_exhausted_count", 0)),
+            "source_candidate_set_refresh_success_count": int(
+                progression.get("source_candidate_set_refresh_success_count", 0)
+            ),
+            "source_candidate_set_refresh_fail_count": int(progression.get("source_candidate_set_refresh_fail_count", 0)),
+            "source_candidate_set_bound_source_hit_count": int(
+                progression.get("source_candidate_set_bound_source_hit_count", 0)
+            ),
+            "source_candidate_set_cached_candidate_hit_count": int(
+                progression.get("source_candidate_set_cached_candidate_hit_count", 0)
+            ),
+            "source_candidate_set_nearest_recompute_hit_count": int(
+                progression.get("source_candidate_set_nearest_recompute_hit_count", 0)
+            ),
+            "source_class_bridge_invoked_count": int(progression.get("source_class_bridge_invoked_count", 0)),
+            "source_class_bridge_success_count": int(progression.get("source_class_bridge_success_count", 0)),
+            "source_class_bridge_fail_count": int(progression.get("source_class_bridge_fail_count", 0)),
+            "source_class_bridge_world_node_hit_count": int(
+                progression.get("source_class_bridge_world_node_hit_count", 0)
+            ),
+            "source_class_bridge_agent_inventory_hit_count": int(
+                progression.get("source_class_bridge_agent_inventory_hit_count", 0)
+            ),
+            "source_class_bridge_blocked_by_distance_count": int(
+                progression.get("source_class_bridge_blocked_by_distance_count", 0)
+            ),
+            "source_class_bridge_blocked_by_context_count": int(
+                progression.get("source_class_bridge_blocked_by_context_count", 0)
+            ),
+            "bridge_not_entered_due_to_storage_path_preemption_count": int(
+                progression.get("bridge_not_entered_due_to_storage_path_preemption_count", 0)
+            ),
+            "bridge_not_entered_due_to_no_pickup_attempt_count": int(
+                progression.get("bridge_not_entered_due_to_no_pickup_attempt_count", 0)
+            ),
+            "bridge_not_entered_due_to_retarget_before_bridge_count": int(
+                progression.get("bridge_not_entered_due_to_retarget_before_bridge_count", 0)
+            ),
+            "bridge_not_entered_due_to_invalid_site_before_bridge_count": int(
+                progression.get("bridge_not_entered_due_to_invalid_site_before_bridge_count", 0)
+            ),
+            "bridge_not_entered_due_to_other_count": int(
+                progression.get("bridge_not_entered_due_to_other_count", 0)
+            ),
+            "bridge_fail_context_village_mismatch_count": int(
+                progression.get("bridge_fail_context_village_mismatch_count", 0)
+            ),
+            "bridge_fail_context_no_local_source_count": int(
+                progression.get("bridge_fail_context_no_local_source_count", 0)
+            ),
+            "bridge_fail_distance_world_node_count": int(
+                progression.get("bridge_fail_distance_world_node_count", 0)
+            ),
+            "bridge_fail_distance_agent_inventory_count": int(
+                progression.get("bridge_fail_distance_agent_inventory_count", 0)
+            ),
+            "bridge_fail_other_count": int(progression.get("bridge_fail_other_count", 0)),
+            "construction_source_pool_checks_count": int(
+                progression.get("construction_source_pool_checks_count", 0)
+            ),
+            "construction_source_pool_storage_holders_total": int(
+                progression.get("construction_source_pool_storage_holders_total", 0)
+            ),
+            "construction_source_pool_storage_holders_eligible_count": int(
+                progression.get("construction_source_pool_storage_holders_eligible_count", 0)
+            ),
+            "construction_source_pool_storage_holders_reachable_count": int(
+                progression.get("construction_source_pool_storage_holders_reachable_count", 0)
+            ),
+            "construction_source_pool_rejected_wrong_village_context_count": int(
+                progression.get("construction_source_pool_rejected_wrong_village_context_count", 0)
+            ),
+            "construction_source_pool_rejected_insufficient_stock_count": int(
+                progression.get("construction_source_pool_rejected_insufficient_stock_count", 0)
+            ),
+            "construction_source_pool_rejected_reservation_conflict_count": int(
+                progression.get("construction_source_pool_rejected_reservation_conflict_count", 0)
+            ),
+            "construction_source_pool_rejected_not_reachable_count": int(
+                progression.get("construction_source_pool_rejected_not_reachable_count", 0)
+            ),
+            "construction_source_pool_rejected_not_allowed_source_class_count": int(
+                progression.get("construction_source_pool_rejected_not_allowed_source_class_count", 0)
+            ),
+            "construction_source_pool_global_stock_but_not_delivery_eligible_count": int(
+                progression.get("construction_source_pool_global_stock_but_not_delivery_eligible_count", 0)
+            ),
+            "construction_source_pool_eligible_but_unreachable_count": int(
+                progression.get("construction_source_pool_eligible_but_unreachable_count", 0)
+            ),
+            "construction_source_pool_global_wood_nodes_total": int(
+                progression.get("construction_source_pool_global_wood_nodes_total", 0)
+            ),
+            "construction_source_pool_global_stone_nodes_total": int(
+                progression.get("construction_source_pool_global_stone_nodes_total", 0)
+            ),
+            "construction_source_pool_global_food_nodes_total": int(
+                progression.get("construction_source_pool_global_food_nodes_total", 0)
+            ),
+            "construction_source_pool_storage_stock_wood_global_total": int(
+                progression.get("construction_source_pool_storage_stock_wood_global_total", 0)
+            ),
+            "construction_source_pool_storage_stock_stone_global_total": int(
+                progression.get("construction_source_pool_storage_stock_stone_global_total", 0)
+            ),
+            "construction_source_pool_storage_stock_food_global_total": int(
+                progression.get("construction_source_pool_storage_stock_food_global_total", 0)
+            ),
+            "construction_source_pool_storage_stock_wood_eligible_total": int(
+                progression.get("construction_source_pool_storage_stock_wood_eligible_total", 0)
+            ),
+            "construction_source_pool_storage_stock_stone_eligible_total": int(
+                progression.get("construction_source_pool_storage_stock_stone_eligible_total", 0)
+            ),
+            "construction_source_pool_storage_stock_food_eligible_total": int(
+                progression.get("construction_source_pool_storage_stock_food_eligible_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_wood_global_total": int(
+                progression.get("construction_source_pool_agent_inventory_wood_global_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_stone_global_total": int(
+                progression.get("construction_source_pool_agent_inventory_stone_global_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_food_global_total": int(
+                progression.get("construction_source_pool_agent_inventory_food_global_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_wood_village_total": int(
+                progression.get("construction_source_pool_agent_inventory_wood_village_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_stone_village_total": int(
+                progression.get("construction_source_pool_agent_inventory_stone_village_total", 0)
+            ),
+            "construction_source_pool_agent_inventory_food_village_total": int(
+                progression.get("construction_source_pool_agent_inventory_food_village_total", 0)
+            ),
+            "construction_source_pool_camp_buffer_wood_total": int(
+                progression.get("construction_source_pool_camp_buffer_wood_total", 0)
+            ),
+            "construction_source_pool_camp_buffer_stone_total": int(
+                progression.get("construction_source_pool_camp_buffer_stone_total", 0)
+            ),
+            "construction_source_pool_camp_buffer_food_total": int(
+                progression.get("construction_source_pool_camp_buffer_food_total", 0)
+            ),
+            "construction_source_pool_construction_buffer_wood_total": int(
+                progression.get("construction_source_pool_construction_buffer_wood_total", 0)
+            ),
+            "construction_source_pool_construction_buffer_stone_total": int(
+                progression.get("construction_source_pool_construction_buffer_stone_total", 0)
+            ),
+            "construction_source_pool_construction_buffer_food_total": int(
+                progression.get("construction_source_pool_construction_buffer_food_total", 0)
+            ),
             "delivery_commitment_hold_invoked_count": int(
                 progression.get("delivery_commitment_hold_invoked_count", 0)
             ),
@@ -10520,25 +11854,55 @@ class World:
         stability_ticks = int(village.get("stability_ticks", int(SETTLEMENT_STABILITY_TICK_THRESHOLD)))
         food_stock = int(metrics.get("food_stock", (village.get("storage", {}) or {}).get("food", 0)))
         food_buffer_critical = bool(needs.get("food_buffer_critical", False))
+        road_maturity_ready = bool(metrics.get("road_maturity_ready", False))
+        if "road_maturity_ready" not in metrics:
+            road_maturity_ready = bool(
+                pop >= 6
+                and houses >= 3
+                and food_stock >= max(4, pop // 2)
+                and not food_buffer_critical
+            )
+        settlement_stage = str(metrics.get("settlement_stage", village.get("settlement_stage", "")) or "").strip().lower()
+        food_buffer_low = bool(needs.get("food_buffer_low", False))
         camps = self.compute_progression_snapshot().get("active_camps_by_village", {})
         camp_count = int(camps.get(uid, 0)) if isinstance(camps, dict) else 0
         reason = ""
+        reason_metric = ""
         if not formalized:
             reason = "village_not_formalized"
+            reason_metric = "road_blocked_by_life_stage_count"
+        elif settlement_stage in {"survival", "camp"} and (pop < 8 or houses < 3):
+            reason = "proto_fragility"
+            reason_metric = "road_blocked_by_proto_fragility_count"
+        elif pop < 6:
+            reason = "population_too_low"
+            reason_metric = "road_blocked_by_low_population_count"
         elif stability_ticks < int(SETTLEMENT_STABILITY_TICK_THRESHOLD):
             reason = "village_not_stable_yet"
-        elif pop < 5:
-            reason = "population_too_low"
-        elif houses < 3 and camp_count <= 0:
-            reason = "no_settlement_anchor"
-        elif food_buffer_critical or food_stock < max(3, pop // 2):
-            reason = "food_crisis_active"
+            reason_metric = "road_blocked_by_low_settlement_stability_count"
+        elif food_buffer_critical or food_buffer_low or food_stock < max(6, pop):
+            reason = "food_security_low"
+            reason_metric = "road_blocked_by_low_food_security_count"
+        elif houses < 3:
+            reason = "life_stage_not_ready"
+            reason_metric = "road_blocked_by_life_stage_count"
+        elif not road_maturity_ready:
+            reason = "maturity_signal_missing"
+            reason_metric = "road_blocked_by_life_stage_count"
         if not reason:
+            progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
+            progression["road_allowed_by_mature_settlement_count"] = int(
+                progression.get("road_allowed_by_mature_settlement_count", 0)
+            ) + 1
+            self.settlement_progression_stats = progression
             return (False, "")
         stats = self.progression_stats if isinstance(self.progression_stats, dict) else _default_progression_stats()
+        progression = self.settlement_progression_stats if isinstance(self.settlement_progression_stats, dict) else _default_settlement_progression_stats()
         stats["early_road_suppressed_count"] = int(stats.get("early_road_suppressed_count", 0)) + 1
         reasons = stats.setdefault("road_priority_deferred_reasons", {})
         reasons[reason] = int(reasons.get(reason, 0)) + 1
+        if reason_metric:
+            progression[reason_metric] = int(progression.get(reason_metric, 0)) + 1
         if uid:
             by_village = stats.setdefault("by_village", {})
             entry = by_village.get(uid)
@@ -10557,6 +11921,7 @@ class World:
             vreasons = entry.setdefault("road_priority_deferred_reasons", {})
             vreasons[reason] = int(vreasons.get(reason, 0)) + 1
         self.progression_stats = stats
+        self.settlement_progression_stats = progression
         return (True, reason)
 
     def compute_progression_snapshot(self) -> Dict[str, Any]:
@@ -11306,6 +12671,50 @@ class World:
             ) + 1
         born_tick = int(getattr(agent, "born_tick", int(getattr(self, "tick", 0))))
         age = max(0, int(getattr(self, "tick", 0)) - born_tick)
+        repro_age_tick = int(getattr(agent, "_useful_lifespan_repro_age_tick", -1))
+        household_tick = int(getattr(agent, "_useful_lifespan_household_stage_tick", -1))
+        food_stability_tick = int(getattr(agent, "_useful_lifespan_food_security_stability_tick", -1))
+        repro_ready_tick = int(getattr(agent, "_useful_lifespan_reproduction_ready_tick", -1))
+        if repro_age_tick < 0:
+            progression["deaths_before_reproductive_age_count"] = int(
+                progression.get("deaths_before_reproductive_age_count", 0)
+            ) + 1
+        else:
+            progression["_remaining_lifespan_after_reproductive_age_total"] = int(
+                progression.get("_remaining_lifespan_after_reproductive_age_total", 0)
+            ) + int(max(0, int(getattr(self, "tick", 0)) - repro_age_tick))
+            progression["_remaining_lifespan_after_reproductive_age_samples"] = int(
+                progression.get("_remaining_lifespan_after_reproductive_age_samples", 0)
+            ) + 1
+        if household_tick < 0:
+            progression["deaths_before_household_stage_count"] = int(
+                progression.get("deaths_before_household_stage_count", 0)
+            ) + 1
+        else:
+            progression["_remaining_lifespan_after_household_stage_total"] = int(
+                progression.get("_remaining_lifespan_after_household_stage_total", 0)
+            ) + int(max(0, int(getattr(self, "tick", 0)) - household_tick))
+            progression["_remaining_lifespan_after_household_stage_samples"] = int(
+                progression.get("_remaining_lifespan_after_household_stage_samples", 0)
+            ) + 1
+        if food_stability_tick < 0:
+            progression["deaths_before_food_security_stability_count"] = int(
+                progression.get("deaths_before_food_security_stability_count", 0)
+            ) + 1
+        else:
+            progression["_remaining_lifespan_after_food_security_stability_total"] = int(
+                progression.get("_remaining_lifespan_after_food_security_stability_total", 0)
+            ) + int(max(0, int(getattr(self, "tick", 0)) - food_stability_tick))
+            progression["_remaining_lifespan_after_food_security_stability_samples"] = int(
+                progression.get("_remaining_lifespan_after_food_security_stability_samples", 0)
+            ) + 1
+        if repro_ready_tick >= 0:
+            progression["_remaining_lifespan_after_reproduction_ready_state_total"] = int(
+                progression.get("_remaining_lifespan_after_reproduction_ready_state_total", 0)
+            ) + int(max(0, int(getattr(self, "tick", 0)) - repro_ready_tick))
+            progression["_remaining_lifespan_after_reproduction_ready_state_samples"] = int(
+                progression.get("_remaining_lifespan_after_reproduction_ready_state_samples", 0)
+            ) + 1
         if reason_key == "hunger":
             if age <= 199:
                 progression["population_deaths_hunger_age_0_199_count"] = int(

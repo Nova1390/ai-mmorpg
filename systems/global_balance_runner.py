@@ -627,6 +627,123 @@ def aggregate_global_balance_results(
     house_cluster_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "house_cluster_count"))
     avg_houses_per_cluster = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "avg_houses_per_cluster"))
     house_cluster_growth_events = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "house_cluster_growth_events"))
+    settlement_house_clusters_at_2_houses_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "settlement_house_clusters_at_2_houses_count")
+    )
+    settlement_house_clusters_at_or_above_3_houses_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "settlement_house_clusters_at_or_above_3_houses_count")
+    )
+    settlement_house_clusters_split_near_formalization_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "settlement_house_clusters_split_near_formalization_count")
+    )
+    cluster_meets_house_threshold_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_meets_house_threshold_count")
+    )
+    cluster_fails_population_gate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_population_gate_count")
+    )
+    cluster_fails_stability_gate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_stability_gate_count")
+    )
+    cluster_fails_food_security_gate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_food_security_gate_count")
+    )
+    cluster_fails_camp_or_household_maturity_gate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_camp_or_household_maturity_gate_count")
+    )
+    cluster_fails_proto_fragility_gate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_proto_fragility_gate_count")
+    )
+    cluster_formalized_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_formalized_count")
+    )
+    cluster_fails_exactly_one_gate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_exactly_one_gate_count")
+    )
+    cluster_fails_population_only_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_population_only_count")
+    )
+    cluster_fails_stability_only_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_stability_only_count")
+    )
+    cluster_fails_food_security_only_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_fails_food_security_only_count")
+    )
+    cluster_coherence_hold_invoked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_coherence_hold_invoked_count")
+    )
+    cluster_coherence_hold_completed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_coherence_hold_completed_count")
+    )
+    cluster_coherence_hold_broken_by_population_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_coherence_hold_broken_by_population_count")
+    )
+    cluster_coherence_hold_broken_by_maturity_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_coherence_hold_broken_by_maturity_count")
+    )
+    cluster_coherence_hold_broken_by_food_security_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_coherence_hold_broken_by_food_security_count")
+    )
+    cluster_population_gate_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_population_gate_pass_count")
+    )
+    cluster_food_security_gate_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_food_security_gate_pass_count")
+    )
+    cluster_maturity_gate_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_maturity_gate_pass_count")
+    )
+    cluster_population_and_food_security_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_population_and_food_security_pass_count")
+    )
+    cluster_population_and_maturity_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_population_and_maturity_pass_count")
+    )
+    cluster_food_security_and_maturity_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_food_security_and_maturity_pass_count")
+    )
+    cluster_all_core_formalization_gates_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_all_core_formalization_gates_pass_count")
+    )
+    cluster_all_core_formalization_gates_pass_but_not_formalized_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_all_core_formalization_gates_pass_but_not_formalized_count")
+    )
+    cluster_all_core_coherent_but_not_formalized_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_all_core_coherent_but_not_formalized_count")
+    )
+    cluster_formalization_blocked_by_final_state_condition_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_formalization_blocked_by_final_state_condition_count")
+    )
+    cluster_formalization_blocked_by_ordering_or_timing_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_formalization_blocked_by_ordering_or_timing_count")
+    )
+    cluster_formalization_already_saturated_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_formalization_already_saturated_count")
+    )
+    cluster_formalization_transition_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "cluster_formalization_transition_count")
+    )
+    avg_cluster_population_pass_before_food_fail_streak_ticks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_cluster_population_pass_before_food_fail_streak_ticks")
+    )
+    avg_cluster_food_security_pass_before_maturity_fail_streak_ticks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_cluster_food_security_pass_before_maturity_fail_streak_ticks")
+    )
+    avg_cluster_all_core_gates_consecutive_streak_ticks = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_cluster_all_core_gates_consecutive_streak_ticks")
+    )
+    avg_cluster_ticks_first_all_core_coherence_to_formalization = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_cluster_ticks_first_all_core_coherence_to_formalization")
+    )
+    avg_cluster_coherent_ticks_without_formalization = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_cluster_coherent_ticks_without_formalization")
+    )
+    avg_max_houses_in_single_cluster = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_max_houses_in_single_cluster")
+    )
+    avg_distance_between_same_settlement_houses = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_distance_between_same_settlement_houses")
+    )
     farm_sites_created = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "farm_sites_created"))
     farm_work_events = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "farm_work_events"))
     farm_abandoned = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "farm_abandoned"))
@@ -740,6 +857,395 @@ def aggregate_global_balance_results(
     secondary_nucleus_house_growth_events = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "secondary_nucleus_house_growth_events"))
     population_alive = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_alive"))
     population_births_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_births_count"))
+    agents_male_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "agents_male_count"))
+    agents_female_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "agents_female_count"))
+    agents_above_repro_min_age_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_above_repro_min_age_count")
+    )
+    agents_meeting_hunger_requirement_for_repro_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_meeting_hunger_requirement_for_repro_count")
+    )
+    agents_meeting_health_requirement_for_repro_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_meeting_health_requirement_for_repro_count")
+    )
+    agents_in_formal_village_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_in_formal_village_count")
+    )
+    agents_meeting_household_or_shelter_requirement_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_meeting_household_or_shelter_requirement_count")
+    )
+    agents_with_local_partner_candidate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_with_local_partner_candidate_count")
+    )
+    agents_with_opposite_sex_partner_candidate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_with_opposite_sex_partner_candidate_count")
+    )
+    agents_meeting_stability_requirement_for_repro_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_meeting_stability_requirement_for_repro_count")
+    )
+    agents_meeting_local_food_security_requirement_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_meeting_local_food_security_requirement_count")
+    )
+    agents_meeting_repro_cooldown_requirement_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_meeting_repro_cooldown_requirement_count")
+    )
+    agents_meeting_all_repro_conditions_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_meeting_all_repro_conditions_count")
+    )
+    agents_meeting_all_repro_conditions_except_one_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_meeting_all_repro_conditions_except_one_count")
+    )
+    agents_reaching_reproductive_age_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_reaching_reproductive_age_count")
+    )
+    avg_ticks_lived_after_reproductive_age = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_ticks_lived_after_reproductive_age")
+    )
+    agents_reaching_household_or_shelter_stage_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_reaching_household_or_shelter_stage_count")
+    )
+    avg_ticks_lived_after_first_household_or_shelter = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_ticks_lived_after_first_household_or_shelter")
+    )
+    agents_reaching_local_food_security_stability_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_reaching_local_food_security_stability_count")
+    )
+    avg_ticks_lived_after_local_food_security_stability = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_ticks_lived_after_local_food_security_stability")
+    )
+    agents_reaching_reproduction_ready_state_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "agents_reaching_reproduction_ready_state_count")
+    )
+    avg_ticks_lived_after_reproduction_ready_state = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_ticks_lived_after_reproduction_ready_state")
+    )
+    deaths_before_reproductive_age_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "deaths_before_reproductive_age_count")
+    )
+    deaths_before_household_stage_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "deaths_before_household_stage_count")
+    )
+    deaths_before_food_security_stability_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "deaths_before_food_security_stability_count")
+    )
+    avg_age_at_first_household_or_shelter_stage = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_age_at_first_household_or_shelter_stage")
+    )
+    avg_age_at_local_food_security_stability = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_age_at_local_food_security_stability")
+    )
+    avg_age_at_reproduction_ready_state = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_age_at_reproduction_ready_state")
+    )
+    avg_age_at_first_meaningful_stability_milestone = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_age_at_first_meaningful_stability_milestone")
+    )
+    avg_remaining_lifespan_after_reproductive_age = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_remaining_lifespan_after_reproductive_age")
+    )
+    avg_remaining_lifespan_after_household_stage = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_remaining_lifespan_after_household_stage")
+    )
+    avg_remaining_lifespan_after_food_security_stability = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_remaining_lifespan_after_food_security_stability")
+    )
+    avg_remaining_lifespan_after_reproduction_ready_state = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "avg_remaining_lifespan_after_reproduction_ready_state")
+    )
+    reproduction_attempt_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_attempt_count")
+    )
+    reproduction_blocked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_count")
+    )
+    reproduction_blocked_by_age_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_age_count")
+    )
+    reproduction_blocked_by_hunger_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_hunger_count")
+    )
+    reproduction_blocked_by_health_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_health_count")
+    )
+    reproduction_blocked_by_no_formal_village_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_no_formal_village_count")
+    )
+    reproduction_blocked_by_no_partner_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_no_partner_count")
+    )
+    reproduction_blocked_by_no_local_partner_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_no_local_partner_count")
+    )
+    reproduction_blocked_by_no_opposite_sex_partner_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_no_opposite_sex_partner_count")
+    )
+    reproduction_blocked_by_partner_unavailable_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_partner_unavailable_count")
+    )
+    reproduction_blocked_by_partner_age_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_partner_age_count")
+    )
+    reproduction_blocked_by_partner_health_or_hunger_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_partner_health_or_hunger_count")
+    )
+    reproduction_blocked_by_no_shelter_or_household_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_no_shelter_or_household_count")
+    )
+    reproduction_blocked_by_low_local_food_security_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_low_local_food_security_count")
+    )
+    reproduction_blocked_by_stability_requirement_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_stability_requirement_count")
+    )
+    reproduction_blocked_by_cooldown_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_cooldown_count")
+    )
+    reproduction_blocked_by_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_blocked_by_other_count")
+    )
+    reproduction_proto_path_considered_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_considered_count")
+    )
+    reproduction_proto_path_activated_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_activated_count")
+    )
+    reproduction_proto_path_gate_pass_stability_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_gate_pass_stability_count")
+    )
+    reproduction_proto_path_gate_pass_food_security_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_gate_pass_food_security_count")
+    )
+    reproduction_proto_path_gate_pass_crisis_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_gate_pass_crisis_count")
+    )
+    proto_food_security_window_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "proto_food_security_window_pass_count")
+    )
+    proto_food_security_window_fail_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "proto_food_security_window_fail_count")
+    )
+    proto_food_security_window_recent_buffer_ok_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "proto_food_security_window_recent_buffer_ok_count")
+    )
+    proto_food_security_window_recent_pressure_clear_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "proto_food_security_window_recent_pressure_clear_count")
+    )
+    reproduction_proto_path_blocked_by_stability_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_blocked_by_stability_count")
+    )
+    reproduction_proto_path_blocked_by_food_security_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_blocked_by_food_security_count")
+    )
+    reproduction_proto_path_blocked_by_no_opposite_sex_partner_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_blocked_by_no_opposite_sex_partner_count")
+    )
+    reproduction_proto_path_blocked_by_no_shelter_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_blocked_by_no_shelter_count")
+    )
+    reproduction_proto_path_blocked_by_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_proto_path_blocked_by_other_count")
+    )
+    reproduction_stable_proto_household_path_considered_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_considered_count")
+    )
+    stable_proto_household_path_considered_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_household_path_considered_count")
+    )
+    stable_proto_household_local_anchor_created_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_household_local_anchor_created_count")
+    )
+    stable_proto_household_local_anchor_reused_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_household_local_anchor_reused_count")
+    )
+    stable_proto_household_local_anchor_fail_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_household_local_anchor_fail_count")
+    )
+    stable_proto_household_candidate_nearby_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_household_candidate_nearby_count")
+    )
+    stable_proto_household_candidate_too_far_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_household_candidate_too_far_count")
+    )
+    stable_proto_anchor_partner_candidate_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_anchor_partner_candidate_count")
+    )
+    stable_proto_anchor_partner_nearby_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_anchor_partner_nearby_count")
+    )
+    stable_proto_anchor_partner_too_far_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_anchor_partner_too_far_count")
+    )
+    stable_proto_anchor_partner_blocked_by_health_or_hunger_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_anchor_partner_blocked_by_health_or_hunger_count")
+    )
+    stable_proto_anchor_partner_blocked_by_cooldown_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_anchor_partner_blocked_by_cooldown_count")
+    )
+    stable_proto_anchor_partner_blocked_by_context_mismatch_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_anchor_partner_blocked_by_context_mismatch_count")
+    )
+    stable_proto_partner_convergence_invoked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_partner_convergence_invoked_count")
+    )
+    stable_proto_partner_convergence_completed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_partner_convergence_completed_count")
+    )
+    stable_proto_partner_convergence_broken_by_survival_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_partner_convergence_broken_by_survival_count")
+    )
+    stable_proto_partner_convergence_broken_by_context_loss_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_partner_convergence_broken_by_context_loss_count")
+    )
+    stable_proto_copresence_ticks_with_opposite_sex_partner_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_copresence_ticks_with_opposite_sex_partner_count")
+    )
+    stable_proto_copresence_window_pass_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_copresence_window_pass_count")
+    )
+    stable_proto_copresence_broken_by_survival_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_copresence_broken_by_survival_count")
+    )
+    stable_proto_copresence_broken_by_context_loss_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_copresence_broken_by_context_loss_count")
+    )
+    stable_proto_local_retention_applied_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_local_retention_applied_count")
+    )
+    stable_proto_partner_drift_damping_invoked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_partner_drift_damping_invoked_count")
+    )
+    stable_proto_partner_drift_damping_completed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_partner_drift_damping_completed_count")
+    )
+    stable_proto_partner_drift_damping_broken_by_survival_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_partner_drift_damping_broken_by_survival_count")
+    )
+    stable_proto_partner_drift_damping_broken_by_context_loss_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_partner_drift_damping_broken_by_context_loss_count")
+    )
+    stable_proto_micro_context_hold_invoked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_context_hold_invoked_count")
+    )
+    stable_proto_path_inactivity_jitter_hold_invoked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_path_inactivity_jitter_hold_invoked_count")
+    )
+    stable_proto_path_inactivity_jitter_hold_completed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_path_inactivity_jitter_hold_completed_count")
+    )
+    stable_proto_path_inactivity_jitter_hold_broken_by_survival_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_path_inactivity_jitter_hold_broken_by_survival_count")
+    )
+    stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count")
+    )
+    stable_proto_micro_context_loss_anchor_invalid_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_context_loss_anchor_invalid_count")
+    )
+    stable_proto_micro_context_loss_anchor_shift_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_context_loss_anchor_shift_count")
+    )
+    stable_proto_micro_context_loss_proto_path_inactive_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_context_loss_proto_path_inactive_count")
+    )
+    stable_proto_micro_context_loss_candidate_missing_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_context_loss_candidate_missing_count")
+    )
+    stable_proto_micro_proximity_closure_invoked_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_invoked_count")
+    )
+    stable_proto_micro_proximity_closure_completed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_completed_count")
+    )
+    stable_proto_micro_proximity_closure_broken_by_survival_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_broken_by_survival_count")
+    )
+    stable_proto_micro_proximity_closure_broken_by_context_loss_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_broken_by_context_loss_count")
+    )
+    stable_proto_micro_proximity_closure_failed_by_distance_too_large_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_failed_by_distance_too_large_count")
+    )
+    stable_proto_micro_proximity_closure_failed_by_ttl_expiry_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_failed_by_ttl_expiry_count")
+    )
+    stable_proto_micro_proximity_closure_failed_by_survival_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_failed_by_survival_count")
+    )
+    stable_proto_micro_proximity_closure_failed_by_context_loss_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_failed_by_context_loss_count")
+    )
+    stable_proto_micro_proximity_closure_failed_by_partner_moved_away_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_failed_by_partner_moved_away_count")
+    )
+    stable_proto_micro_proximity_closure_failed_by_anchor_shift_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_failed_by_anchor_shift_count")
+    )
+    stable_proto_micro_proximity_closure_failed_by_path_not_completed_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_failed_by_path_not_completed_count")
+    )
+    stable_proto_micro_proximity_closure_failed_by_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_failed_by_other_count")
+    )
+    stable_proto_micro_proximity_closure_avg_ticks_to_break = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_avg_ticks_to_break")
+    )
+    stable_proto_micro_proximity_closure_avg_distance_at_invoke = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_avg_distance_at_invoke")
+    )
+    stable_proto_micro_proximity_closure_avg_distance_at_break = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_micro_proximity_closure_avg_distance_at_break")
+    )
+    stable_proto_household_candidate_nearby_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_household_candidate_nearby_count")
+    )
+    stable_proto_household_candidate_too_far_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "stable_proto_household_candidate_too_far_count")
+    )
+    reproduction_stable_proto_household_path_candidate_nearby_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_candidate_nearby_count")
+    )
+    reproduction_stable_proto_household_path_activated_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_activated_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_stability_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_stability_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_food_security_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_food_security_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_crisis_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_crisis_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_other_residual_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_other_residual_count")
+    )
+    reproduction_stable_proto_household_path_blocked_by_other_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "reproduction_stable_proto_household_path_blocked_by_other_count")
+    )
     population_deaths_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_count"))
     population_deaths_hunger_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_hunger_count"))
     population_deaths_exhaustion_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "population_deaths_exhaustion_count"))
@@ -1458,6 +1964,20 @@ def aggregate_global_balance_results(
     settlement_proto_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "settlement_proto_count"))
     settlement_stable_village_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "settlement_stable_village_count"))
     settlement_abandoned_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "settlement_abandoned_count"))
+    road_blocked_by_life_stage_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "road_blocked_by_life_stage_count"))
+    road_blocked_by_low_population_count = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "road_blocked_by_low_population_count"))
+    road_blocked_by_low_settlement_stability_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "road_blocked_by_low_settlement_stability_count")
+    )
+    road_blocked_by_low_food_security_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "road_blocked_by_low_food_security_count")
+    )
+    road_blocked_by_proto_fragility_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "road_blocked_by_proto_fragility_count")
+    )
+    road_allowed_by_mature_settlement_count = _collect(
+        ("metrics", "camp_proto", "settlement_progression_metrics", "road_allowed_by_mature_settlement_count")
+    )
     first_house_completion_tick = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "first_house_completion_tick"))
     first_storage_completion_tick = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "first_storage_completion_tick"))
     first_road_completion_tick = _collect(("metrics", "camp_proto", "settlement_progression_metrics", "first_road_completion_tick"))
@@ -1717,6 +2237,141 @@ def aggregate_global_balance_results(
     )
     construction_delivery_reservation_alignment_fail_reason_source_empty_count = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "construction_delivery_reservation_alignment_fail_reason_source_empty_count")
+    )
+    source_candidate_set_created_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_candidate_set_created_count")
+    )
+    source_candidate_set_reused_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_candidate_set_reused_count")
+    )
+    source_candidate_set_exhausted_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_candidate_set_exhausted_count")
+    )
+    source_candidate_set_refresh_success_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_candidate_set_refresh_success_count")
+    )
+    source_candidate_set_refresh_fail_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_candidate_set_refresh_fail_count")
+    )
+    source_candidate_set_bound_source_hit_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_candidate_set_bound_source_hit_count")
+    )
+    source_candidate_set_cached_candidate_hit_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_candidate_set_cached_candidate_hit_count")
+    )
+    source_candidate_set_nearest_recompute_hit_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_candidate_set_nearest_recompute_hit_count")
+    )
+    source_class_bridge_invoked_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_class_bridge_invoked_count")
+    )
+    source_class_bridge_success_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_class_bridge_success_count")
+    )
+    source_class_bridge_fail_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_class_bridge_fail_count")
+    )
+    source_class_bridge_world_node_hit_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_class_bridge_world_node_hit_count")
+    )
+    source_class_bridge_agent_inventory_hit_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_class_bridge_agent_inventory_hit_count")
+    )
+    source_class_bridge_blocked_by_distance_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_class_bridge_blocked_by_distance_count")
+    )
+    source_class_bridge_blocked_by_context_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "source_class_bridge_blocked_by_context_count")
+    )
+    bridge_not_entered_due_to_storage_path_preemption_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_not_entered_due_to_storage_path_preemption_count")
+    )
+    bridge_not_entered_due_to_no_pickup_attempt_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_not_entered_due_to_no_pickup_attempt_count")
+    )
+    bridge_not_entered_due_to_retarget_before_bridge_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_not_entered_due_to_retarget_before_bridge_count")
+    )
+    bridge_not_entered_due_to_invalid_site_before_bridge_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_not_entered_due_to_invalid_site_before_bridge_count")
+    )
+    bridge_not_entered_due_to_other_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_not_entered_due_to_other_count")
+    )
+    bridge_fail_context_village_mismatch_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_fail_context_village_mismatch_count")
+    )
+    bridge_fail_context_no_local_source_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_fail_context_no_local_source_count")
+    )
+    bridge_fail_distance_world_node_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_fail_distance_world_node_count")
+    )
+    bridge_fail_distance_agent_inventory_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_fail_distance_agent_inventory_count")
+    )
+    bridge_fail_other_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "bridge_fail_other_count")
+    )
+    construction_source_pool_checks_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_checks_count")
+    )
+    construction_source_pool_storage_holders_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_storage_holders_total")
+    )
+    construction_source_pool_storage_holders_eligible_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_storage_holders_eligible_count")
+    )
+    construction_source_pool_storage_holders_reachable_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_storage_holders_reachable_count")
+    )
+    construction_source_pool_rejected_wrong_village_context_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_rejected_wrong_village_context_count")
+    )
+    construction_source_pool_rejected_insufficient_stock_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_rejected_insufficient_stock_count")
+    )
+    construction_source_pool_rejected_reservation_conflict_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_rejected_reservation_conflict_count")
+    )
+    construction_source_pool_rejected_not_reachable_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_rejected_not_reachable_count")
+    )
+    construction_source_pool_rejected_not_allowed_source_class_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_rejected_not_allowed_source_class_count")
+    )
+    construction_source_pool_global_stock_but_not_delivery_eligible_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_global_stock_but_not_delivery_eligible_count")
+    )
+    construction_source_pool_eligible_but_unreachable_count = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_eligible_but_unreachable_count")
+    )
+    construction_source_pool_global_wood_nodes_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_global_wood_nodes_total")
+    )
+    construction_source_pool_global_stone_nodes_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_global_stone_nodes_total")
+    )
+    construction_source_pool_storage_stock_wood_eligible_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_storage_stock_wood_eligible_total")
+    )
+    construction_source_pool_storage_stock_stone_eligible_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_storage_stock_stone_eligible_total")
+    )
+    construction_source_pool_storage_stock_wood_global_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_storage_stock_wood_global_total")
+    )
+    construction_source_pool_storage_stock_stone_global_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_storage_stock_stone_global_total")
+    )
+    construction_source_pool_agent_inventory_wood_global_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_agent_inventory_wood_global_total")
+    )
+    construction_source_pool_camp_buffer_wood_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_camp_buffer_wood_total")
+    )
+    construction_source_pool_construction_buffer_wood_total = _collect(
+        ("metrics", "camp_proto", "material_feasibility_metrics", "construction_source_pool_construction_buffer_wood_total")
     )
     delivery_commitment_hold_invoked_count = _collect(
         ("metrics", "camp_proto", "material_feasibility_metrics", "delivery_commitment_hold_invoked_count")
@@ -2247,6 +2902,123 @@ def aggregate_global_balance_results(
             "avg_house_cluster_count": float(mean(house_cluster_count)) if house_cluster_count else 0.0,
             "avg_houses_per_cluster": float(mean(avg_houses_per_cluster)) if avg_houses_per_cluster else 0.0,
             "avg_house_cluster_growth_events": float(mean(house_cluster_growth_events)) if house_cluster_growth_events else 0.0,
+            "avg_settlement_house_clusters_at_2_houses_count": float(
+                mean(settlement_house_clusters_at_2_houses_count)
+            ) if settlement_house_clusters_at_2_houses_count else 0.0,
+            "avg_settlement_house_clusters_at_or_above_3_houses_count": float(
+                mean(settlement_house_clusters_at_or_above_3_houses_count)
+            ) if settlement_house_clusters_at_or_above_3_houses_count else 0.0,
+            "avg_settlement_house_clusters_split_near_formalization_count": float(
+                mean(settlement_house_clusters_split_near_formalization_count)
+            ) if settlement_house_clusters_split_near_formalization_count else 0.0,
+            "avg_cluster_meets_house_threshold_count": float(
+                mean(cluster_meets_house_threshold_count)
+            ) if cluster_meets_house_threshold_count else 0.0,
+            "avg_cluster_fails_population_gate_count": float(
+                mean(cluster_fails_population_gate_count)
+            ) if cluster_fails_population_gate_count else 0.0,
+            "avg_cluster_fails_stability_gate_count": float(
+                mean(cluster_fails_stability_gate_count)
+            ) if cluster_fails_stability_gate_count else 0.0,
+            "avg_cluster_fails_food_security_gate_count": float(
+                mean(cluster_fails_food_security_gate_count)
+            ) if cluster_fails_food_security_gate_count else 0.0,
+            "avg_cluster_fails_camp_or_household_maturity_gate_count": float(
+                mean(cluster_fails_camp_or_household_maturity_gate_count)
+            ) if cluster_fails_camp_or_household_maturity_gate_count else 0.0,
+            "avg_cluster_fails_proto_fragility_gate_count": float(
+                mean(cluster_fails_proto_fragility_gate_count)
+            ) if cluster_fails_proto_fragility_gate_count else 0.0,
+            "avg_cluster_formalized_count": float(
+                mean(cluster_formalized_count)
+            ) if cluster_formalized_count else 0.0,
+            "avg_cluster_fails_exactly_one_gate_count": float(
+                mean(cluster_fails_exactly_one_gate_count)
+            ) if cluster_fails_exactly_one_gate_count else 0.0,
+            "avg_cluster_fails_population_only_count": float(
+                mean(cluster_fails_population_only_count)
+            ) if cluster_fails_population_only_count else 0.0,
+            "avg_cluster_fails_stability_only_count": float(
+                mean(cluster_fails_stability_only_count)
+            ) if cluster_fails_stability_only_count else 0.0,
+            "avg_cluster_fails_food_security_only_count": float(
+                mean(cluster_fails_food_security_only_count)
+            ) if cluster_fails_food_security_only_count else 0.0,
+            "avg_cluster_coherence_hold_invoked_count": float(
+                mean(cluster_coherence_hold_invoked_count)
+            ) if cluster_coherence_hold_invoked_count else 0.0,
+            "avg_cluster_coherence_hold_completed_count": float(
+                mean(cluster_coherence_hold_completed_count)
+            ) if cluster_coherence_hold_completed_count else 0.0,
+            "avg_cluster_coherence_hold_broken_by_population_count": float(
+                mean(cluster_coherence_hold_broken_by_population_count)
+            ) if cluster_coherence_hold_broken_by_population_count else 0.0,
+            "avg_cluster_coherence_hold_broken_by_maturity_count": float(
+                mean(cluster_coherence_hold_broken_by_maturity_count)
+            ) if cluster_coherence_hold_broken_by_maturity_count else 0.0,
+            "avg_cluster_coherence_hold_broken_by_food_security_count": float(
+                mean(cluster_coherence_hold_broken_by_food_security_count)
+            ) if cluster_coherence_hold_broken_by_food_security_count else 0.0,
+            "avg_cluster_population_gate_pass_count": float(
+                mean(cluster_population_gate_pass_count)
+            ) if cluster_population_gate_pass_count else 0.0,
+            "avg_cluster_food_security_gate_pass_count": float(
+                mean(cluster_food_security_gate_pass_count)
+            ) if cluster_food_security_gate_pass_count else 0.0,
+            "avg_cluster_maturity_gate_pass_count": float(
+                mean(cluster_maturity_gate_pass_count)
+            ) if cluster_maturity_gate_pass_count else 0.0,
+            "avg_cluster_population_and_food_security_pass_count": float(
+                mean(cluster_population_and_food_security_pass_count)
+            ) if cluster_population_and_food_security_pass_count else 0.0,
+            "avg_cluster_population_and_maturity_pass_count": float(
+                mean(cluster_population_and_maturity_pass_count)
+            ) if cluster_population_and_maturity_pass_count else 0.0,
+            "avg_cluster_food_security_and_maturity_pass_count": float(
+                mean(cluster_food_security_and_maturity_pass_count)
+            ) if cluster_food_security_and_maturity_pass_count else 0.0,
+            "avg_cluster_all_core_formalization_gates_pass_count": float(
+                mean(cluster_all_core_formalization_gates_pass_count)
+            ) if cluster_all_core_formalization_gates_pass_count else 0.0,
+            "avg_cluster_all_core_formalization_gates_pass_but_not_formalized_count": float(
+                mean(cluster_all_core_formalization_gates_pass_but_not_formalized_count)
+            ) if cluster_all_core_formalization_gates_pass_but_not_formalized_count else 0.0,
+            "avg_cluster_all_core_coherent_but_not_formalized_count": float(
+                mean(cluster_all_core_coherent_but_not_formalized_count)
+            ) if cluster_all_core_coherent_but_not_formalized_count else 0.0,
+            "avg_cluster_formalization_blocked_by_final_state_condition_count": float(
+                mean(cluster_formalization_blocked_by_final_state_condition_count)
+            ) if cluster_formalization_blocked_by_final_state_condition_count else 0.0,
+            "avg_cluster_formalization_blocked_by_ordering_or_timing_count": float(
+                mean(cluster_formalization_blocked_by_ordering_or_timing_count)
+            ) if cluster_formalization_blocked_by_ordering_or_timing_count else 0.0,
+            "avg_cluster_formalization_already_saturated_count": float(
+                mean(cluster_formalization_already_saturated_count)
+            ) if cluster_formalization_already_saturated_count else 0.0,
+            "avg_cluster_formalization_transition_count": float(
+                mean(cluster_formalization_transition_count)
+            ) if cluster_formalization_transition_count else 0.0,
+            "avg_avg_cluster_population_pass_before_food_fail_streak_ticks": float(
+                mean(avg_cluster_population_pass_before_food_fail_streak_ticks)
+            ) if avg_cluster_population_pass_before_food_fail_streak_ticks else 0.0,
+            "avg_avg_cluster_food_security_pass_before_maturity_fail_streak_ticks": float(
+                mean(avg_cluster_food_security_pass_before_maturity_fail_streak_ticks)
+            ) if avg_cluster_food_security_pass_before_maturity_fail_streak_ticks else 0.0,
+            "avg_avg_cluster_all_core_gates_consecutive_streak_ticks": float(
+                mean(avg_cluster_all_core_gates_consecutive_streak_ticks)
+            ) if avg_cluster_all_core_gates_consecutive_streak_ticks else 0.0,
+            "avg_avg_cluster_ticks_first_all_core_coherence_to_formalization": float(
+                mean(avg_cluster_ticks_first_all_core_coherence_to_formalization)
+            ) if avg_cluster_ticks_first_all_core_coherence_to_formalization else 0.0,
+            "avg_avg_cluster_coherent_ticks_without_formalization": float(
+                mean(avg_cluster_coherent_ticks_without_formalization)
+            ) if avg_cluster_coherent_ticks_without_formalization else 0.0,
+            "avg_avg_max_houses_in_single_cluster": float(
+                mean(avg_max_houses_in_single_cluster)
+            ) if avg_max_houses_in_single_cluster else 0.0,
+            "avg_avg_distance_between_same_settlement_houses": float(
+                mean(avg_distance_between_same_settlement_houses)
+            ) if avg_distance_between_same_settlement_houses else 0.0,
             "avg_farm_sites_created": float(mean(farm_sites_created)) if farm_sites_created else 0.0,
             "avg_farm_work_events": float(mean(farm_work_events)) if farm_work_events else 0.0,
             "avg_farm_abandoned": float(mean(farm_abandoned)) if farm_abandoned else 0.0,
@@ -2348,6 +3120,391 @@ def aggregate_global_balance_results(
             "avg_secondary_nucleus_house_growth_events": float(mean(secondary_nucleus_house_growth_events)) if secondary_nucleus_house_growth_events else 0.0,
             "avg_population_alive": float(mean(population_alive)) if population_alive else 0.0,
             "avg_population_births_count": float(mean(population_births_count)) if population_births_count else 0.0,
+            "avg_agents_male_count": float(mean(agents_male_count)) if agents_male_count else 0.0,
+            "avg_agents_female_count": float(mean(agents_female_count)) if agents_female_count else 0.0,
+            "avg_agents_above_repro_min_age_count": float(
+                mean(agents_above_repro_min_age_count)
+            ) if agents_above_repro_min_age_count else 0.0,
+            "avg_agents_meeting_hunger_requirement_for_repro_count": float(
+                mean(agents_meeting_hunger_requirement_for_repro_count)
+            ) if agents_meeting_hunger_requirement_for_repro_count else 0.0,
+            "avg_agents_meeting_health_requirement_for_repro_count": float(
+                mean(agents_meeting_health_requirement_for_repro_count)
+            ) if agents_meeting_health_requirement_for_repro_count else 0.0,
+            "avg_agents_in_formal_village_count": float(
+                mean(agents_in_formal_village_count)
+            ) if agents_in_formal_village_count else 0.0,
+            "avg_agents_meeting_household_or_shelter_requirement_count": float(
+                mean(agents_meeting_household_or_shelter_requirement_count)
+            ) if agents_meeting_household_or_shelter_requirement_count else 0.0,
+            "avg_agents_with_local_partner_candidate_count": float(
+                mean(agents_with_local_partner_candidate_count)
+            ) if agents_with_local_partner_candidate_count else 0.0,
+            "avg_agents_with_opposite_sex_partner_candidate_count": float(
+                mean(agents_with_opposite_sex_partner_candidate_count)
+            ) if agents_with_opposite_sex_partner_candidate_count else 0.0,
+            "avg_agents_meeting_stability_requirement_for_repro_count": float(
+                mean(agents_meeting_stability_requirement_for_repro_count)
+            ) if agents_meeting_stability_requirement_for_repro_count else 0.0,
+            "avg_agents_meeting_local_food_security_requirement_count": float(
+                mean(agents_meeting_local_food_security_requirement_count)
+            ) if agents_meeting_local_food_security_requirement_count else 0.0,
+            "avg_agents_meeting_repro_cooldown_requirement_count": float(
+                mean(agents_meeting_repro_cooldown_requirement_count)
+            ) if agents_meeting_repro_cooldown_requirement_count else 0.0,
+            "avg_agents_meeting_all_repro_conditions_count": float(
+                mean(agents_meeting_all_repro_conditions_count)
+            ) if agents_meeting_all_repro_conditions_count else 0.0,
+            "avg_agents_meeting_all_repro_conditions_except_one_count": float(
+                mean(agents_meeting_all_repro_conditions_except_one_count)
+            ) if agents_meeting_all_repro_conditions_except_one_count else 0.0,
+            "avg_agents_reaching_reproductive_age_count": float(
+                mean(agents_reaching_reproductive_age_count)
+            ) if agents_reaching_reproductive_age_count else 0.0,
+            "avg_avg_ticks_lived_after_reproductive_age": float(
+                mean(avg_ticks_lived_after_reproductive_age)
+            ) if avg_ticks_lived_after_reproductive_age else 0.0,
+            "avg_agents_reaching_household_or_shelter_stage_count": float(
+                mean(agents_reaching_household_or_shelter_stage_count)
+            ) if agents_reaching_household_or_shelter_stage_count else 0.0,
+            "avg_avg_ticks_lived_after_first_household_or_shelter": float(
+                mean(avg_ticks_lived_after_first_household_or_shelter)
+            ) if avg_ticks_lived_after_first_household_or_shelter else 0.0,
+            "avg_agents_reaching_local_food_security_stability_count": float(
+                mean(agents_reaching_local_food_security_stability_count)
+            ) if agents_reaching_local_food_security_stability_count else 0.0,
+            "avg_avg_ticks_lived_after_local_food_security_stability": float(
+                mean(avg_ticks_lived_after_local_food_security_stability)
+            ) if avg_ticks_lived_after_local_food_security_stability else 0.0,
+            "avg_agents_reaching_reproduction_ready_state_count": float(
+                mean(agents_reaching_reproduction_ready_state_count)
+            ) if agents_reaching_reproduction_ready_state_count else 0.0,
+            "avg_avg_ticks_lived_after_reproduction_ready_state": float(
+                mean(avg_ticks_lived_after_reproduction_ready_state)
+            ) if avg_ticks_lived_after_reproduction_ready_state else 0.0,
+            "avg_deaths_before_reproductive_age_count": float(
+                mean(deaths_before_reproductive_age_count)
+            ) if deaths_before_reproductive_age_count else 0.0,
+            "avg_deaths_before_household_stage_count": float(
+                mean(deaths_before_household_stage_count)
+            ) if deaths_before_household_stage_count else 0.0,
+            "avg_deaths_before_food_security_stability_count": float(
+                mean(deaths_before_food_security_stability_count)
+            ) if deaths_before_food_security_stability_count else 0.0,
+            "avg_avg_age_at_first_household_or_shelter_stage": float(
+                mean(avg_age_at_first_household_or_shelter_stage)
+            ) if avg_age_at_first_household_or_shelter_stage else 0.0,
+            "avg_avg_age_at_local_food_security_stability": float(
+                mean(avg_age_at_local_food_security_stability)
+            ) if avg_age_at_local_food_security_stability else 0.0,
+            "avg_avg_age_at_reproduction_ready_state": float(
+                mean(avg_age_at_reproduction_ready_state)
+            ) if avg_age_at_reproduction_ready_state else 0.0,
+            "avg_avg_age_at_first_meaningful_stability_milestone": float(
+                mean(avg_age_at_first_meaningful_stability_milestone)
+            ) if avg_age_at_first_meaningful_stability_milestone else 0.0,
+            "avg_avg_remaining_lifespan_after_reproductive_age": float(
+                mean(avg_remaining_lifespan_after_reproductive_age)
+            ) if avg_remaining_lifespan_after_reproductive_age else 0.0,
+            "avg_avg_remaining_lifespan_after_household_stage": float(
+                mean(avg_remaining_lifespan_after_household_stage)
+            ) if avg_remaining_lifespan_after_household_stage else 0.0,
+            "avg_avg_remaining_lifespan_after_food_security_stability": float(
+                mean(avg_remaining_lifespan_after_food_security_stability)
+            ) if avg_remaining_lifespan_after_food_security_stability else 0.0,
+            "avg_avg_remaining_lifespan_after_reproduction_ready_state": float(
+                mean(avg_remaining_lifespan_after_reproduction_ready_state)
+            ) if avg_remaining_lifespan_after_reproduction_ready_state else 0.0,
+            "avg_reproduction_attempt_count": float(mean(reproduction_attempt_count)) if reproduction_attempt_count else 0.0,
+            "avg_reproduction_blocked_count": float(mean(reproduction_blocked_count)) if reproduction_blocked_count else 0.0,
+            "avg_reproduction_blocked_by_age_count": float(
+                mean(reproduction_blocked_by_age_count)
+            ) if reproduction_blocked_by_age_count else 0.0,
+            "avg_reproduction_blocked_by_hunger_count": float(
+                mean(reproduction_blocked_by_hunger_count)
+            ) if reproduction_blocked_by_hunger_count else 0.0,
+            "avg_reproduction_blocked_by_health_count": float(
+                mean(reproduction_blocked_by_health_count)
+            ) if reproduction_blocked_by_health_count else 0.0,
+            "avg_reproduction_blocked_by_no_formal_village_count": float(
+                mean(reproduction_blocked_by_no_formal_village_count)
+            ) if reproduction_blocked_by_no_formal_village_count else 0.0,
+            "avg_reproduction_blocked_by_no_partner_count": float(
+                mean(reproduction_blocked_by_no_partner_count)
+            ) if reproduction_blocked_by_no_partner_count else 0.0,
+            "avg_reproduction_blocked_by_no_local_partner_count": float(
+                mean(reproduction_blocked_by_no_local_partner_count)
+            ) if reproduction_blocked_by_no_local_partner_count else 0.0,
+            "avg_reproduction_blocked_by_no_opposite_sex_partner_count": float(
+                mean(reproduction_blocked_by_no_opposite_sex_partner_count)
+            ) if reproduction_blocked_by_no_opposite_sex_partner_count else 0.0,
+            "avg_reproduction_blocked_by_partner_unavailable_count": float(
+                mean(reproduction_blocked_by_partner_unavailable_count)
+            ) if reproduction_blocked_by_partner_unavailable_count else 0.0,
+            "avg_reproduction_blocked_by_partner_age_count": float(
+                mean(reproduction_blocked_by_partner_age_count)
+            ) if reproduction_blocked_by_partner_age_count else 0.0,
+            "avg_reproduction_blocked_by_partner_health_or_hunger_count": float(
+                mean(reproduction_blocked_by_partner_health_or_hunger_count)
+            ) if reproduction_blocked_by_partner_health_or_hunger_count else 0.0,
+            "avg_reproduction_blocked_by_no_shelter_or_household_count": float(
+                mean(reproduction_blocked_by_no_shelter_or_household_count)
+            ) if reproduction_blocked_by_no_shelter_or_household_count else 0.0,
+            "avg_reproduction_blocked_by_low_local_food_security_count": float(
+                mean(reproduction_blocked_by_low_local_food_security_count)
+            ) if reproduction_blocked_by_low_local_food_security_count else 0.0,
+            "avg_reproduction_blocked_by_stability_requirement_count": float(
+                mean(reproduction_blocked_by_stability_requirement_count)
+            ) if reproduction_blocked_by_stability_requirement_count else 0.0,
+            "avg_reproduction_blocked_by_cooldown_count": float(
+                mean(reproduction_blocked_by_cooldown_count)
+            ) if reproduction_blocked_by_cooldown_count else 0.0,
+            "avg_reproduction_blocked_by_other_count": float(
+                mean(reproduction_blocked_by_other_count)
+            ) if reproduction_blocked_by_other_count else 0.0,
+            "avg_reproduction_proto_path_considered_count": float(
+                mean(reproduction_proto_path_considered_count)
+            ) if reproduction_proto_path_considered_count else 0.0,
+            "avg_reproduction_proto_path_activated_count": float(
+                mean(reproduction_proto_path_activated_count)
+            ) if reproduction_proto_path_activated_count else 0.0,
+            "avg_reproduction_proto_path_gate_pass_stability_count": float(
+                mean(reproduction_proto_path_gate_pass_stability_count)
+            ) if reproduction_proto_path_gate_pass_stability_count else 0.0,
+            "avg_reproduction_proto_path_gate_pass_food_security_count": float(
+                mean(reproduction_proto_path_gate_pass_food_security_count)
+            ) if reproduction_proto_path_gate_pass_food_security_count else 0.0,
+            "avg_reproduction_proto_path_gate_pass_crisis_count": float(
+                mean(reproduction_proto_path_gate_pass_crisis_count)
+            ) if reproduction_proto_path_gate_pass_crisis_count else 0.0,
+            "avg_proto_food_security_window_pass_count": float(
+                mean(proto_food_security_window_pass_count)
+            ) if proto_food_security_window_pass_count else 0.0,
+            "avg_proto_food_security_window_fail_count": float(
+                mean(proto_food_security_window_fail_count)
+            ) if proto_food_security_window_fail_count else 0.0,
+            "avg_proto_food_security_window_recent_buffer_ok_count": float(
+                mean(proto_food_security_window_recent_buffer_ok_count)
+            ) if proto_food_security_window_recent_buffer_ok_count else 0.0,
+            "avg_proto_food_security_window_recent_pressure_clear_count": float(
+                mean(proto_food_security_window_recent_pressure_clear_count)
+            ) if proto_food_security_window_recent_pressure_clear_count else 0.0,
+            "avg_reproduction_proto_path_blocked_by_stability_count": float(
+                mean(reproduction_proto_path_blocked_by_stability_count)
+            ) if reproduction_proto_path_blocked_by_stability_count else 0.0,
+            "avg_reproduction_proto_path_blocked_by_food_security_count": float(
+                mean(reproduction_proto_path_blocked_by_food_security_count)
+            ) if reproduction_proto_path_blocked_by_food_security_count else 0.0,
+            "avg_reproduction_proto_path_blocked_by_no_opposite_sex_partner_count": float(
+                mean(reproduction_proto_path_blocked_by_no_opposite_sex_partner_count)
+            ) if reproduction_proto_path_blocked_by_no_opposite_sex_partner_count else 0.0,
+            "avg_reproduction_proto_path_blocked_by_no_shelter_count": float(
+                mean(reproduction_proto_path_blocked_by_no_shelter_count)
+            ) if reproduction_proto_path_blocked_by_no_shelter_count else 0.0,
+            "avg_reproduction_proto_path_blocked_by_other_count": float(
+                mean(reproduction_proto_path_blocked_by_other_count)
+            ) if reproduction_proto_path_blocked_by_other_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_considered_count": float(
+                mean(reproduction_stable_proto_household_path_considered_count)
+            ) if reproduction_stable_proto_household_path_considered_count else 0.0,
+            "avg_stable_proto_household_path_considered_count": float(
+                mean(stable_proto_household_path_considered_count)
+            ) if stable_proto_household_path_considered_count else 0.0,
+            "avg_stable_proto_household_local_anchor_created_count": float(
+                mean(stable_proto_household_local_anchor_created_count)
+            ) if stable_proto_household_local_anchor_created_count else 0.0,
+            "avg_stable_proto_household_local_anchor_reused_count": float(
+                mean(stable_proto_household_local_anchor_reused_count)
+            ) if stable_proto_household_local_anchor_reused_count else 0.0,
+            "avg_stable_proto_household_local_anchor_fail_count": float(
+                mean(stable_proto_household_local_anchor_fail_count)
+            ) if stable_proto_household_local_anchor_fail_count else 0.0,
+            "avg_stable_proto_household_candidate_nearby_count": float(
+                mean(stable_proto_household_candidate_nearby_count)
+            ) if stable_proto_household_candidate_nearby_count else 0.0,
+            "avg_stable_proto_household_candidate_too_far_count": float(
+                mean(stable_proto_household_candidate_too_far_count)
+            ) if stable_proto_household_candidate_too_far_count else 0.0,
+            "avg_stable_proto_anchor_partner_candidate_count": float(
+                mean(stable_proto_anchor_partner_candidate_count)
+            ) if stable_proto_anchor_partner_candidate_count else 0.0,
+            "avg_stable_proto_anchor_partner_nearby_count": float(
+                mean(stable_proto_anchor_partner_nearby_count)
+            ) if stable_proto_anchor_partner_nearby_count else 0.0,
+            "avg_stable_proto_anchor_partner_too_far_count": float(
+                mean(stable_proto_anchor_partner_too_far_count)
+            ) if stable_proto_anchor_partner_too_far_count else 0.0,
+            "avg_stable_proto_anchor_partner_blocked_by_health_or_hunger_count": float(
+                mean(stable_proto_anchor_partner_blocked_by_health_or_hunger_count)
+            ) if stable_proto_anchor_partner_blocked_by_health_or_hunger_count else 0.0,
+            "avg_stable_proto_anchor_partner_blocked_by_cooldown_count": float(
+                mean(stable_proto_anchor_partner_blocked_by_cooldown_count)
+            ) if stable_proto_anchor_partner_blocked_by_cooldown_count else 0.0,
+            "avg_stable_proto_anchor_partner_blocked_by_context_mismatch_count": float(
+                mean(stable_proto_anchor_partner_blocked_by_context_mismatch_count)
+            ) if stable_proto_anchor_partner_blocked_by_context_mismatch_count else 0.0,
+            "avg_stable_proto_partner_convergence_invoked_count": float(
+                mean(stable_proto_partner_convergence_invoked_count)
+            ) if stable_proto_partner_convergence_invoked_count else 0.0,
+            "avg_stable_proto_partner_convergence_completed_count": float(
+                mean(stable_proto_partner_convergence_completed_count)
+            ) if stable_proto_partner_convergence_completed_count else 0.0,
+            "avg_stable_proto_partner_convergence_broken_by_survival_count": float(
+                mean(stable_proto_partner_convergence_broken_by_survival_count)
+            ) if stable_proto_partner_convergence_broken_by_survival_count else 0.0,
+            "avg_stable_proto_partner_convergence_broken_by_context_loss_count": float(
+                mean(stable_proto_partner_convergence_broken_by_context_loss_count)
+            ) if stable_proto_partner_convergence_broken_by_context_loss_count else 0.0,
+            "avg_stable_proto_copresence_ticks_with_opposite_sex_partner_count": float(
+                mean(stable_proto_copresence_ticks_with_opposite_sex_partner_count)
+            ) if stable_proto_copresence_ticks_with_opposite_sex_partner_count else 0.0,
+            "avg_stable_proto_copresence_window_pass_count": float(
+                mean(stable_proto_copresence_window_pass_count)
+            ) if stable_proto_copresence_window_pass_count else 0.0,
+            "avg_stable_proto_copresence_broken_by_survival_count": float(
+                mean(stable_proto_copresence_broken_by_survival_count)
+            ) if stable_proto_copresence_broken_by_survival_count else 0.0,
+            "avg_stable_proto_copresence_broken_by_context_loss_count": float(
+                mean(stable_proto_copresence_broken_by_context_loss_count)
+            ) if stable_proto_copresence_broken_by_context_loss_count else 0.0,
+            "avg_stable_proto_local_retention_applied_count": float(
+                mean(stable_proto_local_retention_applied_count)
+            ) if stable_proto_local_retention_applied_count else 0.0,
+            "avg_stable_proto_partner_drift_damping_invoked_count": float(
+                mean(stable_proto_partner_drift_damping_invoked_count)
+            ) if stable_proto_partner_drift_damping_invoked_count else 0.0,
+            "avg_stable_proto_partner_drift_damping_completed_count": float(
+                mean(stable_proto_partner_drift_damping_completed_count)
+            ) if stable_proto_partner_drift_damping_completed_count else 0.0,
+            "avg_stable_proto_partner_drift_damping_broken_by_survival_count": float(
+                mean(stable_proto_partner_drift_damping_broken_by_survival_count)
+            ) if stable_proto_partner_drift_damping_broken_by_survival_count else 0.0,
+            "avg_stable_proto_partner_drift_damping_broken_by_context_loss_count": float(
+                mean(stable_proto_partner_drift_damping_broken_by_context_loss_count)
+            ) if stable_proto_partner_drift_damping_broken_by_context_loss_count else 0.0,
+            "avg_stable_proto_micro_context_hold_invoked_count": float(
+                mean(stable_proto_micro_context_hold_invoked_count)
+            ) if stable_proto_micro_context_hold_invoked_count else 0.0,
+            "avg_stable_proto_path_inactivity_jitter_hold_invoked_count": float(
+                mean(stable_proto_path_inactivity_jitter_hold_invoked_count)
+            ) if stable_proto_path_inactivity_jitter_hold_invoked_count else 0.0,
+            "avg_stable_proto_path_inactivity_jitter_hold_completed_count": float(
+                mean(stable_proto_path_inactivity_jitter_hold_completed_count)
+            ) if stable_proto_path_inactivity_jitter_hold_completed_count else 0.0,
+            "avg_stable_proto_path_inactivity_jitter_hold_broken_by_survival_count": float(
+                mean(stable_proto_path_inactivity_jitter_hold_broken_by_survival_count)
+            ) if stable_proto_path_inactivity_jitter_hold_broken_by_survival_count else 0.0,
+            "avg_stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count": float(
+                mean(stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count)
+            ) if stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count else 0.0,
+            "avg_stable_proto_micro_context_loss_anchor_invalid_count": float(
+                mean(stable_proto_micro_context_loss_anchor_invalid_count)
+            ) if stable_proto_micro_context_loss_anchor_invalid_count else 0.0,
+            "avg_stable_proto_micro_context_loss_anchor_shift_count": float(
+                mean(stable_proto_micro_context_loss_anchor_shift_count)
+            ) if stable_proto_micro_context_loss_anchor_shift_count else 0.0,
+            "avg_stable_proto_micro_context_loss_proto_path_inactive_count": float(
+                mean(stable_proto_micro_context_loss_proto_path_inactive_count)
+            ) if stable_proto_micro_context_loss_proto_path_inactive_count else 0.0,
+            "avg_stable_proto_micro_context_loss_candidate_missing_count": float(
+                mean(stable_proto_micro_context_loss_candidate_missing_count)
+            ) if stable_proto_micro_context_loss_candidate_missing_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_invoked_count": float(
+                mean(stable_proto_micro_proximity_closure_invoked_count)
+            ) if stable_proto_micro_proximity_closure_invoked_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_completed_count": float(
+                mean(stable_proto_micro_proximity_closure_completed_count)
+            ) if stable_proto_micro_proximity_closure_completed_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_broken_by_survival_count": float(
+                mean(stable_proto_micro_proximity_closure_broken_by_survival_count)
+            ) if stable_proto_micro_proximity_closure_broken_by_survival_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_broken_by_context_loss_count": float(
+                mean(stable_proto_micro_proximity_closure_broken_by_context_loss_count)
+            ) if stable_proto_micro_proximity_closure_broken_by_context_loss_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_failed_by_distance_too_large_count": float(
+                mean(stable_proto_micro_proximity_closure_failed_by_distance_too_large_count)
+            ) if stable_proto_micro_proximity_closure_failed_by_distance_too_large_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_failed_by_ttl_expiry_count": float(
+                mean(stable_proto_micro_proximity_closure_failed_by_ttl_expiry_count)
+            ) if stable_proto_micro_proximity_closure_failed_by_ttl_expiry_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_failed_by_survival_count": float(
+                mean(stable_proto_micro_proximity_closure_failed_by_survival_count)
+            ) if stable_proto_micro_proximity_closure_failed_by_survival_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_failed_by_context_loss_count": float(
+                mean(stable_proto_micro_proximity_closure_failed_by_context_loss_count)
+            ) if stable_proto_micro_proximity_closure_failed_by_context_loss_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_failed_by_partner_moved_away_count": float(
+                mean(stable_proto_micro_proximity_closure_failed_by_partner_moved_away_count)
+            ) if stable_proto_micro_proximity_closure_failed_by_partner_moved_away_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_failed_by_anchor_shift_count": float(
+                mean(stable_proto_micro_proximity_closure_failed_by_anchor_shift_count)
+            ) if stable_proto_micro_proximity_closure_failed_by_anchor_shift_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_failed_by_path_not_completed_count": float(
+                mean(stable_proto_micro_proximity_closure_failed_by_path_not_completed_count)
+            ) if stable_proto_micro_proximity_closure_failed_by_path_not_completed_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_failed_by_other_count": float(
+                mean(stable_proto_micro_proximity_closure_failed_by_other_count)
+            ) if stable_proto_micro_proximity_closure_failed_by_other_count else 0.0,
+            "avg_stable_proto_micro_proximity_closure_avg_ticks_to_break": float(
+                mean(stable_proto_micro_proximity_closure_avg_ticks_to_break)
+            ) if stable_proto_micro_proximity_closure_avg_ticks_to_break else 0.0,
+            "avg_stable_proto_micro_proximity_closure_avg_distance_at_invoke": float(
+                mean(stable_proto_micro_proximity_closure_avg_distance_at_invoke)
+            ) if stable_proto_micro_proximity_closure_avg_distance_at_invoke else 0.0,
+            "avg_stable_proto_micro_proximity_closure_avg_distance_at_break": float(
+                mean(stable_proto_micro_proximity_closure_avg_distance_at_break)
+            ) if stable_proto_micro_proximity_closure_avg_distance_at_break else 0.0,
+            "avg_stable_proto_household_candidate_nearby_count": float(
+                mean(stable_proto_household_candidate_nearby_count)
+            ) if stable_proto_household_candidate_nearby_count else 0.0,
+            "avg_stable_proto_household_candidate_too_far_count": float(
+                mean(stable_proto_household_candidate_too_far_count)
+            ) if stable_proto_household_candidate_too_far_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_candidate_nearby_count": float(
+                mean(reproduction_stable_proto_household_path_candidate_nearby_count)
+            ) if reproduction_stable_proto_household_path_candidate_nearby_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_activated_count": float(
+                mean(reproduction_stable_proto_household_path_activated_count)
+            ) if reproduction_stable_proto_household_path_activated_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_stability_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_stability_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_stability_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_food_security_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_food_security_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_food_security_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_crisis_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_crisis_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_crisis_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_other_residual_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_other_residual_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_other_residual_count else 0.0,
+            "avg_reproduction_stable_proto_household_path_blocked_by_other_count": float(
+                mean(reproduction_stable_proto_household_path_blocked_by_other_count)
+            ) if reproduction_stable_proto_household_path_blocked_by_other_count else 0.0,
             "avg_population_deaths_count": float(mean(population_deaths_count)) if population_deaths_count else 0.0,
             "avg_population_deaths_hunger_count": float(mean(population_deaths_hunger_count)) if population_deaths_hunger_count else 0.0,
             "avg_population_deaths_exhaustion_count": float(mean(population_deaths_exhaustion_count)) if population_deaths_exhaustion_count else 0.0,
@@ -3026,6 +4183,24 @@ def aggregate_global_balance_results(
             "avg_settlement_proto_count": float(mean(settlement_proto_count)) if settlement_proto_count else 0.0,
             "avg_settlement_stable_village_count": float(mean(settlement_stable_village_count)) if settlement_stable_village_count else 0.0,
             "avg_settlement_abandoned_count": float(mean(settlement_abandoned_count)) if settlement_abandoned_count else 0.0,
+            "avg_road_blocked_by_life_stage_count": float(
+                mean(road_blocked_by_life_stage_count)
+            ) if road_blocked_by_life_stage_count else 0.0,
+            "avg_road_blocked_by_low_population_count": float(
+                mean(road_blocked_by_low_population_count)
+            ) if road_blocked_by_low_population_count else 0.0,
+            "avg_road_blocked_by_low_settlement_stability_count": float(
+                mean(road_blocked_by_low_settlement_stability_count)
+            ) if road_blocked_by_low_settlement_stability_count else 0.0,
+            "avg_road_blocked_by_low_food_security_count": float(
+                mean(road_blocked_by_low_food_security_count)
+            ) if road_blocked_by_low_food_security_count else 0.0,
+            "avg_road_blocked_by_proto_fragility_count": float(
+                mean(road_blocked_by_proto_fragility_count)
+            ) if road_blocked_by_proto_fragility_count else 0.0,
+            "avg_road_allowed_by_mature_settlement_count": float(
+                mean(road_allowed_by_mature_settlement_count)
+            ) if road_allowed_by_mature_settlement_count else 0.0,
             "avg_first_house_completion_tick": float(mean(first_house_completion_tick)) if first_house_completion_tick else 0.0,
             "avg_first_storage_completion_tick": float(mean(first_storage_completion_tick)) if first_storage_completion_tick else 0.0,
             "avg_first_road_completion_tick": float(mean(first_road_completion_tick)) if first_road_completion_tick else 0.0,
@@ -3270,6 +4445,141 @@ def aggregate_global_balance_results(
             "avg_construction_delivery_reservation_alignment_fail_reason_source_empty_count": float(
                 mean(construction_delivery_reservation_alignment_fail_reason_source_empty_count)
             ) if construction_delivery_reservation_alignment_fail_reason_source_empty_count else 0.0,
+            "avg_source_candidate_set_created_count": float(
+                mean(source_candidate_set_created_count)
+            ) if source_candidate_set_created_count else 0.0,
+            "avg_source_candidate_set_reused_count": float(
+                mean(source_candidate_set_reused_count)
+            ) if source_candidate_set_reused_count else 0.0,
+            "avg_source_candidate_set_exhausted_count": float(
+                mean(source_candidate_set_exhausted_count)
+            ) if source_candidate_set_exhausted_count else 0.0,
+            "avg_source_candidate_set_refresh_success_count": float(
+                mean(source_candidate_set_refresh_success_count)
+            ) if source_candidate_set_refresh_success_count else 0.0,
+            "avg_source_candidate_set_refresh_fail_count": float(
+                mean(source_candidate_set_refresh_fail_count)
+            ) if source_candidate_set_refresh_fail_count else 0.0,
+            "avg_source_candidate_set_bound_source_hit_count": float(
+                mean(source_candidate_set_bound_source_hit_count)
+            ) if source_candidate_set_bound_source_hit_count else 0.0,
+            "avg_source_candidate_set_cached_candidate_hit_count": float(
+                mean(source_candidate_set_cached_candidate_hit_count)
+            ) if source_candidate_set_cached_candidate_hit_count else 0.0,
+            "avg_source_candidate_set_nearest_recompute_hit_count": float(
+                mean(source_candidate_set_nearest_recompute_hit_count)
+            ) if source_candidate_set_nearest_recompute_hit_count else 0.0,
+            "avg_source_class_bridge_invoked_count": float(
+                mean(source_class_bridge_invoked_count)
+            ) if source_class_bridge_invoked_count else 0.0,
+            "avg_source_class_bridge_success_count": float(
+                mean(source_class_bridge_success_count)
+            ) if source_class_bridge_success_count else 0.0,
+            "avg_source_class_bridge_fail_count": float(
+                mean(source_class_bridge_fail_count)
+            ) if source_class_bridge_fail_count else 0.0,
+            "avg_source_class_bridge_world_node_hit_count": float(
+                mean(source_class_bridge_world_node_hit_count)
+            ) if source_class_bridge_world_node_hit_count else 0.0,
+            "avg_source_class_bridge_agent_inventory_hit_count": float(
+                mean(source_class_bridge_agent_inventory_hit_count)
+            ) if source_class_bridge_agent_inventory_hit_count else 0.0,
+            "avg_source_class_bridge_blocked_by_distance_count": float(
+                mean(source_class_bridge_blocked_by_distance_count)
+            ) if source_class_bridge_blocked_by_distance_count else 0.0,
+            "avg_source_class_bridge_blocked_by_context_count": float(
+                mean(source_class_bridge_blocked_by_context_count)
+            ) if source_class_bridge_blocked_by_context_count else 0.0,
+            "avg_bridge_not_entered_due_to_storage_path_preemption_count": float(
+                mean(bridge_not_entered_due_to_storage_path_preemption_count)
+            ) if bridge_not_entered_due_to_storage_path_preemption_count else 0.0,
+            "avg_bridge_not_entered_due_to_no_pickup_attempt_count": float(
+                mean(bridge_not_entered_due_to_no_pickup_attempt_count)
+            ) if bridge_not_entered_due_to_no_pickup_attempt_count else 0.0,
+            "avg_bridge_not_entered_due_to_retarget_before_bridge_count": float(
+                mean(bridge_not_entered_due_to_retarget_before_bridge_count)
+            ) if bridge_not_entered_due_to_retarget_before_bridge_count else 0.0,
+            "avg_bridge_not_entered_due_to_invalid_site_before_bridge_count": float(
+                mean(bridge_not_entered_due_to_invalid_site_before_bridge_count)
+            ) if bridge_not_entered_due_to_invalid_site_before_bridge_count else 0.0,
+            "avg_bridge_not_entered_due_to_other_count": float(
+                mean(bridge_not_entered_due_to_other_count)
+            ) if bridge_not_entered_due_to_other_count else 0.0,
+            "avg_bridge_fail_context_village_mismatch_count": float(
+                mean(bridge_fail_context_village_mismatch_count)
+            ) if bridge_fail_context_village_mismatch_count else 0.0,
+            "avg_bridge_fail_context_no_local_source_count": float(
+                mean(bridge_fail_context_no_local_source_count)
+            ) if bridge_fail_context_no_local_source_count else 0.0,
+            "avg_bridge_fail_distance_world_node_count": float(
+                mean(bridge_fail_distance_world_node_count)
+            ) if bridge_fail_distance_world_node_count else 0.0,
+            "avg_bridge_fail_distance_agent_inventory_count": float(
+                mean(bridge_fail_distance_agent_inventory_count)
+            ) if bridge_fail_distance_agent_inventory_count else 0.0,
+            "avg_bridge_fail_other_count": float(
+                mean(bridge_fail_other_count)
+            ) if bridge_fail_other_count else 0.0,
+            "avg_construction_source_pool_checks_count": float(
+                mean(construction_source_pool_checks_count)
+            ) if construction_source_pool_checks_count else 0.0,
+            "avg_construction_source_pool_storage_holders_total": float(
+                mean(construction_source_pool_storage_holders_total)
+            ) if construction_source_pool_storage_holders_total else 0.0,
+            "avg_construction_source_pool_storage_holders_eligible_count": float(
+                mean(construction_source_pool_storage_holders_eligible_count)
+            ) if construction_source_pool_storage_holders_eligible_count else 0.0,
+            "avg_construction_source_pool_storage_holders_reachable_count": float(
+                mean(construction_source_pool_storage_holders_reachable_count)
+            ) if construction_source_pool_storage_holders_reachable_count else 0.0,
+            "avg_construction_source_pool_rejected_wrong_village_context_count": float(
+                mean(construction_source_pool_rejected_wrong_village_context_count)
+            ) if construction_source_pool_rejected_wrong_village_context_count else 0.0,
+            "avg_construction_source_pool_rejected_insufficient_stock_count": float(
+                mean(construction_source_pool_rejected_insufficient_stock_count)
+            ) if construction_source_pool_rejected_insufficient_stock_count else 0.0,
+            "avg_construction_source_pool_rejected_reservation_conflict_count": float(
+                mean(construction_source_pool_rejected_reservation_conflict_count)
+            ) if construction_source_pool_rejected_reservation_conflict_count else 0.0,
+            "avg_construction_source_pool_rejected_not_reachable_count": float(
+                mean(construction_source_pool_rejected_not_reachable_count)
+            ) if construction_source_pool_rejected_not_reachable_count else 0.0,
+            "avg_construction_source_pool_rejected_not_allowed_source_class_count": float(
+                mean(construction_source_pool_rejected_not_allowed_source_class_count)
+            ) if construction_source_pool_rejected_not_allowed_source_class_count else 0.0,
+            "avg_construction_source_pool_global_stock_but_not_delivery_eligible_count": float(
+                mean(construction_source_pool_global_stock_but_not_delivery_eligible_count)
+            ) if construction_source_pool_global_stock_but_not_delivery_eligible_count else 0.0,
+            "avg_construction_source_pool_eligible_but_unreachable_count": float(
+                mean(construction_source_pool_eligible_but_unreachable_count)
+            ) if construction_source_pool_eligible_but_unreachable_count else 0.0,
+            "avg_construction_source_pool_global_wood_nodes_total": float(
+                mean(construction_source_pool_global_wood_nodes_total)
+            ) if construction_source_pool_global_wood_nodes_total else 0.0,
+            "avg_construction_source_pool_global_stone_nodes_total": float(
+                mean(construction_source_pool_global_stone_nodes_total)
+            ) if construction_source_pool_global_stone_nodes_total else 0.0,
+            "avg_construction_source_pool_storage_stock_wood_global_total": float(
+                mean(construction_source_pool_storage_stock_wood_global_total)
+            ) if construction_source_pool_storage_stock_wood_global_total else 0.0,
+            "avg_construction_source_pool_storage_stock_stone_global_total": float(
+                mean(construction_source_pool_storage_stock_stone_global_total)
+            ) if construction_source_pool_storage_stock_stone_global_total else 0.0,
+            "avg_construction_source_pool_agent_inventory_wood_global_total": float(
+                mean(construction_source_pool_agent_inventory_wood_global_total)
+            ) if construction_source_pool_agent_inventory_wood_global_total else 0.0,
+            "avg_construction_source_pool_camp_buffer_wood_total": float(
+                mean(construction_source_pool_camp_buffer_wood_total)
+            ) if construction_source_pool_camp_buffer_wood_total else 0.0,
+            "avg_construction_source_pool_construction_buffer_wood_total": float(
+                mean(construction_source_pool_construction_buffer_wood_total)
+            ) if construction_source_pool_construction_buffer_wood_total else 0.0,
+            "avg_construction_source_pool_storage_stock_wood_eligible_total": float(
+                mean(construction_source_pool_storage_stock_wood_eligible_total)
+            ) if construction_source_pool_storage_stock_wood_eligible_total else 0.0,
+            "avg_construction_source_pool_storage_stock_stone_eligible_total": float(
+                mean(construction_source_pool_storage_stock_stone_eligible_total)
+            ) if construction_source_pool_storage_stock_stone_eligible_total else 0.0,
             "avg_delivery_commitment_hold_invoked_count": float(
                 mean(delivery_commitment_hold_invoked_count)
             ) if delivery_commitment_hold_invoked_count else 0.0,

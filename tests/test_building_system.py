@@ -2846,7 +2846,7 @@ def test_builder_prefers_assigned_active_site_for_return_continuity() -> None:
     action = builder.brain.decide(builder, world)
     assert action[0] == "move"
     assert (int(builder.x) + int(action[1]), int(builder.y) + int(action[2])) in {
-        (11, 10),
+        (14, 10),
         (10, 11),
         (11, 11),
     }
@@ -2975,7 +2975,7 @@ def test_delivery_invalid_site_diagnostics_recorded_on_site_completion() -> None
     site = building_system.place_building(
         world,
         "house",
-        (10, 10),
+        (14, 10),
         village_id=1,
         village_uid=village["village_uid"],
         operational_state="under_construction",
@@ -3012,7 +3012,7 @@ def test_delivery_invalid_source_diagnostics_recorded_when_no_source_available()
     site = building_system.place_building(
         world,
         "house",
-        (10, 10),
+        (11, 10),
         village_id=1,
         village_uid=village["village_uid"],
         operational_state="under_construction",
@@ -3036,7 +3036,194 @@ def test_delivery_invalid_source_diagnostics_recorded_when_no_source_available()
     assert int(snap.get("construction_delivery_invalid_source_no_source_available_count", 0)) >= 1
     assert int(snap.get("construction_delivery_invalid_source_before_pickup_count", 0)) >= 1
     assert int(snap.get("construction_delivery_reservation_alignment_pass_count", 0)) >= 1
+    assert int(snap.get("construction_source_pool_checks_count", 0)) >= 1
+    assert int(snap.get("construction_source_pool_storage_holders_total", 0)) >= 0
+    assert int(snap.get("construction_source_pool_rejected_insufficient_stock_count", 0)) >= 0
     assert float(snap.get("construction_delivery_ticks_reservation_to_invalid_source_avg", 0.0)) >= 0.0
+
+
+def test_source_class_bridge_uses_nearby_agent_inventory_when_storage_unavailable() -> None:
+    world = _flat_grass_world()
+    world.tick = 320
+    village = _village(village_id=1, uid="v-000001", tier=1, population=8, houses=3, center_x=10, center_y=10)
+    village["storage"] = {"food": 0, "wood": 0, "stone": 0}
+    world.villages = [village]
+    site = building_system.place_building(
+        world,
+        "house",
+        (10, 10),
+        village_id=1,
+        village_uid=village["village_uid"],
+        operational_state="under_construction",
+        construction_request={"wood_needed": 1, "wood_reserved": 1, "stone_needed": 0, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        construction_buffer={"wood": 0, "stone": 0, "food": 0},
+        construction_progress=0,
+        construction_required_work=2,
+    )
+    assert site is not None
+    donor = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    donor.village_id = 1
+    donor.inventory["wood"] = 2
+    hauler = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    hauler.village_id = 1
+    hauler.role = "hauler"
+    hauler.delivery_target_building_id = str(site["building_id"])
+    hauler.delivery_resource_type = "wood"
+    hauler.delivery_reserved_amount = 1
+    world.agents = [hauler, donor]
+
+    assert building_system.run_hauler_construction_delivery(world, hauler) is True
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("source_class_bridge_invoked_count", 0)) >= 1
+    assert int(snap.get("source_class_bridge_success_count", 0)) >= 1
+    assert int(snap.get("source_class_bridge_agent_inventory_hit_count", 0)) >= 1
+    assert int(hauler.inventory.get("wood", 0)) >= 1
+    assert int(donor.inventory.get("wood", 0)) <= 1
+
+
+def test_source_class_bridge_uses_world_node_when_storage_unavailable() -> None:
+    world = _flat_grass_world()
+    world.tick = 340
+    village = _village(village_id=1, uid="v-000001", tier=1, population=8, houses=3, center_x=10, center_y=10)
+    village["storage"] = {"food": 0, "wood": 0, "stone": 0}
+    world.villages = [village]
+    site = building_system.place_building(
+        world,
+        "house",
+        (10, 10),
+        village_id=1,
+        village_uid=village["village_uid"],
+        operational_state="under_construction",
+        construction_request={"wood_needed": 1, "wood_reserved": 1, "stone_needed": 0, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        construction_buffer={"wood": 0, "stone": 0, "food": 0},
+        construction_progress=0,
+        construction_required_work=2,
+    )
+    assert site is not None
+    world.wood.add((10, 10))
+    hauler = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    hauler.village_id = 1
+    hauler.role = "hauler"
+    hauler.delivery_target_building_id = str(site["building_id"])
+    hauler.delivery_resource_type = "wood"
+    hauler.delivery_reserved_amount = 1
+
+    assert building_system.run_hauler_construction_delivery(world, hauler) is True
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("source_class_bridge_invoked_count", 0)) >= 1
+    assert int(snap.get("source_class_bridge_success_count", 0)) >= 1
+    assert int(snap.get("source_class_bridge_world_node_hit_count", 0)) >= 1
+    assert (10, 10) not in world.wood
+    assert int(hauler.inventory.get("wood", 0)) >= 1
+
+
+def test_bridge_not_entered_records_storage_path_preemption() -> None:
+    world = _flat_grass_world()
+    world.tick = 360
+    village = _village(village_id=1, uid="v-000001", tier=1, population=8, houses=3, center_x=10, center_y=10)
+    world.villages = [village]
+    storage = world.place_building("storage", 10, 10, village_id=1, village_uid=village["village_uid"])
+    assert storage is not None
+    world.buildings[str(storage["building_id"])]["storage"]["wood"] = 3
+    village["storage"] = {"food": 0, "wood": 3, "stone": 0}
+    site = building_system.place_building(
+        world,
+        "house",
+        (14, 10),
+        village_id=1,
+        village_uid=village["village_uid"],
+        operational_state="under_construction",
+        construction_request={"wood_needed": 1, "wood_reserved": 1, "stone_needed": 0, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        construction_buffer={"wood": 0, "stone": 0, "food": 0},
+        construction_progress=0,
+        construction_required_work=2,
+    )
+    assert site is not None
+    hauler = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    hauler.village_id = 1
+    hauler.role = "hauler"
+    hauler.delivery_target_building_id = str(site["building_id"])
+    hauler.delivery_resource_type = "wood"
+    hauler.delivery_reserved_amount = 1
+
+    assert building_system.run_hauler_construction_delivery(world, hauler) is True
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("bridge_not_entered_due_to_storage_path_preemption_count", 0)) >= 1
+
+
+def test_source_class_bridge_failure_reasons_record_context_and_distance() -> None:
+    world = _flat_grass_world()
+    world.tick = 380
+    village = _village(village_id=1, uid="v-000001", tier=1, population=8, houses=3, center_x=10, center_y=10)
+    village["storage"] = {"food": 0, "wood": 0, "stone": 0}
+    world.villages = [village]
+    site = building_system.place_building(
+        world,
+        "house",
+        (10, 10),
+        village_id=1,
+        village_uid=village["village_uid"],
+        operational_state="under_construction",
+        construction_request={"wood_needed": 1, "wood_reserved": 1, "stone_needed": 0, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        construction_buffer={"wood": 0, "stone": 0, "food": 0},
+        construction_progress=0,
+        construction_required_work=2,
+    )
+    assert site is not None
+    # same resource exists globally, but not locally reachable under bridge constraints
+    world.wood.add((15, 15))
+    donor_other_context = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    donor_other_context.village_id = 2
+    donor_other_context.inventory["wood"] = 2
+    hauler = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    hauler.village_id = 1
+    hauler.role = "hauler"
+    hauler.delivery_target_building_id = str(site["building_id"])
+    hauler.delivery_resource_type = "wood"
+    hauler.delivery_reserved_amount = 1
+    world.agents = [hauler, donor_other_context]
+
+    assert building_system.run_hauler_construction_delivery(world, hauler) is False
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("source_class_bridge_invoked_count", 0)) >= 1
+    assert int(snap.get("source_class_bridge_fail_count", 0)) >= 1
+    assert int(snap.get("bridge_fail_context_village_mismatch_count", 0)) >= 1
+    assert int(snap.get("bridge_fail_distance_world_node_count", 0)) >= 1
+
+
+def test_food_logistics_prefers_site_when_delivery_active_and_storage_empty() -> None:
+    world = _flat_grass_world()
+    village = _village(village_id=1, uid="v-000001", tier=1, population=10, houses=4, center_x=12, center_y=12)
+    village["storage"] = {"food": 0, "wood": 0, "stone": 0}
+    village["storage_pos"] = {"x": 2, "y": 2}
+    world.villages = [village]
+    site = building_system.place_building(
+        world,
+        "house",
+        (12, 12),
+        village_id=1,
+        village_uid=village["village_uid"],
+        operational_state="under_construction",
+        construction_request={"wood_needed": 2, "wood_reserved": 1, "stone_needed": 0, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        construction_buffer={"wood": 0, "stone": 0, "food": 0},
+        construction_progress=0,
+        construction_required_work=3,
+    )
+    assert site is not None
+    hauler = Agent(x=8, y=8, brain=FoodBrain(), is_player=False, player_id=None)
+    hauler.village_id = 1
+    hauler.role = "hauler"
+    hauler.task = "food_logistics"
+    hauler.delivery_target_building_id = str(site["building_id"])
+    hauler.delivery_resource_type = "wood"
+    hauler.delivery_reserved_amount = 1
+    hauler.inventory["wood"] = 0
+
+    action = hauler.brain.decide(hauler, world)
+    assert action[0] == "move"
+    nx, ny = int(hauler.x) + int(action[1]), int(hauler.y) + int(action[2])
+    # Must step toward construction site (12,12), not toward storage_pos (2,2).
+    assert abs(nx - 12) + abs(ny - 12) < abs(int(hauler.x) - 12) + abs(int(hauler.y) - 12)
 
 
 def test_source_binding_refresh_recovers_pickup_when_recompute_misses_source(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3078,6 +3265,50 @@ def test_source_binding_refresh_recovers_pickup_when_recompute_misses_source(mon
     assert int(snap.get("construction_delivery_source_persistence_window_completed_count", 0)) >= 1
     assert int(snap.get("construction_delivery_source_binding_refreshed_count", 0)) >= 1
     assert int(hauler.inventory.get("wood", 0)) >= 1
+
+
+def test_source_candidate_set_reuse_hits_cached_candidate_when_bound_source_lost(monkeypatch: pytest.MonkeyPatch) -> None:
+    world = _flat_grass_world()
+    world.tick = 210
+    village = _village(village_id=1, uid="v-000001", tier=1, population=8, houses=3, center_x=10, center_y=10)
+    world.villages = [village]
+    storage = world.place_building("storage", 10, 10, village_id=1, village_uid=village["village_uid"])
+    assert storage is not None
+    world.buildings[str(storage["building_id"])]["storage"]["wood"] = 4
+    village["storage"] = {"food": 0, "wood": 4, "stone": 0}
+    site = building_system.place_building(
+        world,
+        "house",
+        (12, 12),
+        village_id=1,
+        village_uid=village["village_uid"],
+        operational_state="under_construction",
+        construction_request={"wood_needed": 2, "wood_reserved": 1, "stone_needed": 0, "stone_reserved": 0, "food_needed": 0, "food_reserved": 0},
+        construction_buffer={"wood": 0, "stone": 0, "food": 0},
+        construction_progress=0,
+        construction_required_work=2,
+    )
+    assert site is not None
+    hauler = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    hauler.village_id = 1
+    hauler.role = "hauler"
+    hauler.delivery_target_building_id = str(site["building_id"])
+    hauler.delivery_resource_type = "wood"
+    hauler.delivery_reserved_amount = 1
+
+    # First pass: nearest source is available -> candidate set created.
+    assert building_system.run_hauler_construction_delivery(world, hauler) is True
+    # Simulate bound source loss while retaining cached candidate set context.
+    hauler.inventory["wood"] = 0
+    hauler.delivery_source_storage_id = "missing-source-id"
+    hauler.delivery_source_binding_until_tick = world.tick + 2
+    monkeypatch.setattr(building_system, "_nearest_storage_with_resource_for_agent", lambda *_args, **_kwargs: None)
+
+    assert building_system.run_hauler_construction_delivery(world, hauler) is True
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("source_candidate_set_created_count", 0)) >= 1
+    assert int(snap.get("source_candidate_set_cached_candidate_hit_count", 0)) >= 1
+    assert int(snap.get("source_candidate_set_reused_count", 0)) >= 1
 
 
 def test_reservation_alignment_blocks_misaligned_material_before_pickup() -> None:

@@ -162,3 +162,179 @@ def test_reproduction_requires_formalized_local_stability() -> None:
     assert len(world.agents) >= start_count + 1
     snap = world.compute_settlement_progression_snapshot()
     assert int(snap.get("population_births_count", 0)) >= 1
+
+
+def test_reproduction_requires_opposite_biological_sex_partner() -> None:
+    world = World(width=30, height=30, seed=67)
+    world.tick = 500
+    world.villages = [
+        {
+            "id": 1,
+            "village_uid": "v-000001",
+            "center": {"x": 10, "y": 10},
+            "population": 5,
+            "houses": 3,
+            "formalized": True,
+            "stability_ticks": 200,
+            "storage": {"food": 20, "wood": 0, "stone": 0},
+        }
+    ]
+    a1 = _spawn_agent(world, 10, 10)
+    a2 = _spawn_agent(world, 11, 10)
+    a1.village_id = 1
+    a2.village_id = 1
+    a1.born_tick = 0
+    a2.born_tick = 0
+    a1.hunger = 95.0
+    a2.hunger = 95.0
+    a1.biological_sex = "female"
+    a2.biological_sex = "female"
+    start_count = len(world.agents)
+
+    a1.try_reproduce(world)
+
+    assert len(world.agents) == start_count
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("reproduction_blocked_by_no_opposite_sex_partner_count", 0)) >= 1
+
+
+def test_reproduction_proto_path_allows_stable_proto_settlement_birth() -> None:
+    world = World(width=30, height=30, seed=68)
+    world.tick = 500
+    world.villages = [
+        {
+            "id": 1,
+            "village_uid": "v-000001",
+            "center": {"x": 10, "y": 10},
+            "population": 6,
+            "houses": 3,
+            "formalized": False,
+            "settlement_stage": "proto_settlement",
+            "stability_ticks": 180,
+            "storage": {"food": 24, "wood": 0, "stone": 0},
+        }
+    ]
+    a1 = _spawn_agent(world, 10, 10)
+    a2 = _spawn_agent(world, 11, 10)
+    a1.village_id = 1
+    a2.village_id = 1
+    a1.born_tick = 0
+    a2.born_tick = 0
+    a1.hunger = 95.0
+    a2.hunger = 95.0
+    a1.biological_sex = "female"
+    a2.biological_sex = "male"
+    start_count = len(world.agents)
+
+    random_state = random.random
+    try:
+        random.random = lambda: 0.0
+        a1.repro_cooldown = 0
+        a2.repro_cooldown = 0
+        a1.try_reproduce(world)
+    finally:
+        random.random = random_state
+
+    assert len(world.agents) >= start_count + 1
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("reproduction_proto_path_activated_count", 0)) >= 1
+    assert int(snap.get("population_births_count", 0)) >= 1
+
+
+def test_reproduction_proto_food_security_continuity_window_can_unlock_proto_path() -> None:
+    world = World(width=30, height=30, seed=69)
+    world.tick = 500
+    world.villages = [
+        {
+            "id": 1,
+            "village_uid": "v-000001",
+            "center": {"x": 10, "y": 10},
+            "population": 6,
+            "houses": 3,
+            "formalized": False,
+            "settlement_stage": "proto_settlement",
+            "stability_ticks": 180,
+            "storage": {"food": 0, "wood": 0, "stone": 0},
+        }
+    ]
+    a1 = _spawn_agent(world, 10, 10)
+    a2 = _spawn_agent(world, 11, 10)
+    a1.village_id = 1
+    a2.village_id = 1
+    a1.born_tick = 0
+    a2.born_tick = 0
+    a1.hunger = 95.0
+    a2.hunger = 95.0
+    a1.biological_sex = "female"
+    a2.biological_sex = "male"
+
+    world.compute_local_food_pressure_for_agent = lambda _a, max_distance=8: {  # type: ignore[assignment]
+        "pressure_active": False,
+        "unmet_pressure": False,
+        "camp_food": 1,
+        "house_food_nearby": 1,
+        "near_food_sources": 2,
+    }
+    random_state = random.random
+    try:
+        random.random = lambda: 0.99
+        for _ in range(15):
+            world.tick += 1
+            a1.repro_cooldown = 0
+            a1.try_reproduce(world)
+    finally:
+        random.random = random_state
+
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("proto_food_security_window_pass_count", 0)) >= 1
+    assert int(snap.get("reproduction_proto_path_activated_count", 0)) >= 1
+
+
+def test_stable_proto_household_path_can_activate_without_village_id() -> None:
+    world = World(width=30, height=30, seed=70)
+    world.tick = 520
+    world.villages = [
+        {
+            "id": 1,
+            "village_uid": "v-000001",
+            "center": {"x": 10, "y": 10},
+            "population": 6,
+            "houses": 3,
+            "formalized": False,
+            "settlement_stage": "proto_settlement",
+            "stability_ticks": 220,
+            "storage": {"food": 0, "wood": 0, "stone": 0},
+        }
+    ]
+    a1 = _spawn_agent(world, 10, 10)
+    a2 = _spawn_agent(world, 11, 10)
+    a1.village_id = None
+    a2.village_id = None
+    a1.born_tick = 0
+    a2.born_tick = 0
+    a1.hunger = 95.0
+    a2.hunger = 95.0
+    a1.biological_sex = "female"
+    a2.biological_sex = "male"
+
+    world.compute_local_food_pressure_for_agent = lambda _a, max_distance=8: {  # type: ignore[assignment]
+        "pressure_active": True,
+        "unmet_pressure": False,
+        "camp_food": 1,
+        "house_food_nearby": 1,
+        "near_food_sources": 2,
+    }
+    random_state = random.random
+    try:
+        random.random = lambda: 0.0
+        for _ in range(20):
+            world.tick += 1
+            a1.repro_cooldown = 0
+            a2.repro_cooldown = 0
+            a1.try_reproduce(world)
+    finally:
+        random.random = random_state
+
+    snap = world.compute_settlement_progression_snapshot()
+    assert int(snap.get("reproduction_stable_proto_household_path_considered_count", 0)) >= 1
+    assert int(snap.get("reproduction_stable_proto_household_path_activated_count", 0)) >= 1

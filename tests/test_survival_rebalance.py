@@ -764,3 +764,73 @@ def test_material_feasibility_snapshot_exposes_resource_stock_flow_basics() -> N
     assert int(snap.get("food_available_world_total", 0)) >= 3
     assert "construction_site_nearest_wood_distance_avg" in snap
     assert "construction_delivery_failure_no_source_available" in snap
+
+
+def test_reproduction_diagnostics_record_partner_blocker() -> None:
+    world = _world()
+    world.tick = 500
+    world.villages = [
+        {
+            "id": 1,
+            "village_uid": "v-000001",
+            "formalized": True,
+            "stability_ticks": 200,
+            "population": 3,
+            "houses": 2,
+            "storage": {"food": 0, "wood": 0, "stone": 0},
+        }
+    ]
+    a = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    a.village_id = 1
+    a.born_tick = 0
+    a.hunger = 90.0
+    a.health = 100.0
+    a.repro_cooldown = 0
+    world.agents = [a]
+
+    a.try_reproduce(world)
+    snap = world.compute_settlement_progression_snapshot()
+
+    assert int(snap.get("reproduction_attempt_count", 0)) >= 1
+    assert int(snap.get("agents_above_repro_min_age_count", 0)) >= 1
+    assert int(snap.get("agents_in_formal_village_count", 0)) >= 1
+    assert int(snap.get("reproduction_blocked_by_no_local_partner_count", 0)) >= 1
+    assert int(snap.get("reproduction_blocked_count", 0)) >= 1
+
+
+def test_reproduction_diagnostics_record_near_miss_single_blocker() -> None:
+    world = _world()
+    world.tick = 500
+    world.villages = [
+        {
+            "id": 1,
+            "village_uid": "v-000001",
+            "formalized": True,
+            "stability_ticks": 200,
+            "population": 3,
+            "houses": 2,
+            "storage": {"food": 0, "wood": 0, "stone": 0},
+        }
+    ]
+    a = Agent(x=10, y=10, brain=None, is_player=False, player_id=None)
+    a.village_id = 1
+    a.born_tick = 0
+    a.hunger = 0.0
+    a.health = 100.0
+    a.repro_cooldown = 0
+    a.biological_sex = "female"
+    partner = Agent(x=11, y=10, brain=None, is_player=False, player_id=None)
+    partner.village_id = 1
+    partner.born_tick = 0
+    partner.health = 100.0
+    partner.hunger = 95.0
+    partner.repro_cooldown = 0
+    partner.biological_sex = "male"
+    world.agents = [a, partner]
+
+    a.try_reproduce(world)
+    snap = world.compute_settlement_progression_snapshot()
+
+    assert int(snap.get("agents_with_local_partner_candidate_count", 0)) >= 1
+    assert int(snap.get("agents_meeting_all_repro_conditions_except_one_count", 0)) >= 1
+    assert int(snap.get("reproduction_blocked_by_low_local_food_security_count", 0)) >= 1

@@ -25,6 +25,9 @@ STYLES = ("conservative", "adaptive", "opportunistic")
 FORMAL_VILLAGE_MIN_POPULATION = 4
 FORMAL_VILLAGE_MIN_HOUSES = 3
 FORMAL_VILLAGE_MIN_STABILITY_TICKS = 90
+FORMALIZATION_STRUCTURE_NEIGHBOR_RADIUS = 6
+CLUSTER_COHERENCE_FOOD_HOLD_TTL_TICKS = 2
+CLUSTER_COHERENCE_MEANINGFUL_STREAK_TICKS = 2
 GHOST_VILLAGE_DOWNGRADE_GRACE_TICKS = 80
 GHOST_VILLAGE_ABANDONED_TICKS = 180
 
@@ -123,7 +126,7 @@ def _pick_color_for_village(previous: Optional[Dict], village_id: int) -> str:
     return VILLAGE_COLORS[(village_id - 1) % len(VILLAGE_COLORS)]
 
 
-def _structure_neighbors(world: "World", pos: Coord, radius: int = 4) -> List[Coord]:
+def _structure_neighbors(world: "World", pos: Coord, radius: int = FORMALIZATION_STRUCTURE_NEIGHBOR_RADIUS) -> List[Coord]:
     x, y = pos
     result: List[Coord] = []
 
@@ -142,6 +145,10 @@ def _structure_neighbors(world: "World", pos: Coord, radius: int = 4) -> List[Co
 
 
 def detect_villages(world: "World") -> None:
+    def _prog_metric(key: str, value: int = 1) -> None:
+        if hasattr(world, "record_settlement_progression_metric"):
+            world.record_settlement_progression_metric(str(key), int(value))
+
     old_villages = list(world.villages)
     unmatched_old = list(old_villages)
 
@@ -194,7 +201,7 @@ def detect_villages(world: "World") -> None:
             visited.add(cur)
             cluster.append(cur)
 
-            for nei in _structure_neighbors(world, cur, radius=4):
+            for nei in _structure_neighbors(world, cur):
                 if nei not in visited:
                     stack.append(nei)
 
@@ -280,14 +287,148 @@ def detect_villages(world: "World") -> None:
         default_strategy = _default_strategy_for_new_village(len(cluster), pop)
         prev_stability = int(previous.get("stability_ticks", 0)) if isinstance(previous, dict) else 0
         stability_ticks = max(1, prev_stability + 1)
+        formal_house_threshold = int(max(FORMAL_VILLAGE_MIN_HOUSES, world.MIN_HOUSES_FOR_VILLAGE))
+        meets_house_threshold = bool(len(cluster) >= formal_house_threshold)
+        population_gate_pass = bool(int(pop) >= int(FORMAL_VILLAGE_MIN_POPULATION))
+        stability_gate_pass = bool(int(stability_ticks) >= int(FORMAL_VILLAGE_MIN_STABILITY_TICKS))
+        prev_storage_food = (
+            int((previous.get("storage", {}) or {}).get("food", 0))
+            if isinstance(previous, dict)
+            else 0
+        )
+        camp_food = int(nearby_camp.get("food_cache", 0)) if isinstance(nearby_camp, dict) else 0
+        raw_food_security_gate_pass = bool((prev_storage_food + camp_food) >= max(4, int(pop) // 3))
+        camp_or_household_maturity_gate_pass = bool(active_camp_near or mature_nucleus)
+        prev_stage = str(previous.get("settlement_stage", "")).strip().lower() if isinstance(previous, dict) else ""
+        prev_abandoned = bool(previous.get("abandoned", False)) if isinstance(previous, dict) else False
+        proto_fragility_gate_pass = bool((not prev_abandoned) and prev_stage not in {"abandoned", "ghost", "ghost_village"})
+        prev_food_hold_until_tick = int(previous.get("_coherence_food_hold_until_tick", -1)) if isinstance(previous, dict) else -1
+        prev_food_hold_invoked = bool(previous.get("_coherence_food_hold_invoked", False)) if isinstance(previous, dict) else False
+        prev_first_all_core_tick = int(previous.get("_coherence_first_all_core_tick", -1)) if isinstance(previous, dict) else -1
+        prev_coherent_nonformal_streak = int(previous.get("_coherence_nonformal_streak", 0)) if isinstance(previous, dict) else 0
+        hold_context_ok = bool(meets_house_threshold and population_gate_pass and camp_or_household_maturity_gate_pass)
+        hold_active_prev = bool(prev_food_hold_until_tick >= int(getattr(world, "tick", 0)))
+        food_hold_until_tick = -1
+        food_hold_invoked = False
+        food_security_gate_pass = bool(raw_food_security_gate_pass)
+        if hold_context_ok:
+            if raw_food_security_gate_pass:
+                food_security_gate_pass = True
+                food_hold_until_tick = int(getattr(world, "tick", 0)) + int(CLUSTER_COHERENCE_FOOD_HOLD_TTL_TICKS)
+                food_hold_invoked = False
+                if hold_active_prev and prev_food_hold_invoked:
+                    _prog_metric("cluster_coherence_hold_completed_count", 1)
+            elif hold_active_prev:
+                food_security_gate_pass = True
+                food_hold_until_tick = int(prev_food_hold_until_tick)
+                food_hold_invoked = True
+                if not prev_food_hold_invoked:
+                    _prog_metric("cluster_coherence_hold_invoked_count", 1)
+            else:
+                food_security_gate_pass = False
+                if prev_food_hold_invoked:
+                    _prog_metric("cluster_coherence_hold_broken_by_food_security_count", 1)
+        else:
+            if hold_active_prev and prev_food_hold_invoked:
+                if not population_gate_pass:
+                    _prog_metric("cluster_coherence_hold_broken_by_population_count", 1)
+                elif not camp_or_household_maturity_gate_pass:
+                    _prog_metric("cluster_coherence_hold_broken_by_maturity_count", 1)
+                else:
+                    _prog_metric("cluster_coherence_hold_broken_by_food_security_count", 1)
+        if meets_house_threshold:
+            _prog_metric("cluster_meets_house_threshold_count", 1)
+            if population_gate_pass:
+                _prog_metric("cluster_population_gate_pass_count", 1)
+            if food_security_gate_pass:
+                _prog_metric("cluster_food_security_gate_pass_count", 1)
+            if camp_or_household_maturity_gate_pass:
+                _prog_metric("cluster_maturity_gate_pass_count", 1)
+            if population_gate_pass and food_security_gate_pass:
+                _prog_metric("cluster_population_and_food_security_pass_count", 1)
+            if population_gate_pass and camp_or_household_maturity_gate_pass:
+                _prog_metric("cluster_population_and_maturity_pass_count", 1)
+            if food_security_gate_pass and camp_or_household_maturity_gate_pass:
+                _prog_metric("cluster_food_security_and_maturity_pass_count", 1)
+            all_core_gates_pass = bool(
+                population_gate_pass and food_security_gate_pass and camp_or_household_maturity_gate_pass
+            )
+            if all_core_gates_pass:
+                _prog_metric("cluster_all_core_formalization_gates_pass_count", 1)
+                first_all_core_tick = int(prev_first_all_core_tick) if int(prev_first_all_core_tick) >= 0 else int(getattr(world, "tick", 0))
+            prev_pop_before_food_streak = int(
+                previous.get("_coherence_pop_before_food_fail_streak", 0)
+            ) if isinstance(previous, dict) else 0
+            if population_gate_pass and (not food_security_gate_pass):
+                pop_before_food_streak = int(prev_pop_before_food_streak) + 1
+            else:
+                if prev_pop_before_food_streak > 0:
+                    _prog_metric("cluster_population_pass_before_food_fail_streak_total", prev_pop_before_food_streak)
+                    _prog_metric("cluster_population_pass_before_food_fail_streak_samples", 1)
+                pop_before_food_streak = 0
+            prev_food_before_maturity_streak = int(
+                previous.get("_coherence_food_before_maturity_fail_streak", 0)
+            ) if isinstance(previous, dict) else 0
+            if food_security_gate_pass and (not camp_or_household_maturity_gate_pass):
+                food_before_maturity_streak = int(prev_food_before_maturity_streak) + 1
+            else:
+                if prev_food_before_maturity_streak > 0:
+                    _prog_metric("cluster_food_security_pass_before_maturity_fail_streak_total", prev_food_before_maturity_streak)
+                    _prog_metric("cluster_food_security_pass_before_maturity_fail_streak_samples", 1)
+                food_before_maturity_streak = 0
+            prev_all_core_streak = int(
+                previous.get("_coherence_all_core_streak", 0)
+            ) if isinstance(previous, dict) else 0
+            if all_core_gates_pass:
+                all_core_streak = int(prev_all_core_streak) + 1
+            else:
+                if prev_all_core_streak > 0:
+                    _prog_metric("cluster_all_core_gates_consecutive_streak_total", prev_all_core_streak)
+                    _prog_metric("cluster_all_core_gates_consecutive_streak_samples", 1)
+                all_core_streak = 0
+                first_all_core_tick = -1
+            failed_gates = 0
+            if not population_gate_pass:
+                _prog_metric("cluster_fails_population_gate_count", 1)
+                failed_gates += 1
+            if not stability_gate_pass:
+                _prog_metric("cluster_fails_stability_gate_count", 1)
+                failed_gates += 1
+            if not food_security_gate_pass:
+                _prog_metric("cluster_fails_food_security_gate_count", 1)
+                failed_gates += 1
+            if not camp_or_household_maturity_gate_pass:
+                _prog_metric("cluster_fails_camp_or_household_maturity_gate_count", 1)
+                failed_gates += 1
+            if not proto_fragility_gate_pass:
+                _prog_metric("cluster_fails_proto_fragility_gate_count", 1)
+                failed_gates += 1
+            if failed_gates == 1:
+                _prog_metric("cluster_fails_exactly_one_gate_count", 1)
+                if not population_gate_pass:
+                    _prog_metric("cluster_fails_population_only_count", 1)
+                elif not stability_gate_pass:
+                    _prog_metric("cluster_fails_stability_only_count", 1)
+                elif not food_security_gate_pass:
+                    _prog_metric("cluster_fails_food_security_only_count", 1)
+        else:
+            all_core_gates_pass = False
+            pop_before_food_streak = 0
+            food_before_maturity_streak = 0
+            all_core_streak = 0
+            first_all_core_tick = -1
         prev_formalized = bool(previous.get("formalized", False)) if isinstance(previous, dict) else False
         prev_viability_debt = int(previous.get("viability_debt_ticks", 0)) if isinstance(previous, dict) else 0
         formalization_ready = bool(
-            len(cluster) >= int(max(FORMAL_VILLAGE_MIN_HOUSES, world.MIN_HOUSES_FOR_VILLAGE))
-            and int(pop) >= int(FORMAL_VILLAGE_MIN_POPULATION)
-            and int(stability_ticks) >= int(FORMAL_VILLAGE_MIN_STABILITY_TICKS)
-            and (active_camp_near or mature_nucleus)
+            meets_house_threshold
+            and population_gate_pass
+            and stability_gate_pass
+            and camp_or_household_maturity_gate_pass
         )
+        if meets_house_threshold and all_core_gates_pass and (not formalization_ready):
+            _prog_metric("cluster_all_core_formalization_gates_pass_but_not_formalized_count", 1)
+        if meets_house_threshold and formalization_ready:
+            _prog_metric("cluster_formalized_count", 1)
         viability_debt_ticks = 0
         if not formalization_ready and (prev_formalized or prev_viability_debt > 0):
             viability_debt_ticks = int(prev_viability_debt) + 1
@@ -298,6 +439,35 @@ def detect_villages(world: "World") -> None:
         if formalization_ready:
             viability_debt_ticks = 0
         settlement_stage = "formal_village" if formalized else "proto_settlement"
+        coherent_streak_meaningful = bool(int(all_core_streak) >= int(CLUSTER_COHERENCE_MEANINGFUL_STREAK_TICKS))
+        if coherent_streak_meaningful and (not formalized):
+            _prog_metric("cluster_all_core_coherent_but_not_formalized_count", 1)
+            if not stability_gate_pass:
+                _prog_metric("cluster_formalization_blocked_by_final_state_condition_count", 1)
+            else:
+                _prog_metric("cluster_formalization_blocked_by_ordering_or_timing_count", 1)
+        elif all_core_gates_pass and (not formalized):
+            _prog_metric("cluster_formalization_blocked_by_ordering_or_timing_count", 1)
+        if formalized and prev_formalized:
+            _prog_metric("cluster_formalization_already_saturated_count", 1)
+        if formalized and (not prev_formalized):
+            _prog_metric("cluster_formalization_transition_count", 1)
+            if int(first_all_core_tick) >= 0:
+                _prog_metric(
+                    "cluster_ticks_first_all_core_coherence_to_formalization_total",
+                    max(0, int(getattr(world, "tick", 0)) - int(first_all_core_tick)),
+                )
+                _prog_metric("cluster_ticks_first_all_core_coherence_to_formalization_samples", 1)
+        if all_core_gates_pass and (not formalized):
+            coherent_nonformal_streak = int(prev_coherent_nonformal_streak) + 1
+        else:
+            if int(prev_coherent_nonformal_streak) > 0:
+                _prog_metric(
+                    "cluster_coherent_without_formalization_ticks_total",
+                    int(prev_coherent_nonformal_streak),
+                )
+                _prog_metric("cluster_coherent_without_formalization_ticks_samples", 1)
+            coherent_nonformal_streak = 0
         prev_abandoned = bool(previous.get("abandoned", False)) if isinstance(previous, dict) else False
         abandoned = bool(
             not formalized
@@ -351,6 +521,13 @@ def detect_villages(world: "World") -> None:
                 "stability_ticks": int(stability_ticks),
                 "viability_debt_ticks": int(viability_debt_ticks),
                 "abandoned": bool(abandoned),
+                "_coherence_pop_before_food_fail_streak": int(pop_before_food_streak),
+                "_coherence_food_before_maturity_fail_streak": int(food_before_maturity_streak),
+                "_coherence_all_core_streak": int(all_core_streak),
+                "_coherence_food_hold_until_tick": int(food_hold_until_tick),
+                "_coherence_food_hold_invoked": bool(food_hold_invoked),
+                "_coherence_first_all_core_tick": int(first_all_core_tick),
+                "_coherence_nonformal_streak": int(coherent_nonformal_streak),
             }
         )
         if bool(formalized) and not bool(prev_formalized):

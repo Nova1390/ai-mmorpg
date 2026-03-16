@@ -50,6 +50,22 @@ HIGH_HUNGER_LATENCY_THRESHOLD = 35.0
 MEDIUM_TERM_FOOD_CONTINUITY_HUNGER_THRESHOLD = 42.0
 REPRO_MIN_AGE_TICKS = 260
 REPRO_NEARBY_PARTNER_RADIUS = 3
+BIOLOGICAL_SEX_VALUES = ("male", "female")
+PROTO_REPRO_FOOD_SECURITY_WINDOW_TICKS = 12
+STABLE_PROTO_HOUSEHOLD_RADIUS = 6
+STABLE_PROTO_HOUSEHOLD_MIN_STABILITY_TICKS = 140
+STABLE_PROTO_HOUSEHOLD_ANCHOR_MAX_AGE_TICKS = 80
+STABLE_PROTO_HOUSEHOLD_ANCHOR_SEARCH_RADIUS = 18
+STABLE_PROTO_HOUSEHOLD_ANCHOR_CAMP_LINK_RADIUS = 10
+STABLE_PROTO_PARTNER_COLOCALITY_COMMIT_TICKS = 6
+STABLE_PROTO_PARTNER_CONVERGENCE_TTL_TICKS = 10
+STABLE_PROTO_COPRESENCE_RADIUS = 4
+STABLE_PROTO_COPRESENCE_WINDOW_TICKS = 8
+STABLE_PROTO_MICRO_CLOSURE_MAX_DISTANCE = 6
+STABLE_PROTO_MICRO_CLOSURE_TTL_TICKS = 5
+STABLE_PROTO_PARTNER_DRIFT_DAMPING_TTL_TICKS = 6
+STABLE_PROTO_MICRO_CONTEXT_HOLD_GRACE_TICKS = 1
+STABLE_PROTO_PATH_INACTIVITY_HOLD_TTL_TICKS = 2
 LOCAL_LOOP_COMMITMENT_TICKS = 8
 EAT_TRIGGER_BASE_THRESHOLD = 50
 CONSTRUCTION_SITE_STICKINESS_TICKS = 18
@@ -115,6 +131,24 @@ class Agent:
     )
 
     repro_cooldown: int = 0
+    biological_sex: str = field(default_factory=lambda: random.choice(BIOLOGICAL_SEX_VALUES))
+    repro_proto_food_security_stable_ticks: int = 0
+    stable_proto_anchor_village_id: Optional[int] = None
+    stable_proto_anchor_tick: int = -1
+    stable_proto_partner_convergence_agent_id: Optional[str] = None
+    stable_proto_partner_convergence_until_tick: int = -1
+    stable_proto_partner_convergence_anchor_village_id: Optional[int] = None
+    stable_proto_copresence_ticks: int = 0
+    stable_proto_micro_partner_agent_id: Optional[str] = None
+    stable_proto_micro_until_tick: int = -1
+    stable_proto_micro_anchor_village_id: Optional[int] = None
+    stable_proto_micro_invoke_tick: int = -1
+    stable_proto_micro_invoke_distance: int = 0
+    stable_proto_path_inactivity_hold_until_tick: int = -1
+    stable_proto_path_inactivity_hold_anchor_village_id: Optional[int] = None
+    stable_proto_drift_damping_partner_agent_id: Optional[str] = None
+    stable_proto_drift_damping_until_tick: int = -1
+    stable_proto_drift_damping_anchor_village_id: Optional[int] = None
 
     goal: str = "survive"
     last_llm_tick: int = 0
@@ -1995,65 +2029,789 @@ class Agent:
         return ate
 
     def try_reproduce(self, world: "World") -> None:
+        def _metric(key: str, value: int = 1) -> None:
+            if hasattr(world, "record_settlement_progression_metric"):
+                world.record_settlement_progression_metric(str(key), int(value))
+
+        def _blocked(reason: str) -> None:
+            _metric("reproduction_blocked_count", 1)
+            _metric(f"reproduction_{str(reason)}_count", 1)
+
+        def _clear_proto_micro_closure(broken_reason: str = "", context_subreason: str = "") -> None:
+            if broken_reason == "survival":
+                _metric("stable_proto_micro_proximity_closure_broken_by_survival_count", 1)
+            elif broken_reason == "context_loss":
+                _metric("stable_proto_micro_proximity_closure_broken_by_context_loss_count", 1)
+                if context_subreason:
+                    _metric(f"stable_proto_micro_context_loss_{str(context_subreason)}_count", 1)
+            self.stable_proto_micro_partner_agent_id = None
+            self.stable_proto_micro_until_tick = -1
+            self.stable_proto_micro_anchor_village_id = None
+            self.stable_proto_micro_invoke_tick = -1
+            self.stable_proto_micro_invoke_distance = 0
+            self.stable_proto_path_inactivity_hold_until_tick = -1
+            self.stable_proto_path_inactivity_hold_anchor_village_id = None
+            self.stable_proto_drift_damping_partner_agent_id = None
+            self.stable_proto_drift_damping_until_tick = -1
+            self.stable_proto_drift_damping_anchor_village_id = None
+
+        def _clear_proto_partner_convergence(broken_reason: str = "") -> None:
+            if broken_reason == "survival":
+                _metric("stable_proto_partner_convergence_broken_by_survival_count", 1)
+            elif broken_reason == "context_loss":
+                _metric("stable_proto_partner_convergence_broken_by_context_loss_count", 1)
+            self.stable_proto_partner_convergence_agent_id = None
+            self.stable_proto_partner_convergence_until_tick = -1
+            self.stable_proto_partner_convergence_anchor_village_id = None
+
         if self.is_player:
             return
 
-        # Hard gate: no uncontrolled growth before first real settlements.
-        if getattr(self, "village_id", None) is None or not getattr(world, "villages", []):
+        if not getattr(world, "villages", []):
+            _blocked("blocked_by_no_formal_village")
             return
+
+        effective_village_id: Optional[int] = self.village_id
+        stable_proto_household_path_active = False
+        stable_proto_household_center: Optional[Tuple[int, int]] = None
+        tick_now = int(getattr(world, "tick", 0))
+        convergence_active = bool(
+            isinstance(getattr(self, "stable_proto_partner_convergence_agent_id", None), str)
+            and int(getattr(self, "stable_proto_partner_convergence_until_tick", -1)) >= int(tick_now)
+        )
+        if convergence_active:
+            survival_unstable = bool(
+                float(getattr(self, "hunger", 0.0)) < max(30.0, float(REPRO_MIN_HUNGER) - 20.0)
+                or float(getattr(self, "health", 100.0)) < float(LOW_HEALTH_THRESHOLD)
+                or float(getattr(self, "sleep_need", 0.0)) >= 85.0
+                or float(getattr(self, "fatigue", 0.0)) >= 85.0
+            )
+            if survival_unstable:
+                _clear_proto_partner_convergence("survival")
+                convergence_active = False
+        micro_closure_active = bool(
+            isinstance(getattr(self, "stable_proto_micro_partner_agent_id", None), str)
+            and bool(str(getattr(self, "stable_proto_micro_partner_agent_id", "") or ""))
+        )
+        proto_path_inactivity_hold_active = bool(
+            int(getattr(self, "stable_proto_path_inactivity_hold_until_tick", -1)) >= int(tick_now)
+        )
+
+        sex_self = str(getattr(self, "biological_sex", "") or "").strip().lower()
+        if sex_self not in BIOLOGICAL_SEX_VALUES:
+            sex_self = random.choice(BIOLOGICAL_SEX_VALUES)
+            self.biological_sex = sex_self
+
+        age_ticks = int(getattr(world, "tick", 0)) - int(getattr(self, "born_tick", 0))
+        age_ok = age_ticks >= int(REPRO_MIN_AGE_TICKS)
+        if age_ok:
+            _metric("agents_above_repro_min_age_count", 1)
+        health_ok = float(getattr(self, "health", 100.0)) >= float(LOW_HEALTH_THRESHOLD)
+        if health_ok:
+            _metric("agents_meeting_health_requirement_for_repro_count", 1)
 
         if len(world.agents) >= int(MAX_AGENTS * 0.60):
+            _blocked("blocked_by_other")
             return
 
+        cooldown_ok = int(self.repro_cooldown) <= 0
+        if cooldown_ok:
+            _metric("agents_meeting_repro_cooldown_requirement_count", 1)
         if self.repro_cooldown > 0:
             self.repro_cooldown -= 1
+            _blocked("blocked_by_cooldown")
             return
 
-        village = world.get_village_by_id(self.village_id)
+        if effective_village_id is None:
+            _metric("reproduction_stable_proto_household_path_considered_count", 1)
+            _metric("stable_proto_household_path_considered_count", 1)
+            candidate: Optional[Dict[str, Any]] = None
+            best_dist = 10**9
+            proto_all_count = 0
+            proto_stage_eligible_count = 0
+            proto_within_radius_count = 0
+            anchor_reused = False
+            tick_now = int(getattr(world, "tick", 0))
+
+            # Step 1: try a short-lived local proto anchor memory to avoid repeatedly
+            # failing on recomputation jitter when the local context is still valid.
+            anchor_id = getattr(self, "stable_proto_anchor_village_id", None)
+            anchor_age_ok = int(tick_now - int(getattr(self, "stable_proto_anchor_tick", -1))) <= int(
+                STABLE_PROTO_HOUSEHOLD_ANCHOR_MAX_AGE_TICKS
+            )
+            if isinstance(anchor_id, int) and anchor_age_ok:
+                anchor_v = world.get_village_by_id(anchor_id)
+                if isinstance(anchor_v, dict) and not bool(anchor_v.get("formalized", False)):
+                    stage = str(anchor_v.get("settlement_stage", "") or "").strip().lower()
+                    if stage not in {"abandoned", "ghost", "ghost_village"}:
+                        center = anchor_v.get("center", {})
+                        vx = int(center.get("x", 0))
+                        vy = int(center.get("y", 0))
+                        dist = abs(int(self.x) - vx) + abs(int(self.y) - vy)
+                        if dist <= int(STABLE_PROTO_HOUSEHOLD_ANCHOR_SEARCH_RADIUS):
+                            candidate = anchor_v
+                            best_dist = int(dist)
+                            anchor_reused = True
+                            _metric("stable_proto_household_local_anchor_reused_count", 1)
+                if not anchor_reused:
+                    self.stable_proto_anchor_village_id = None
+
+            # Step 2: if no reusable anchor, create one from nearest active camp + nearby proto village.
+            if candidate is None:
+                camp = None
+                if hasattr(world, "nearest_active_camp_for_agent"):
+                    camp = world.nearest_active_camp_for_agent(self, max_distance=int(STABLE_PROTO_HOUSEHOLD_ANCHOR_SEARCH_RADIUS))
+                if isinstance(camp, dict):
+                    cx = int(camp.get("x", 0))
+                    cy = int(camp.get("y", 0))
+                    for v in getattr(world, "villages", []):
+                        if not isinstance(v, dict):
+                            continue
+                        if bool(v.get("formalized", False)):
+                            continue
+                        stage = str(v.get("settlement_stage", "") or "").strip().lower()
+                        if stage in {"abandoned", "ghost", "ghost_village"}:
+                            continue
+                        center = v.get("center", {})
+                        vx = int(center.get("x", 0))
+                        vy = int(center.get("y", 0))
+                        camp_dist = abs(vx - cx) + abs(vy - cy)
+                        if camp_dist > int(STABLE_PROTO_HOUSEHOLD_ANCHOR_CAMP_LINK_RADIUS):
+                            continue
+                        dist = abs(int(self.x) - vx) + abs(int(self.y) - vy)
+                        if dist < best_dist:
+                            candidate = v
+                            best_dist = int(dist)
+                    if isinstance(candidate, dict):
+                        self.stable_proto_anchor_village_id = int(candidate.get("id")) if isinstance(candidate.get("id"), int) else None
+                        self.stable_proto_anchor_tick = int(tick_now)
+                        _metric("stable_proto_household_local_anchor_created_count", 1)
+
+            # Step 3: fallback direct scan (legacy behavior) if anchor path didn't find anything.
+            for v in getattr(world, "villages", []):
+                if not isinstance(v, dict):
+                    continue
+                if bool(v.get("formalized", False)):
+                    continue
+                proto_all_count += 1
+                stage = str(v.get("settlement_stage", "") or "").strip().lower()
+                if stage in {"abandoned", "ghost", "ghost_village"}:
+                    continue
+                proto_stage_eligible_count += 1
+                center = v.get("center", {})
+                vx = int(center.get("x", 0))
+                vy = int(center.get("y", 0))
+                dist = abs(int(self.x) - vx) + abs(int(self.y) - vy)
+                if dist > int(STABLE_PROTO_HOUSEHOLD_RADIUS):
+                    continue
+                proto_within_radius_count += 1
+                if candidate is None and dist < best_dist:
+                    candidate = v
+                    best_dist = dist
+            candidate_local_context_nearby = proto_within_radius_count > 0
+            if (not candidate_local_context_nearby) and isinstance(candidate, dict):
+                center = candidate.get("center", {})
+                cx = int(center.get("x", int(self.x)))
+                cy = int(center.get("y", int(self.y)))
+                cdist = abs(int(self.x) - cx) + abs(int(self.y) - cy)
+                if cdist <= int(STABLE_PROTO_HOUSEHOLD_ANCHOR_SEARCH_RADIUS):
+                    candidate_local_context_nearby = True
+            if candidate_local_context_nearby:
+                _metric("reproduction_stable_proto_household_path_candidate_nearby_count", 1)
+                _metric("stable_proto_household_candidate_nearby_count", 1)
+            if candidate is None:
+                reason_mapped = False
+                if proto_all_count <= 0 or proto_stage_eligible_count <= 0:
+                    _metric("reproduction_stable_proto_household_path_blocked_by_proto_context_mismatch_count", 1)
+                    reason_mapped = True
+                elif proto_within_radius_count <= 0:
+                    _metric("reproduction_stable_proto_household_path_blocked_by_proto_candidate_too_far_count", 1)
+                    _metric("stable_proto_household_candidate_too_far_count", 1)
+                    reason_mapped = True
+                else:
+                    _metric("reproduction_stable_proto_household_path_blocked_by_no_proto_candidate_nearby_count", 1)
+                    reason_mapped = True
+                _metric("reproduction_stable_proto_household_path_blocked_by_other_count", 1)
+                if not reason_mapped:
+                    _metric("reproduction_stable_proto_household_path_blocked_by_other_residual_count", 1)
+                _metric("stable_proto_household_local_anchor_fail_count", 1)
+                _blocked("blocked_by_other")
+                return
+            if (not anchor_reused) and isinstance(candidate, dict):
+                cand_id = candidate.get("id")
+                if isinstance(cand_id, int):
+                    self.stable_proto_anchor_village_id = cand_id
+                    self.stable_proto_anchor_tick = int(tick_now)
+                    _metric("stable_proto_household_local_anchor_created_count", 1)
+
+            c_stability = int(candidate.get("stability_ticks", 0))
+            c_pop = int(candidate.get("population", 0))
+            c_houses = max(0, int(candidate.get("houses", 0)))
+            c_storage_food = int(candidate.get("storage", {}).get("food", 0))
+            c_center = candidate.get("center", {})
+            stable_proto_household_center = (int(c_center.get("x", int(self.x))), int(c_center.get("y", int(self.y))))
+            if c_stability < int(STABLE_PROTO_HOUSEHOLD_MIN_STABILITY_TICKS) or c_pop < 4:
+                _metric("reproduction_stable_proto_household_path_blocked_by_insufficient_proto_continuity_ticks_count", 1)
+                _metric("reproduction_stable_proto_household_path_blocked_by_stability_count", 1)
+                _blocked("blocked_by_stability_requirement")
+                return
+            if c_houses < 2:
+                _metric("reproduction_stable_proto_household_path_blocked_by_no_valid_household_or_shelter_match_count", 1)
+                _metric("reproduction_stable_proto_household_path_blocked_by_no_household_or_shelter_count", 1)
+                _blocked("blocked_by_no_shelter_or_household")
+                return
+
+            proto_crisis_block = False
+            proto_food_ok = bool(c_storage_food >= max(4, c_pop // 3))
+            if hasattr(world, "compute_local_food_pressure_for_agent"):
+                pressure = world.compute_local_food_pressure_for_agent(self, max_distance=8)
+                if isinstance(pressure, dict):
+                    pressure_active = bool(pressure.get("pressure_active", False))
+                    unmet_pressure = bool(pressure.get("unmet_pressure", False))
+                    near_food_sources = int(pressure.get("near_food_sources", 0))
+                    buffered_local_food = int(pressure.get("camp_food", 0)) + int(pressure.get("house_food_nearby", 0))
+                    if (not unmet_pressure) and bool(buffered_local_food >= 1 or near_food_sources >= 2):
+                        self.repro_proto_food_security_stable_ticks = int(
+                            min(120, int(getattr(self, "repro_proto_food_security_stable_ticks", 0)) + 1)
+                        )
+                    else:
+                        self.repro_proto_food_security_stable_ticks = 0
+                    proto_food_ok = bool(
+                        proto_food_ok
+                        or int(getattr(self, "repro_proto_food_security_stable_ticks", 0))
+                        >= int(PROTO_REPRO_FOOD_SECURITY_WINDOW_TICKS)
+                    )
+                    proto_crisis_block = bool(
+                        unmet_pressure or (pressure_active and buffered_local_food <= 0 and near_food_sources <= 0)
+                    )
+            else:
+                self.repro_proto_food_security_stable_ticks = 0
+
+            if proto_crisis_block:
+                _metric("reproduction_stable_proto_household_path_blocked_by_crisis_count", 1)
+                _blocked("blocked_by_other")
+                return
+            if not proto_food_ok:
+                _metric("reproduction_stable_proto_household_path_blocked_by_food_security_count", 1)
+                _blocked("blocked_by_low_local_food_security")
+                return
+
+            effective_village_id = candidate.get("id")
+            stable_proto_household_path_active = True
+            _metric("reproduction_stable_proto_household_path_activated_count", 1)
+
+        village = world.get_village_by_id(effective_village_id)
         storage_food = 0
         village_pop = 0
-        if int(getattr(world, "tick", 0)) - int(getattr(self, "born_tick", 0)) < int(REPRO_MIN_AGE_TICKS):
+        formalized = False
+        shelter_ok = False
+        stability_ok = False
+        proto_path_active = False
+        if not age_ok:
+            _blocked("blocked_by_age")
             return
+        _metric("reproduction_attempt_count", 1)
         if village is not None:
             storage_food = village.get("storage", {}).get("food", 0)
             village_pop = village.get("population", 0)
-            if not bool(village.get("formalized", False)):
-                return
+            formalized = bool(village.get("formalized", False))
+            if formalized:
+                _metric("agents_in_formal_village_count", 1)
+            stability_ticks = int(village.get("stability_ticks", 0))
+            stability_ok = stability_ticks >= 120
+            if stability_ok:
+                _metric("agents_meeting_stability_requirement_for_repro_count", 1)
             houses = max(0, int(village.get("houses", 0)))
             population_cap = houses * 5
-            if village_pop >= population_cap:
-                return
-            if houses < 2 or village_pop < 3:
-                return
+            shelter_ok = bool(houses >= 2 and village_pop >= 3 and village_pop < population_cap)
+            if shelter_ok:
+                _metric("agents_meeting_household_or_shelter_requirement_count", 1)
+            local_food_security_ok_formal = bool(storage_food >= max(4, village_pop // 3))
+            local_food_security_ok = local_food_security_ok_formal
+            proto_pressure: Dict[str, Any] = {}
+            if not formalized:
+                _metric("reproduction_proto_path_considered_count", 1)
+                proto_stage = str(village.get("settlement_stage", "") or "").strip().lower()
+                proto_stability_ok = bool(
+                    stability_ticks >= 120
+                    and village_pop >= 4
+                    and proto_stage not in {"abandoned", "ghost", "ghost_village"}
+                )
+                if not proto_stability_ok:
+                    _metric("reproduction_proto_path_blocked_by_stability_count", 1)
+                    _blocked("blocked_by_stability_requirement")
+                    return
+                _metric("reproduction_proto_path_gate_pass_stability_count", 1)
+                crisis_block = False
+                if hasattr(world, "compute_local_food_pressure_for_agent"):
+                    pressure = world.compute_local_food_pressure_for_agent(self, max_distance=8)
+                    if isinstance(pressure, dict):
+                        proto_pressure = pressure
+                        pressure_active = bool(pressure.get("pressure_active", False))
+                        near_food_sources = int(pressure.get("near_food_sources", 0))
+                        camp_food = int(pressure.get("camp_food", 0))
+                        house_food_nearby = int(pressure.get("house_food_nearby", 0))
+                        buffered_local_food = max(0, camp_food + house_food_nearby)
+                        unmet_pressure = bool(pressure.get("unmet_pressure", False))
+                        proto_food_signal_ok = bool(
+                            local_food_security_ok_formal
+                            or (buffered_local_food >= 2 and not unmet_pressure)
+                            or (buffered_local_food >= 1 and near_food_sources >= 2 and not unmet_pressure)
+                        )
+                        if bool(buffered_local_food >= 1 or near_food_sources >= 2):
+                            _metric("proto_food_security_window_recent_buffer_ok_count", 1)
+                        if not unmet_pressure:
+                            _metric("proto_food_security_window_recent_pressure_clear_count", 1)
+                        if (not unmet_pressure) and bool(buffered_local_food >= 1 or near_food_sources >= 2):
+                            self.repro_proto_food_security_stable_ticks = int(
+                                min(120, int(getattr(self, "repro_proto_food_security_stable_ticks", 0)) + 1)
+                            )
+                        else:
+                            self.repro_proto_food_security_stable_ticks = 0
+                        local_food_security_ok = bool(
+                            local_food_security_ok_formal
+                            or int(getattr(self, "repro_proto_food_security_stable_ticks", 0)) >= int(PROTO_REPRO_FOOD_SECURITY_WINDOW_TICKS)
+                        )
+                        crisis_block = bool(
+                            unmet_pressure
+                            or (pressure_active and buffered_local_food <= 0 and near_food_sources <= 0)
+                        )
+                else:
+                    self.repro_proto_food_security_stable_ticks = 0
+                if crisis_block:
+                    _metric("reproduction_proto_path_blocked_by_other_count", 1)
+                    _blocked("blocked_by_other")
+                    return
+                _metric("reproduction_proto_path_gate_pass_crisis_count", 1)
+                if not shelter_ok:
+                    _metric("reproduction_proto_path_blocked_by_no_shelter_count", 1)
+                    _blocked("blocked_by_no_shelter_or_household")
+                    return
+                if not local_food_security_ok:
+                    _metric("proto_food_security_window_fail_count", 1)
+                    _metric("reproduction_proto_path_blocked_by_food_security_count", 1)
+                    _blocked("blocked_by_low_local_food_security")
+                    return
+                _metric("proto_food_security_window_pass_count", 1)
+                _metric("reproduction_proto_path_gate_pass_food_security_count", 1)
+                proto_path_active = True
+                _metric("reproduction_proto_path_activated_count", 1)
+            else:
+                self.repro_proto_food_security_stable_ticks = 0
+                if village_pop >= population_cap:
+                    _blocked("blocked_by_no_shelter_or_household")
+                    return
+                if houses < 2 or village_pop < 3:
+                    _blocked("blocked_by_no_shelter_or_household")
+                    return
+                local_food_security_ok = bool(local_food_security_ok_formal)
+            if local_food_security_ok:
+                _metric("agents_meeting_local_food_security_requirement_count", 1)
+        else:
+            _blocked("blocked_by_no_formal_village")
+            return
+
+        if convergence_active and not stable_proto_household_path_active:
+            _clear_proto_partner_convergence("context_loss")
+            convergence_active = False
         nearby_partners = 0
+        opposite_sex_partners = 0
+        opposite_sex_age_ok = 0
+        opposite_sex_ready_partner: Optional["Agent"] = None
+        anchor_partner_candidate_count = 0
+        anchor_partner_nearby_count = 0
+        anchor_partner_too_far_count = 0
+        anchor_partner_context_mismatch_count = 0
+        anchor_partner_blocked_health_or_hunger_count = 0
+        anchor_partner_blocked_cooldown_count = 0
+        anchor_nearest_partner_far_dist = 10**9
+        anchor_nearest_partner_far_pos: Optional[Tuple[int, int]] = None
+        anchor_nearest_age_ok_far_dist = 10**9
+        anchor_nearest_age_ok_far_pos: Optional[Tuple[int, int]] = None
+        anchor_nearest_age_ok_far_id: Optional[str] = None
+        anchor_nearest_micro_age_ok_dist = 10**9
+        anchor_nearest_micro_age_ok_id: Optional[str] = None
+        anchor_nearest_micro_age_ok_agent: Optional["Agent"] = None
+        anchor_nearest_valid_partner_far_dist = 10**9
+        anchor_nearest_valid_partner_far_pos: Optional[Tuple[int, int]] = None
+        anchor_nearest_valid_partner_far_id: Optional[str] = None
+        anchor_opposite_sex_copresent_count = 0
         for other in getattr(world, "agents", []):
             if other is self or not getattr(other, "alive", False) or bool(getattr(other, "is_player", False)):
                 continue
-            if getattr(other, "village_id", None) != getattr(self, "village_id", None):
+            other_sex = str(getattr(other, "biological_sex", "") or "").strip().lower()
+            if other_sex not in BIOLOGICAL_SEX_VALUES:
+                other_sex = random.choice(BIOLOGICAL_SEX_VALUES)
+                other.biological_sex = other_sex
+            same_effective_context = bool(getattr(other, "village_id", None) == effective_village_id)
+            anchor_center_dist: Optional[int] = None
+            if (not same_effective_context) and stable_proto_household_path_active and stable_proto_household_center is not None:
+                ox = int(getattr(other, "x", 0))
+                oy = int(getattr(other, "y", 0))
+                cdist = abs(ox - int(stable_proto_household_center[0])) + abs(oy - int(stable_proto_household_center[1]))
+                anchor_center_dist = int(cdist)
+                same_effective_context = bool(cdist <= int(STABLE_PROTO_HOUSEHOLD_RADIUS))
+            if (
+                stable_proto_household_path_active
+                and stable_proto_household_center is not None
+                and other_sex != sex_self
+            ):
+                if anchor_center_dist is None:
+                    ox = int(getattr(other, "x", 0))
+                    oy = int(getattr(other, "y", 0))
+                    anchor_center_dist = abs(ox - int(stable_proto_household_center[0])) + abs(oy - int(stable_proto_household_center[1]))
+                if (not same_effective_context) and int(anchor_center_dist) <= int(STABLE_PROTO_HOUSEHOLD_ANCHOR_SEARCH_RADIUS):
+                    anchor_partner_context_mismatch_count += 1
+            if not same_effective_context:
                 continue
-            other_age = int(getattr(world, "tick", 0)) - int(getattr(other, "born_tick", 0))
-            if other_age < int(REPRO_MIN_AGE_TICKS):
-                continue
-            if abs(int(getattr(other, "x", 0)) - int(self.x)) + abs(int(getattr(other, "y", 0)) - int(self.y)) <= int(REPRO_NEARBY_PARTNER_RADIUS):
+            dist_to_other = abs(int(getattr(other, "x", 0)) - int(self.x)) + abs(int(getattr(other, "y", 0)) - int(self.y))
+            if int(dist_to_other) <= int(REPRO_NEARBY_PARTNER_RADIUS):
                 nearby_partners += 1
-                break
+            if other_sex != sex_self:
+                anchor_partner_candidate_count += 1
+                if int(dist_to_other) <= int(REPRO_NEARBY_PARTNER_RADIUS):
+                    anchor_partner_nearby_count += 1
+                else:
+                    anchor_partner_too_far_count += 1
+                    if int(dist_to_other) < int(anchor_nearest_partner_far_dist):
+                        anchor_nearest_partner_far_dist = int(dist_to_other)
+                        anchor_nearest_partner_far_pos = (
+                            int(getattr(other, "x", int(self.x))),
+                            int(getattr(other, "y", int(self.y))),
+                        )
+                other_age = int(getattr(world, "tick", 0)) - int(getattr(other, "born_tick", 0))
+                if other_age < int(REPRO_MIN_AGE_TICKS):
+                    continue
+                if int(dist_to_other) <= int(STABLE_PROTO_COPRESENCE_RADIUS):
+                    anchor_opposite_sex_copresent_count += 1
+                if int(dist_to_other) > int(REPRO_NEARBY_PARTNER_RADIUS) and int(dist_to_other) < int(anchor_nearest_age_ok_far_dist):
+                    anchor_nearest_age_ok_far_dist = int(dist_to_other)
+                    anchor_nearest_age_ok_far_pos = (
+                        int(getattr(other, "x", int(self.x))),
+                        int(getattr(other, "y", int(self.y))),
+                    )
+                    anchor_nearest_age_ok_far_id = str(getattr(other, "agent_id", ""))
+                other_health_ok = float(getattr(other, "health", 100.0)) >= float(LOW_HEALTH_THRESHOLD)
+                other_hunger_ok = float(getattr(other, "hunger", 0.0)) >= float(REPRO_MIN_HUNGER)
+                other_cooldown_ok = int(getattr(other, "repro_cooldown", 0)) <= 0
+                if not other_cooldown_ok:
+                    anchor_partner_blocked_cooldown_count += 1
+                if not (other_health_ok and other_hunger_ok):
+                    anchor_partner_blocked_health_or_hunger_count += 1
+                if (
+                    int(dist_to_other) > int(REPRO_NEARBY_PARTNER_RADIUS)
+                    and int(dist_to_other) <= int(STABLE_PROTO_MICRO_CLOSURE_MAX_DISTANCE)
+                    and int(dist_to_other) < int(anchor_nearest_micro_age_ok_dist)
+                ):
+                    anchor_nearest_micro_age_ok_dist = int(dist_to_other)
+                    anchor_nearest_micro_age_ok_id = str(getattr(other, "agent_id", ""))
+                    anchor_nearest_micro_age_ok_agent = other
+                if int(dist_to_other) > int(REPRO_NEARBY_PARTNER_RADIUS):
+                    continue
+                opposite_sex_partners += 1
+                opposite_sex_age_ok += 1
+                if other_health_ok and other_hunger_ok and other_cooldown_ok:
+                    if int(dist_to_other) <= int(REPRO_NEARBY_PARTNER_RADIUS):
+                        opposite_sex_ready_partner = other
+                        break
+                    if int(dist_to_other) < int(anchor_nearest_valid_partner_far_dist):
+                        anchor_nearest_valid_partner_far_dist = int(dist_to_other)
+                        anchor_nearest_valid_partner_far_pos = (
+                            int(getattr(other, "x", int(self.x))),
+                            int(getattr(other, "y", int(self.y))),
+                        )
+                        anchor_nearest_valid_partner_far_id = str(getattr(other, "agent_id", ""))
+        if stable_proto_household_path_active:
+            if anchor_partner_candidate_count > 0:
+                _metric("stable_proto_anchor_partner_candidate_count", 1)
+            if anchor_partner_nearby_count > 0:
+                _metric("stable_proto_anchor_partner_nearby_count", 1)
+            elif anchor_partner_too_far_count > 0:
+                _metric("stable_proto_anchor_partner_too_far_count", 1)
+            if anchor_partner_blocked_health_or_hunger_count > 0:
+                _metric("stable_proto_anchor_partner_blocked_by_health_or_hunger_count", 1)
+            if anchor_partner_blocked_cooldown_count > 0:
+                _metric("stable_proto_anchor_partner_blocked_by_cooldown_count", 1)
+            if anchor_partner_context_mismatch_count > 0:
+                _metric("stable_proto_anchor_partner_blocked_by_context_mismatch_count", 1)
+            copresence_survival_ok = bool(
+                float(getattr(self, "hunger", 0.0)) >= max(30.0, float(REPRO_MIN_HUNGER) - 20.0)
+                and float(getattr(self, "health", 100.0)) >= float(LOW_HEALTH_THRESHOLD)
+                and float(getattr(self, "sleep_need", 0.0)) < 85.0
+                and float(getattr(self, "fatigue", 0.0)) < 85.0
+            )
+            if anchor_opposite_sex_copresent_count > 0:
+                _metric("stable_proto_copresence_ticks_with_opposite_sex_partner_count", 1)
+                if copresence_survival_ok:
+                    self.stable_proto_copresence_ticks = int(getattr(self, "stable_proto_copresence_ticks", 0)) + 1
+                    if int(self.stable_proto_copresence_ticks) == int(STABLE_PROTO_COPRESENCE_WINDOW_TICKS):
+                        _metric("stable_proto_copresence_window_pass_count", 1)
+                else:
+                    if int(getattr(self, "stable_proto_copresence_ticks", 0)) > 0:
+                        _metric("stable_proto_copresence_broken_by_survival_count", 1)
+                    self.stable_proto_copresence_ticks = 0
+            else:
+                if int(getattr(self, "stable_proto_copresence_ticks", 0)) > 0:
+                    _metric("stable_proto_copresence_broken_by_context_loss_count", 1)
+                self.stable_proto_copresence_ticks = 0
+        else:
+            if int(getattr(self, "stable_proto_copresence_ticks", 0)) > 0:
+                _metric("stable_proto_copresence_broken_by_context_loss_count", 1)
+            self.stable_proto_copresence_ticks = 0
+
+        hold_survival_unstable = bool(
+            float(getattr(self, "hunger", 0.0)) < max(30.0, float(REPRO_MIN_HUNGER) - 20.0)
+            or float(getattr(self, "health", 100.0)) < float(LOW_HEALTH_THRESHOLD)
+            or float(getattr(self, "sleep_need", 0.0)) >= 85.0
+            or float(getattr(self, "fatigue", 0.0)) >= 85.0
+        )
+        if proto_path_inactivity_hold_active:
+            hold_anchor_id = getattr(self, "stable_proto_path_inactivity_hold_anchor_village_id", None)
+            hold_anchor_village = (
+                world.get_village_by_id(int(hold_anchor_id))
+                if isinstance(hold_anchor_id, int) and hasattr(world, "get_village_by_id")
+                else None
+            )
+            if hold_survival_unstable:
+                _metric("stable_proto_path_inactivity_jitter_hold_broken_by_survival_count", 1)
+                self.stable_proto_path_inactivity_hold_until_tick = -1
+                self.stable_proto_path_inactivity_hold_anchor_village_id = None
+                proto_path_inactivity_hold_active = False
+            elif not isinstance(hold_anchor_village, dict):
+                _metric("stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count", 1)
+                self.stable_proto_path_inactivity_hold_until_tick = -1
+                self.stable_proto_path_inactivity_hold_anchor_village_id = None
+                proto_path_inactivity_hold_active = False
+            elif stable_proto_household_path_active and isinstance(anchor_nearest_micro_age_ok_id, str) and bool(anchor_nearest_micro_age_ok_id):
+                _metric("stable_proto_path_inactivity_jitter_hold_completed_count", 1)
+                self.stable_proto_path_inactivity_hold_until_tick = -1
+                self.stable_proto_path_inactivity_hold_anchor_village_id = None
+                proto_path_inactivity_hold_active = False
+        if opposite_sex_partners > 0:
+            _metric("agents_with_opposite_sex_partner_candidate_count", 1)
+        partner_ok = opposite_sex_ready_partner is not None
+        if convergence_active and (partner_ok or anchor_partner_nearby_count > 0):
+            _metric("stable_proto_partner_convergence_completed_count", 1)
+            _clear_proto_partner_convergence("")
+            convergence_active = False
+        if micro_closure_active and anchor_partner_nearby_count > 0:
+            _metric("stable_proto_micro_proximity_closure_completed_count", 1)
+            _clear_proto_micro_closure("")
+            micro_closure_active = False
+        if partner_ok:
+            _metric("agents_with_local_partner_candidate_count", 1)
+        if (
+            (not partner_ok)
+            and stable_proto_household_path_active
+            and isinstance(anchor_nearest_micro_age_ok_id, str)
+            and bool(anchor_nearest_micro_age_ok_id)
+            and float(getattr(self, "hunger", 0.0)) >= max(34.0, float(REPRO_MIN_HUNGER) - 20.0)
+            and float(getattr(self, "health", 100.0)) >= float(LOW_HEALTH_THRESHOLD)
+            and float(getattr(self, "sleep_need", 0.0)) < 80.0
+            and float(getattr(self, "fatigue", 0.0)) < 80.0
+        ):
+            tick_now = int(getattr(world, "tick", 0))
+            if (not micro_closure_active) or str(getattr(self, "stable_proto_micro_partner_agent_id", "")) != str(anchor_nearest_micro_age_ok_id):
+                _metric("stable_proto_micro_proximity_closure_invoked_count", 1)
+            self.stable_proto_micro_partner_agent_id = str(anchor_nearest_micro_age_ok_id)
+            self.stable_proto_micro_until_tick = int(tick_now) + int(STABLE_PROTO_MICRO_CLOSURE_TTL_TICKS)
+            self.stable_proto_micro_anchor_village_id = (
+                int(effective_village_id) if isinstance(effective_village_id, int) else None
+            )
+            self.stable_proto_micro_invoke_tick = int(tick_now)
+            self.stable_proto_micro_invoke_distance = int(anchor_nearest_micro_age_ok_dist)
+            self.stable_proto_drift_damping_partner_agent_id = str(anchor_nearest_micro_age_ok_id)
+            self.stable_proto_drift_damping_until_tick = int(tick_now) + int(STABLE_PROTO_PARTNER_DRIFT_DAMPING_TTL_TICKS)
+            self.stable_proto_drift_damping_anchor_village_id = (
+                int(effective_village_id) if isinstance(effective_village_id, int) else None
+            )
+            if anchor_nearest_micro_age_ok_agent is not None and bool(getattr(anchor_nearest_micro_age_ok_agent, "alive", False)):
+                anchor_nearest_micro_age_ok_agent.stable_proto_drift_damping_partner_agent_id = str(getattr(self, "agent_id", ""))
+                anchor_nearest_micro_age_ok_agent.stable_proto_drift_damping_until_tick = (
+                    int(tick_now) + int(STABLE_PROTO_PARTNER_DRIFT_DAMPING_TTL_TICKS)
+                )
+                partner_anchor_id = (
+                    int(effective_village_id)
+                    if isinstance(effective_village_id, int)
+                    else (
+                        int(getattr(anchor_nearest_micro_age_ok_agent, "village_id", -1))
+                        if isinstance(getattr(anchor_nearest_micro_age_ok_agent, "village_id", None), int)
+                        else None
+                    )
+                )
+                anchor_nearest_micro_age_ok_agent.stable_proto_drift_damping_anchor_village_id = partner_anchor_id
+            micro_closure_active = True
+        elif micro_closure_active and (not partner_ok) and (
+            not stable_proto_household_path_active
+            or not isinstance(anchor_nearest_micro_age_ok_id, str)
+            or not bool(anchor_nearest_micro_age_ok_id)
+        ):
+            tick_now = int(getattr(world, "tick", 0))
+            invoke_tick = int(getattr(self, "stable_proto_micro_invoke_tick", -1))
+            hold_allowed = bool(
+                invoke_tick >= 0
+                and int(tick_now - invoke_tick) <= int(STABLE_PROTO_MICRO_CONTEXT_HOLD_GRACE_TICKS)
+            )
+            hold_anchor_id = (
+                int(effective_village_id) if isinstance(effective_village_id, int)
+                else (
+                    int(getattr(self, "stable_proto_micro_anchor_village_id", -1))
+                    if isinstance(getattr(self, "stable_proto_micro_anchor_village_id", None), int)
+                    else None
+                )
+            )
+            hold_anchor_valid = bool(
+                isinstance(hold_anchor_id, int)
+                and hasattr(world, "get_village_by_id")
+                and isinstance(world.get_village_by_id(int(hold_anchor_id)), dict)
+            )
+            if hold_allowed:
+                _metric("stable_proto_micro_context_hold_invoked_count", 1)
+                self.stable_proto_micro_until_tick = max(int(getattr(self, "stable_proto_micro_until_tick", -1)), int(tick_now) + 1)
+            can_hold_jitter = bool((not hold_survival_unstable) and hold_anchor_valid)
+            if can_hold_jitter:
+                if not proto_path_inactivity_hold_active:
+                    _metric("stable_proto_path_inactivity_jitter_hold_invoked_count", 1)
+                self.stable_proto_path_inactivity_hold_until_tick = int(tick_now) + int(
+                    STABLE_PROTO_PATH_INACTIVITY_HOLD_TTL_TICKS
+                )
+                self.stable_proto_path_inactivity_hold_anchor_village_id = int(hold_anchor_id) if isinstance(hold_anchor_id, int) else None
+                proto_path_inactivity_hold_active = True
+            elif (not hold_allowed) or hold_survival_unstable or (not hold_anchor_valid):
+                subreason = (
+                    "proto_path_inactive"
+                    if (not stable_proto_household_path_active)
+                    else "candidate_missing"
+                )
+                if hold_survival_unstable:
+                    _metric("stable_proto_path_inactivity_jitter_hold_broken_by_survival_count", 1)
+                elif not hold_anchor_valid:
+                    _metric("stable_proto_path_inactivity_jitter_hold_broken_by_context_loss_count", 1)
+                _clear_proto_micro_closure("context_loss", subreason)
+                micro_closure_active = False
+        if (
+            (not partner_ok)
+            and stable_proto_household_path_active
+            and isinstance(anchor_nearest_age_ok_far_pos, tuple)
+            and len(anchor_nearest_age_ok_far_pos) == 2
+        ):
+            tick_now = int(getattr(world, "tick", 0))
+            self.task_target = (int(anchor_nearest_age_ok_far_pos[0]), int(anchor_nearest_age_ok_far_pos[1]))
+            self.movement_commit_target = (int(anchor_nearest_age_ok_far_pos[0]), int(anchor_nearest_age_ok_far_pos[1]))
+            self.movement_commit_until_tick = int(tick_now) + int(STABLE_PROTO_PARTNER_COLOCALITY_COMMIT_TICKS)
+            new_convergence_target = str(anchor_nearest_age_ok_far_id or "")
+            if (not convergence_active) or str(getattr(self, "stable_proto_partner_convergence_agent_id", "")) != new_convergence_target:
+                _metric("stable_proto_partner_convergence_invoked_count", 1)
+            self.stable_proto_partner_convergence_agent_id = new_convergence_target or None
+            self.stable_proto_partner_convergence_until_tick = int(tick_now) + int(STABLE_PROTO_PARTNER_CONVERGENCE_TTL_TICKS)
+            self.stable_proto_partner_convergence_anchor_village_id = (
+                int(effective_village_id) if isinstance(effective_village_id, int) else None
+            )
+            convergence_active = True
+        elif convergence_active and (not partner_ok) and (
+            not stable_proto_household_path_active
+            or not isinstance(anchor_nearest_age_ok_far_pos, tuple)
+        ):
+            _clear_proto_partner_convergence("context_loss")
+            convergence_active = False
         if nearby_partners <= 0:
+            if stable_proto_household_path_active:
+                _metric("reproduction_stable_proto_household_path_blocked_by_partner_not_in_same_effective_proto_context_count", 1)
+            core_near_miss = [
+                age_ok,
+                (formalized or proto_path_active or stable_proto_household_path_active),
+                shelter_ok,
+                health_ok,
+                cooldown_ok,
+                False,
+            ]
+            if sum(1 for ok in core_near_miss if not bool(ok)) == 1:
+                _metric("agents_meeting_all_repro_conditions_except_one_count", 1)
+            _blocked("blocked_by_no_local_partner")
+            return
+        if opposite_sex_partners <= 0:
+            if proto_path_active:
+                _metric("reproduction_proto_path_blocked_by_no_opposite_sex_partner_count", 1)
+            if stable_proto_household_path_active:
+                _metric("reproduction_stable_proto_household_path_blocked_by_no_opposite_sex_partner_count", 1)
+            _blocked("blocked_by_no_opposite_sex_partner")
+            return
+        if opposite_sex_age_ok <= 0:
+            _blocked("blocked_by_partner_age")
+            return
+        if not partner_ok:
+            # At least one opposite-sex candidate exists and age is valid, but no healthy/hunger/cooldown-ready partner.
+            partner_unavailable = False
+            for other in getattr(world, "agents", []):
+                if other is self or not getattr(other, "alive", False) or bool(getattr(other, "is_player", False)):
+                    continue
+                same_effective_context = bool(getattr(other, "village_id", None) == effective_village_id)
+                if (not same_effective_context) and stable_proto_household_path_active and stable_proto_household_center is not None:
+                    ox = int(getattr(other, "x", 0))
+                    oy = int(getattr(other, "y", 0))
+                    cdist = abs(ox - int(stable_proto_household_center[0])) + abs(oy - int(stable_proto_household_center[1]))
+                    same_effective_context = bool(cdist <= int(STABLE_PROTO_HOUSEHOLD_RADIUS))
+                if not same_effective_context:
+                    continue
+                if abs(int(getattr(other, "x", 0)) - int(self.x)) + abs(int(getattr(other, "y", 0)) - int(self.y)) > int(REPRO_NEARBY_PARTNER_RADIUS):
+                    continue
+                other_sex = str(getattr(other, "biological_sex", "") or "").strip().lower()
+                if other_sex == sex_self:
+                    continue
+                other_age = int(getattr(world, "tick", 0)) - int(getattr(other, "born_tick", 0))
+                if other_age < int(REPRO_MIN_AGE_TICKS):
+                    continue
+                if int(getattr(other, "repro_cooldown", 0)) > 0:
+                    partner_unavailable = True
+                    break
+            if partner_unavailable:
+                _blocked("blocked_by_partner_unavailable")
+            else:
+                _blocked("blocked_by_partner_health_or_hunger")
             return
 
         repro_min_hunger = REPRO_MIN_HUNGER
         repro_prob = REPRO_PROB
-        if village is not None and storage_food >= max(4, village_pop // 3):
+        if village is not None and local_food_security_ok:
             repro_min_hunger = max(75, REPRO_MIN_HUNGER - 10)
             repro_prob = min(0.03, REPRO_PROB * 1.8)
+        if proto_path_active:
+            # Proto path stays narrow and gated, but once all gates pass we allow slightly
+            # better activation-to-birth conversion to avoid a fully inert continuity path.
+            repro_min_hunger = max(72, repro_min_hunger - 3)
+            repro_prob = min(0.12, repro_prob * 2.8)
+
+        hunger_ok = float(self.hunger) >= float(repro_min_hunger)
+        if hunger_ok:
+            _metric("agents_meeting_hunger_requirement_for_repro_count", 1)
+        core_near_miss = [
+            age_ok,
+            (formalized or proto_path_active or stable_proto_household_path_active),
+            shelter_ok,
+            health_ok,
+            cooldown_ok,
+            partner_ok,
+            hunger_ok,
+        ]
+        if sum(1 for ok in core_near_miss if not bool(ok)) == 1:
+            _metric("agents_meeting_all_repro_conditions_except_one_count", 1)
+        if partner_ok and hunger_ok and age_ok and (formalized or proto_path_active or stable_proto_household_path_active) and shelter_ok and health_ok and cooldown_ok:
+            _metric("agents_meeting_all_repro_conditions_count", 1)
 
         if self.hunger < repro_min_hunger:
+            if not local_food_security_ok:
+                _blocked("blocked_by_low_local_food_security")
+            else:
+                _blocked("blocked_by_hunger")
             return
 
         if random.random() > repro_prob:
+            _blocked("blocked_by_other")
             return
 
         pos = world.find_free_adjacent(self.x, self.y)
         if pos is None:
+            _blocked("blocked_by_other")
             return
 
         bx, by = pos
@@ -2069,7 +2827,7 @@ class Agent:
 
         baby.hunger = float(AGENT_START_HUNGER)
         baby.role = "npc"
-        baby.village_id = self.village_id
+        baby.village_id = effective_village_id if isinstance(effective_village_id, int) else self.village_id
         baby.task = "idle"
 
         world.add_agent(baby)
@@ -2079,6 +2837,8 @@ class Agent:
             self.hunger = 1
 
         self.repro_cooldown = 80
+        if opposite_sex_ready_partner is not None:
+            opposite_sex_ready_partner.repro_cooldown = max(int(getattr(opposite_sex_ready_partner, "repro_cooldown", 0)), 80)
 
     def update(self, world: "World") -> None:
         if not self.alive:
